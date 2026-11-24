@@ -1510,6 +1510,38 @@ void main() {
         unawaited(pd.releaseHold('w', extend: true, token: wHold['w']));
         async.flushMicrotasks();
         expect(committed, contains('w'));
+
+        // Adopted anchor timer stays active across subsequent failed renewals:
+        // (a) H1 succeeds -> adopts H1's 120ms anchor; H2 starts then fails BEFORE anchor expires -> commits at H1 anchor.
+        pd.schedule('a', () async => committed.add('a'));
+        final aHold1 = pd.holdAll(['a']);
+        async.elapse(const Duration(milliseconds: 50));
+        unawaited(pd.releaseHold('a', extend: true, token: aHold1['a'])); // ~70ms remaining
+        async.flushMicrotasks();
+        expect(committed.contains('a'), isFalse);
+        final aHold2 = pd.holdAll(['a']);
+        async.elapse(const Duration(milliseconds: 20)); // ~50ms remaining on H1 anchor
+        unawaited(pd.releaseHold('a', extend: false, token: aHold2['a']));
+        async.flushMicrotasks();
+        expect(committed.contains('a'), isFalse);
+        async.elapse(const Duration(milliseconds: 45)); // 5ms before H1 anchor deadline
+        expect(committed.contains('a'), isFalse);
+        async.elapse(const Duration(milliseconds: 10)); // crosses H1 anchor deadline
+        expect(committed, contains('a'));
+
+        // (b) H1 succeeds -> adopts H1's 120ms anchor; H2 spans PAST H1's anchor deadline then fails -> commits on release.
+        pd.schedule('b', () async => committed.add('b'));
+        final bHold1 = pd.holdAll(['b']);
+        async.elapse(const Duration(milliseconds: 50));
+        unawaited(pd.releaseHold('b', extend: true, token: bHold1['b'])); // ~70ms remaining
+        async.flushMicrotasks();
+        final bHold2 = pd.holdAll(['b']);
+        async.elapse(const Duration(milliseconds: 90)); // H1 anchor expires while held by H2
+        async.flushMicrotasks();
+        expect(committed.contains('b'), isFalse);
+        unawaited(pd.releaseHold('b', extend: false, token: bHold2['b']));
+        async.flushMicrotasks();
+        expect(committed, contains('b'));
       });
     });
 
@@ -1612,6 +1644,49 @@ void main() {
       await tester.pumpAndSettle();
       expect(repo.deletedIds, containsAll(['saints/s1', 'saints/s2']));
       expect(find.textContaining('permission-denied'), findsOneWidget);
+    });
+
+    testWidgets('deferred visibility error flushes immediately when Undo closes even if restore write stalls',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _ControlledUpdateBackend(initialCollections: {
+        'saints': [
+          AdminDoc('s1', {'nameAr': 'مارمرقس', 'visible': true, 'order': 10}),
+          AdminDoc('s2', {'nameAr': 'مارجرجس', 'visible': true, 'order': 20}),
+        ],
+      });
+      addTearDown(repo.dispose);
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('saints')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('delete-s1')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.text('تراجع'), findsOneWidget);
+
+      final visFail = repo.hold('saints', 's2');
+      await tester.tap(find.byKey(const ValueKey('visibility-s2')));
+      await tester.pump();
+      visFail.completeError(FirebaseException(plugin: 'cloud_firestore', code: 'permission-denied', message: 'Denied'));
+      await tester.pump();
+      expect(find.textContaining('permission-denied'), findsNothing);
+
+      final restoreHold = repo.hold('saints', 's1');
+      await tester.tap(find.text('تراجع'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(find.textContaining('permission-denied'), findsOneWidget);
+
+      restoreHold.complete();
+      await tester.pumpAndSettle();
     });
 
     testWidgets('CollectionListScreen multi-delete extends batch window so undoAll at 12s restores both items', (tester) async {
@@ -4139,6 +4214,16 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('visibility-p1')));
       await tester.pumpAndSettle();
 
+      expect(find.text('مخفي'), findsOneWidget);
+      expect(find.text('ظاهر'), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('visibility-p1')),
+          matching: find.byIcon(Icons.visibility_off_outlined),
+        ),
+        findsOneWidget,
+      );
+
       repo.collections['priests']![0].data['visible'] = true;
       repo.emitSnapshot('priests');
       await tester.pumpAndSettle();
@@ -4146,6 +4231,50 @@ void main() {
       expect(find.text('ظاهر'), findsOneWidget);
       expect(find.text('مخفي'), findsNothing);
       expect(find.descendant(of: find.byKey(const ValueKey('visibility-p1')), matching: find.byIcon(Icons.visibility_outlined)), findsOneWidget);
+    });
+
+    testWidgets(
+        'stale snapshot delivered before Hide completes but built afterward does not clear optimistic Hide',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _ControlledUpdateBackend(initialCollections: {
+        'priests': [
+          AdminDoc('p1', {'name': 'أبونا فلان', 'rank': 'priest', 'status': 'serving', 'visible': true}),
+        ],
+      });
+      addTearDown(repo.dispose);
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('priests')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      final hideHold = repo.hold('priests', 'p1');
+      repo.emitOnUpdate = false;
+      await tester.tap(find.byKey(const ValueKey('visibility-p1')));
+      await tester.pump();
+
+      // Deliver a stale `visible: true` snapshot at t=0, flush microtasks before completing Hide at t=1ms,
+      // and then pump a frame at t=5ms so the frame builds after Hide has already settled.
+      repo.emitSnapshot('priests');
+      Timer(const Duration(milliseconds: 1), hideHold.complete);
+      await tester.pump(const Duration(milliseconds: 5));
+      await tester.pumpAndSettle();
+
+      expect(find.text('مخفي'), findsOneWidget);
+      expect(find.text('ظاهر'), findsNothing);
+
+      // A genuinely newer snapshot delivered after Hide settled clears the optimistic override.
+      repo.collections['priests']![0].data['visible'] = true;
+      repo.emitSnapshot('priests');
+      await tester.pumpAndSettle();
+
+      expect(find.text('ظاهر'), findsOneWidget);
+      expect(find.text('مخفي'), findsNothing);
     });
 
     testWidgets(

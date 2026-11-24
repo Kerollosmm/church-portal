@@ -66,7 +66,15 @@ class PendingDelete {
   void _onHoldAnchorFired(String id, _PendingCommit item, _PendingHold hold) {
     hold.anchorExpired = true;
     if (!identical(_pending[id], item)) return;
-    // Adopted as active item timer when item.activeHolds is empty and extendingHold == hold.
+    // Adopted as active item timer either via item.timer or via pending extendingHold.
+    if (identical(item.timer, hold.anchorTimer)) {
+      if (item.activeHolds.isNotEmpty) {
+        item.expiredWhileHeld = true;
+      } else {
+        unawaited(_commitItem(id));
+      }
+      return;
+    }
     if (item.activeHolds.isEmpty && identical(item.extendingHold, hold)) {
       item.extendingHold = null;
       unawaited(_commitItem(id));
@@ -112,6 +120,7 @@ class PendingDelete {
       } else {
         // Adopt the anchorTimer already counting from the renewed deletedAt timestamp.
         item.timer = winner.anchorTimer;
+        item.extendingHold = null;
       }
     } else if (expired) {
       await _commitItem(id);

@@ -216,10 +216,12 @@ Two tabs: «الإشعارات» (`NotificationsAdminSection`, kept alive across
    (default tomorrow 09:00; past times refused; switching to «في أقرب وقت» auto-clears past-time errors); timing and target chips use `context.pal.bar` background for high-contrast visibility; targets «الجميع / تطبيق أندرويد فقط / المتصفح و iPhone فقط»;
    «ماذا يفتح» picker (built-in pages, custom pages/categories, liturgies `lit-`, meetings `meeting-`, today's
    events `day-`, seasons `season-` — one-off reads when the dialog opens; ids the rules reject open the page without
-   an `eventKey`) or a custom `/path`; phone preview ar/en; «جرّب على هذا الجهاز». Field validation routes through pure
-   `validateScheduledNotificationFields` (`admin_validators.dart`) directly beneath the exact input (`titleAr`,
-   `bodyAr`, `titleEn`, `bodyEn`, `when`, `targets`, `link`), auto-expanding `draft-english` if needed and scrolling
-   the first error into view (`SingleChildScrollView` + `Column` keeps off-screen keys mounted at 320 px / 200 %);
+   an `eventKey`) or a custom `/path`; phone preview ar/en; «جرّب على هذا الجهاز». Pure field validation routes
+   through `validateScheduledNotificationFields` (`admin_validators.dart`) directly beneath each input
+   (`titleAr`, `bodyAr`, `titleEn`, `bodyEn`, `targets`, `link`), while `_saveDraft` handles scheduled-time checks
+   (setting the `when` error for past times and checking again after confirmation), auto-expanding `draft-english` if
+   needed and scrolling the first error into view (`SingleChildScrollView` + `Column` keeps off-screen keys mounted at
+   320 px / 200 %);
    editing clears that field's error while server concurrency/cap conflicts (`nm_errRowGone`, `nm_errAlreadySending`,
    `nm_errFull`) stay in the form-level `draft-error` banner.
    Rows grouped «القادمة» / «السابقة» with icon status chips and a one-line explanation per state; «تعديل» while

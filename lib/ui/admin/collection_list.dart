@@ -108,17 +108,17 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   final Set<String> _togglingVisibility = {};
   final Map<String, bool> _optimisticVisible = {};
   final Map<String, bool> _latestStreamVisible = {};
-  final Map<String, List<AdminDoc>> _lastRawDocs = {};
   final Map<String, int> _settledAtStreamSeq = {};
   final Map<String, int> _streamSeqByCollection = {};
   int _screenEpoch = 0;
   ListFilter _filter = ListFilter.all;
   PriestStatusFilter _priestFilter = PriestStatusFilter.all;
-  late Stream<List<AdminDoc>> _stream = widget.repo.watch(widget.def.name);
-  late Stream<List<AdminDoc>>? _entriesStream =
-      widget.def.name == 'categories' ? widget.repo.watch('entries') : null;
-  late Stream<List<AdminDoc>>? _pagesStream =
-      widget.def.name == 'categories' ? widget.repo.watch('pages') : null;
+  late Stream<({int seq, List<AdminDoc> docs})> _stream =
+      _trackStream(widget.def.name, widget.repo.watch(widget.def.name));
+  late Stream<({int seq, List<AdminDoc> docs})>? _entriesStream =
+      widget.def.name == 'categories' ? _trackStream('entries', widget.repo.watch('entries')) : null;
+  late Stream<({int seq, List<AdminDoc> docs})>? _pagesStream =
+      widget.def.name == 'categories' ? _trackStream('pages', widget.repo.watch('pages')) : null;
   StreamSubscription<AdminDoc?>? _featuresSub;
   bool _englishEnabled = true;
   bool _openingEditor = false;
@@ -163,13 +163,14 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       _togglingVisibility.clear();
       _optimisticVisible.clear();
       _latestStreamVisible.clear();
-      _lastRawDocs.clear();
       _settledAtStreamSeq.clear();
       _streamSeqByCollection.clear();
       _deferredErrorSnacks.clear();
-      _stream = widget.repo.watch(widget.def.name);
-      _entriesStream = widget.def.name == 'categories' ? widget.repo.watch('entries') : null;
-      _pagesStream = widget.def.name == 'categories' ? widget.repo.watch('pages') : null;
+      _stream = _trackStream(widget.def.name, widget.repo.watch(widget.def.name));
+      _entriesStream =
+          widget.def.name == 'categories' ? _trackStream('entries', widget.repo.watch('entries')) : null;
+      _pagesStream =
+          widget.def.name == 'categories' ? _trackStream('pages', widget.repo.watch('pages')) : null;
     }
     if (old.repo != widget.repo) _bindFeatures();
     if (old.def.id != widget.def.id || old.def.name != widget.def.name) {
@@ -246,7 +247,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           icon: const Icon(Icons.add),
           label: Text(context.tr('add')),
         ),
-        body: StreamBuilder<List<AdminDoc>>(
+        body: StreamBuilder<({int seq, List<AdminDoc> docs})>(
         // A new stream (another backend) gets a fresh StreamBuilder: a reused
         // one keeps the old backend's list while the new one loads.
         key: ObjectKey(_stream),
@@ -256,10 +257,11 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
             return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('${snap.error}')));
           }
           if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-          _syncStreamVisibility(def.name, snap.data!);
+          final rawSnapshot = snap.data!;
+          _syncStreamVisibility(def.name, rawSnapshot);
           final all = sortAdminDocs(
               def,
-              snap.data!
+              rawSnapshot.docs
                   .where((d) => def.matches(d.data))
                   .toList());
           _lastDocs = all.where((d) => !isSoftDeleted(d.data) || _pendingDelete.isPending(d.id)).toList();
@@ -271,10 +273,10 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
             filter: _filter,
             statusFilter: def.name == 'priests' ? _priestFilter : PriestStatusFilter.all,
           );
-          _checkLazyPurge(snap.data!, def);
+          _checkLazyPurge(rawSnapshot.docs, def);
 
           if (def.name == 'categories' && _entriesStream != null && _pagesStream != null) {
-            return StreamBuilder<List<AdminDoc>>(
+            return StreamBuilder<({int seq, List<AdminDoc> docs})>(
               key: ObjectKey(_entriesStream),
               stream: _entriesStream,
               builder: (context, entrySnap) {
@@ -282,7 +284,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                   return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('${entrySnap.error}')));
                 }
                 if (!entrySnap.hasData) return const Center(child: CircularProgressIndicator());
-                return StreamBuilder<List<AdminDoc>>(
+                return StreamBuilder<({int seq, List<AdminDoc> docs})>(
                   key: ObjectKey(_pagesStream),
                   stream: _pagesStream,
                   builder: (context, pageSnap) {
@@ -293,12 +295,14 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                     if (!pageSnap.hasData) return const Center(child: CircularProgressIndicator());
                     final entriesDef = collectionById('entries')!;
                     final pagesDef = collectionById('pages')!;
-                    final rawEntries = entrySnap.data!;
-                    _syncStreamVisibility(entriesDef.name, rawEntries);
+                    final entriesSnapshot = entrySnap.data!;
+                    final rawEntries = entriesSnapshot.docs;
+                    _syncStreamVisibility(entriesDef.name, entriesSnapshot);
                     _checkLazyPurge(rawEntries, entriesDef);
-                    final rawPages = pageSnap.data!;
+                    final pagesSnapshot = pageSnap.data!;
+                    final rawPages = pagesSnapshot.docs;
                     _lastPages = rawPages;
-                    _syncStreamVisibility(pagesDef.name, rawPages);
+                    _syncStreamVisibility(pagesDef.name, pagesSnapshot);
                     _checkLazyPurge(rawPages, pagesDef);
                     final unsoftEntries = rawEntries
                         .where((d) => !isSoftDeleted(d.data) && !_pendingDelete.isPending(d.id))
@@ -743,13 +747,22 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
 
   String _visKey(String collection, String id) => '$collection:$id';
 
-  void _syncStreamVisibility(String collection, List<AdminDoc> rawDocs) {
-    final isNewSnapshot = !identical(_lastRawDocs[collection], rawDocs);
-    final seq = isNewSnapshot
-        ? (_streamSeqByCollection[collection] = (_streamSeqByCollection[collection] ?? 0) + 1)
-        : (_streamSeqByCollection[collection] ?? 0);
-    _lastRawDocs[collection] = rawDocs;
-    for (final d in rawDocs) {
+  Stream<({int seq, List<AdminDoc> docs})> _trackStream(
+    String collection,
+    Stream<List<AdminDoc>> source,
+  ) {
+    final epoch = _screenEpoch;
+    return source.map((docs) {
+      if (epoch != _screenEpoch) return (seq: 0, docs: docs);
+      final seq = (_streamSeqByCollection[collection] ?? 0) + 1;
+      _streamSeqByCollection[collection] = seq;
+      return (seq: seq, docs: docs);
+    });
+  }
+
+  void _syncStreamVisibility(String collection, ({int seq, List<AdminDoc> docs}) snapshot) {
+    final seq = snapshot.seq;
+    for (final d in snapshot.docs) {
       final k = _visKey(collection, d.id);
       final streamVisible = d.data['visible'] != false;
       _latestStreamVisible[k] = streamVisible;
@@ -1551,11 +1564,12 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                 ));
               }
             }
-            if (undone.isEmpty) {
-              _flushDeferredErrors(messenger);
-              return;
-            }
-            if (mounted) setState(() {});
+            if (mounted && undone.isNotEmpty) setState(() {});
+            // Yield past SnackBarAction._handlePressed()'s trailing hideCurrentSnackBar call
+            // so flushed errors are not immediately dismissed as if they were the Undo bar.
+            await Future<void>.microtask(() {});
+            _flushDeferredErrors(messenger);
+            if (undone.isEmpty) return;
             for (final item in undone) {
               try {
                 if (item.renewal != null) await item.renewal;
@@ -1565,7 +1579,6 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                 _showSnack(messenger, SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
               }
             }
-            _flushDeferredErrors(messenger);
           },
         ),
       ),
