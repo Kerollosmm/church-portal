@@ -1489,6 +1489,27 @@ void main() {
         unawaited(pd.releaseHold('y', extend: false, token: freshTokens['y']));
         async.flushMicrotasks();
         expect(committed, contains('y2'));
+
+        // Anchor timer aligns successful renewal expiry with hold acquisition (backend deletedAt + window),
+        // and commits immediately if the anchor already elapsed during a slow renewal (window = 120ms).
+        pd.schedule('z', () async => committed.add('z'));
+        async.elapse(const Duration(milliseconds: 50));
+        final zHold = pd.holdAll(['z']); // anchor deadline = +120ms from now (t+170ms)
+        async.elapse(const Duration(milliseconds: 80)); // original t+120ms elapsed; anchor still has 40ms left
+        unawaited(pd.releaseHold('z', extend: true, token: zHold['z']));
+        async.flushMicrotasks();
+        expect(committed.contains('z'), isFalse);
+        async.elapse(const Duration(milliseconds: 35)); // 5ms before anchor deadline
+        expect(committed.contains('z'), isFalse);
+        async.elapse(const Duration(milliseconds: 10)); // crosses anchor deadline -> commits at backend deadline
+        expect(committed, contains('z'));
+
+        pd.schedule('w', () async => committed.add('w'));
+        final wHold = pd.holdAll(['w']);
+        async.elapse(const Duration(milliseconds: 130)); // slow RPC finishes AFTER 120ms anchor elapsed
+        unawaited(pd.releaseHold('w', extend: true, token: wHold['w']));
+        async.flushMicrotasks();
+        expect(committed, contains('w'));
       });
     });
 
@@ -1543,7 +1564,7 @@ void main() {
       expect(find.textContaining('delete failed'), findsOneWidget);
     });
 
-    testWidgets('slow batch renewal extending past 10s keeps Undo SnackBar active until renewed items settle',
+    testWidgets('slow batch renewal aligns with backend deletedAt and deferred visibility error survives Undo refresh',
         (tester) async {
       tester.view.physicalSize = const Size(900, 1000);
       tester.view.devicePixelRatio = 1;
@@ -1553,6 +1574,7 @@ void main() {
         'saints': [
           AdminDoc('s1', {'nameAr': 'مارمرقس', 'visible': true, 'order': 10}),
           AdminDoc('s2', {'nameAr': 'مارجرجس', 'visible': true, 'order': 20}),
+          AdminDoc('s3', {'nameAr': 'مارمينا', 'visible': true, 'order': 30}),
         ],
       });
       addTearDown(repo.dispose);
@@ -1563,28 +1585,33 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      // Delete s1 at t=0.
+      // Delete s1 at t=0, advance 2s, then delete s2 at t=2s while holding s1's renewal.
       await tester.tap(find.byKey(const ValueKey('delete-s1')));
       await tester.pump();
       await tester.pump(const Duration(seconds: 2));
 
-      // Hold s1's renewal write, delete s2 at t=2s, let s1 expire while held,
-      // then complete s1's renewal at t=11s -> s1 is extended cleanly to t=21s.
       final s1Renew = repo.hold('saints', 's1');
       await tester.tap(find.byKey(const ValueKey('delete-s2')));
       await tester.pump();
 
-      await tester.pump(const Duration(seconds: 9)); // now t=11s
-      s1Renew.complete();
+      // Fail a visibility toggle on s3 while Undo bar is active -> deferred error survives bar refresh.
+      final visFail = repo.hold('saints', 's3');
+      await tester.tap(find.byKey(const ValueKey('visibility-s3')));
+      await tester.pump();
+      visFail.completeError(FirebaseException(plugin: 'cloud_firestore', code: 'permission-denied', message: 'Denied'));
       await tester.pump();
 
-      // At t=12s (10s since s2's _presentUndoSnackBar), s2 has committed, s1 is still pending until t=21s.
-      await tester.pump(const Duration(seconds: 2));
-      expect(find.text('تراجع'), findsOneWidget);
+      // Complete s1's renewal at t=11s -> anchor deadline from t=2s (+10s) expires at t=12s (aligned with s2).
+      await tester.pump(const Duration(seconds: 9));
+      s1Renew.complete();
+      await tester.pump();
+      expect(find.text('تراجع عن الكل'), findsOneWidget);
 
-      await tester.tap(find.text('تراجع'));
+      // Advance past t=12s -> both s1 and s2 commit together at backend deadline, and deferred error surfaces!
+      await tester.pump(const Duration(seconds: 2));
       await tester.pumpAndSettle();
-      expect(repo.collections['saints']!.any((d) => d.id == 's1'), isTrue);
+      expect(repo.deletedIds, containsAll(['saints/s1', 'saints/s2']));
+      expect(find.textContaining('permission-denied'), findsOneWidget);
     });
 
     testWidgets('CollectionListScreen multi-delete extends batch window so undoAll at 12s restores both items', (tester) async {

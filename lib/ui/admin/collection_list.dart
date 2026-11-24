@@ -125,6 +125,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? _undoSnackBarController;
   int _undoSnackBarCount = 0;
   Timer? _undoSnackBarTimer;
+  final List<SnackBar> _deferredErrorSnacks = [];
 
   /// The list as last shown (slug uniqueness checks in the editor).
   List<AdminDoc> _lastDocs = const [];
@@ -165,6 +166,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       _lastRawDocs.clear();
       _settledAtStreamSeq.clear();
       _streamSeqByCollection.clear();
+      _deferredErrorSnacks.clear();
       _stream = widget.repo.watch(widget.def.name);
       _entriesStream = widget.def.name == 'categories' ? widget.repo.watch('entries') : null;
       _pagesStream = widget.def.name == 'categories' ? widget.repo.watch('pages') : null;
@@ -179,6 +181,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   void dispose() {
     _undoSnackBarTimer?.cancel();
     _undoSnackBarController = null;
+    _deferredErrorSnacks.clear();
     _featuresSub?.cancel();
     _pendingDelete.dispose();
     _pendingEntries.clear();
@@ -761,9 +764,22 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     }
   }
 
-  void _showSnack(ScaffoldMessengerState? messenger, SnackBar bar) {
+  void _showSnack(ScaffoldMessengerState? messenger, SnackBar bar, {bool deferWhileUndo = false}) {
     if (!mounted || messenger == null || !messenger.mounted) return;
+    if (deferWhileUndo && _undoSnackBarController != null) {
+      _deferredErrorSnacks.add(bar);
+      return;
+    }
     messenger.showSnackBar(bar);
+  }
+
+  void _flushDeferredErrors(ScaffoldMessengerState? messenger) {
+    if (!mounted || messenger == null || !messenger.mounted) return;
+    if (_undoSnackBarController != null || _deferredErrorSnacks.isEmpty) return;
+    for (final bar in _deferredErrorSnacks) {
+      messenger.showSnackBar(bar);
+    }
+    _deferredErrorSnacks.clear();
   }
 
   bool _effectiveHidden(AdminDoc d, {CollectionDef? targetDef}) {
@@ -1308,7 +1324,11 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         _optimisticVisible.remove(k);
         _settledAtStreamSeq.remove(k);
       });
-      _showSnack(messenger, SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e)))));
+      _showSnack(
+        messenger,
+        SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e)))),
+        deferWhileUndo: true,
+      );
     }
   }
 
@@ -1332,7 +1352,11 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       _showSnack(messenger, SnackBar(content: Text(ok), duration: const Duration(seconds: 2)));
     } catch (e) {
       if (!mounted) return;
-      _showSnack(messenger, SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e)))));
+      _showSnack(
+        messenger,
+        SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e)))),
+        deferWhileUndo: true,
+      );
     }
   }
 
@@ -1430,6 +1454,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           } catch (_) {}
           if (!mounted) return;
           await _pendingDelete.releaseHold(p.id, extend: renewed, token: token);
+          if (mounted) _syncUndoBarAfterExpiry(messenger, failedMsg: failedMsg);
         }();
         final priorInFlight = _inFlightRenewals[p.id];
         late final Future<void> combined;
@@ -1458,6 +1483,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       if (hadActiveUndoBar && messenger != null && messenger.mounted) {
         messenger.removeCurrentSnackBar();
       }
+      _flushDeferredErrors(messenger);
       return;
     }
     final pendingCount = _pendingDelete.pendingIds.length;
@@ -1525,7 +1551,10 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                 ));
               }
             }
-            if (undone.isEmpty) return;
+            if (undone.isEmpty) {
+              _flushDeferredErrors(messenger);
+              return;
+            }
             if (mounted) setState(() {});
             for (final item in undone) {
               try {
@@ -1536,6 +1565,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                 _showSnack(messenger, SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
               }
             }
+            _flushDeferredErrors(messenger);
           },
         ),
       ),
@@ -1560,6 +1590,8 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
             failedMsg: failedMsg,
             resetTimer: true,
           );
+        } else {
+          _flushDeferredErrors(messenger);
         }
       }
     });
@@ -1579,6 +1611,8 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
             failedMsg: failedMsg,
             resetTimer: true,
           );
+        } else {
+          _flushDeferredErrors(messenger);
         }
       });
     }

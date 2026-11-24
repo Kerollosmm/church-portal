@@ -43,8 +43,9 @@ class PendingDelete {
     await _commitItem(id);
   }
 
-  /// Suspends timer expiry for [ids] with per-hold identity tokens so overlapping
-  /// batch deletions or stale renewals from undone items cannot touch a replacement entry.
+  /// Suspends timer expiry for [ids] with per-hold identity tokens whose [window]
+  /// anchor starts at hold acquisition (matching the `deletedAt` timestamp written
+  /// for the batch) so successful renewals align expiry with backend `deletedAt + window`.
   Map<String, Object> holdAll(Iterable<String> ids) {
     final tokens = <String, Object>{};
     for (final id in ids) {
@@ -52,35 +53,66 @@ class PendingDelete {
       if (item == null) continue;
       if (item.activeHolds.isEmpty) {
         item.expiredWhileHeld = false;
-        item.extendOnRelease = false;
+        item.extendingHold = null;
       }
-      final token = Object();
-      item.activeHolds.add(token);
-      tokens[id] = token;
+      late final _PendingHold hold;
+      hold = _PendingHold(Timer(window, () => _onHoldAnchorFired(id, item, hold)));
+      item.activeHolds.add(hold);
+      tokens[id] = hold;
     }
     return tokens;
   }
 
+  void _onHoldAnchorFired(String id, _PendingCommit item, _PendingHold hold) {
+    hold.anchorExpired = true;
+    if (!identical(_pending[id], item)) return;
+    // Adopted as active item timer when item.activeHolds is empty and extendingHold == hold.
+    if (item.activeHolds.isEmpty && identical(item.extendingHold, hold)) {
+      item.extendingHold = null;
+      unawaited(_commitItem(id));
+    }
+  }
+
   /// Releases one hold on [id] matching [token]: ignores stale tokens from undone/replaced
-  /// entries, and only when the last overlapping hold releases does it extend or commit.
+  /// entries, and when the last hold releases either adopts the winning hold's anchor timer
+  /// (commit immediately if its anchor already elapsed) or keeps/commits the original deadline.
   Future<void> releaseHold(String id, {required bool extend, Object? token}) async {
     final item = _pending[id];
     if (item == null) return;
+    _PendingHold? released;
     if (token != null) {
-      if (!item.activeHolds.remove(token)) return;
+      final idx = item.activeHolds.indexWhere((h) => identical(h, token));
+      if (idx == -1) return;
+      released = item.activeHolds.removeAt(idx);
     } else if (item.activeHolds.isNotEmpty) {
-      item.activeHolds.remove(item.activeHolds.last);
+      released = item.activeHolds.removeLast();
     } else {
       return;
     }
-    if (extend) item.extendOnRelease = true;
-    if (item.activeHolds.isNotEmpty) return;
-    final shouldExtend = item.extendOnRelease;
+    if (extend) {
+      item.extendingHold = released;
+    } else {
+      released.anchorTimer.cancel();
+    }
+    if (item.activeHolds.isNotEmpty) {
+      if (!extend && identical(item.extendingHold, released)) {
+        item.extendingHold = null;
+      }
+      return;
+    }
+    final winner = item.extendingHold;
     final expired = item.expiredWhileHeld;
-    item.extendOnRelease = false;
     item.expiredWhileHeld = false;
-    if (shouldExtend) {
-      _resetTimer(id, item);
+    if (winner != null) {
+      item.timer.cancel();
+      if (winner.anchorExpired) {
+        item.extendingHold = null;
+        winner.anchorTimer.cancel();
+        await _commitItem(id);
+      } else {
+        // Adopt the anchorTimer already counting from the renewed deletedAt timestamp.
+        item.timer = winner.anchorTimer;
+      }
     } else if (expired) {
       await _commitItem(id);
     }
@@ -97,8 +129,11 @@ class PendingDelete {
   }
 
   void _resetTimer(String id, _PendingCommit item) {
+    for (final h in item.activeHolds) {
+      h.anchorTimer.cancel();
+    }
     item.activeHolds.clear();
-    item.extendOnRelease = false;
+    item.extendingHold = null;
     item.expiredWhileHeld = false;
     item.timer.cancel();
     item.timer = Timer(window, () => _onTimerFired(id, item));
@@ -136,11 +171,17 @@ class PendingDelete {
   }
 }
 
+class _PendingHold {
+  final Timer anchorTimer;
+  bool anchorExpired = false;
+  _PendingHold(this.anchorTimer);
+}
+
 class _PendingCommit {
   Timer timer;
   final Future<void> Function() commit;
-  final List<Object> activeHolds = [];
-  bool extendOnRelease = false;
+  final List<_PendingHold> activeHolds = [];
+  _PendingHold? extendingHold;
   bool expiredWhileHeld = false;
   bool _executed = false;
 
@@ -150,6 +191,11 @@ class _PendingCommit {
 
   void cancel() {
     timer.cancel();
+    for (final h in activeHolds) {
+      h.anchorTimer.cancel();
+    }
+    activeHolds.clear();
+    extendingHold = null;
   }
 
   Future<void> execute() async {
