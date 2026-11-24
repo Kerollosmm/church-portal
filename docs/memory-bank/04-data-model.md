@@ -14,10 +14,10 @@ Four places must agree for every field — change them together:
 ## Conventions
 
 - **Bilingual pairs**: `…Ar` / `…En` (rendered with `context.pick`). Exceptions: `Priest.name` (Arabic) + `nameEn`;
-  `Clinic.doctorName` (single); `Saint.feastGregorian` (EN) + `feastGregorianAr`.
+  `Saint.feastGregorian` (EN) + `feastGregorianAr`.
 - **Times**: strings `"HH:mm"` 24 h, Cairo wall clock (`parseHm`; rules regex `^([01][0-9]|2[0-3]):[0-5][0-9]$`,
   empty string allowed where optional).
-- **Weekdays**: ISO **1 = Monday … 7 = Sunday** (`weekday`, `Clinic.days`).
+- **Weekdays**: ISO **1 = Monday … 7 = Sunday** (`weekday`).
 - **Instants**: Firestore `Timestamp` (`startsAt`, `endsAt`, `date`, `createdAt`, `updatedAt`). In `seed.json` they
   are ISO strings with the Cairo offset (`gen_seed.py` `T(date, "HH:mm")` uses `ZoneInfo("Africa/Cairo")`, so DST is
   right); `seed_firestore.js` converts the keys `startsAt/endsAt/date/createdAt` to Timestamps.
@@ -43,8 +43,8 @@ changes** (`changedKeys`; a create checks all keys) — see `05-firebase.md` (ex
 
 Allowed (and shown) on **`priests`** (serving + departed), **`saints`**, **`milestones`**, **`activities`**,
 **`alerts`**, **`seasons`** (`imageCollections` in `admin_schema.dart`). Since PR #11 the model (`Meeting.image`,
-`Clinic.image`, `Facility.image`) and the rules also accept it on **`meetings`**, **`clinics`** and **`facilities`**;
-since PR #12 the admin form has the field there too, and since PR #13 their cards show it (meeting / clinic: beside
+`Facility.image`) and the rules also accept it on **`meetings`** and **`facilities`**;
+since PR #12 the admin form has the field there too, and since PR #13 their cards show it (meeting: beside
 the title; facility: in place of the type icon). It is **never required**; absent / `null` /
 malformed = no image and the card keeps its icon / initials placeholder. The seed has no images.
 
@@ -65,14 +65,14 @@ malformed = no image and the card keeps its icon / initials placeholder. The see
 
 ### Optional `imageStyle` (PR #15, ADR-023)
 
-On the 9 image collections (`alerts`, `seasons`, `meetings`, `activities`, `clinics`, `facilities`, `priests`,
+On the 8 image collections (`alerts`, `seasons`, `meetings`, `activities`, `facilities`, `priests`,
 `milestones`, `saints`): `imageStyle` string, one of `avatar` · `card` · `banner`; absent / `null` / anything else =
-the section default (`settings/features.imageStyles[collection]`), then the built-in default (priests & clinics →
+the section default (`settings/features.imageStyles[collection]`), then the built-in default (priests →
 `avatar`, everything else → `card`; saints use a portrait card). Not seeded; new documents do not write it unset.
 
 ### Optional item detail page (PR #11) — `ItemDetails` / `CustomField` (`lib/domain/models.dart`)
 
-On the **7 detail collections** `meetings`, `activities`, `clinics`, `facilities`, `priests`, `milestones`,
+On the **6 detail collections** `meetings`, `activities`, `facilities`, `priests`, `milestones`,
 `saints` (**not** `liturgies`, `seasons`, `alerts`) every model has `details` (`ItemDetails.fromMap(doc)`;
 `ItemDetails.none` for const constructors). All keys are optional. Except `detailsEnabled`, they default to the
 pre-PR #11 behaviour (images / contacts / socials shown where they already were). `detailsEnabled` is **opt-out
@@ -90,16 +90,16 @@ the buttons already on the item's list card (PR #13).
 | `detailsAr` / `detailsEn` | string ≤ 10,000 | `''` | long text |
 | `extraFields` | list ≤ 15 (`MediaLimits.maxExtraFields`) of `{titleAr, titleEn, valueAr, valueEn}` | `[]` | admin-defined rows; all 4 keys written, titles ≤ 150, values ≤ 2000, a title (titleAr, else titleEn) required. The model drops empty rows and caps at 15 |
 | `gallery` | list ≤ 8 (`MediaLimits.maxGalleryItems`) of `image` maps | `[]` | same shape as `image` (rules don't range-check `w`/`h` of gallery items); inline bytes fetched only when the detail page opens. The model keeps usable images, max 8 |
-| `contactPhone` | string ≤ 20 | `''` | primary phone; **clinics read `bookingPhone`, facilities `phone`** (no new key there) |
-| `whatsapp` | string ≤ 20 | `''` | WhatsApp number (clinics already had it) |
+| `contactPhone` | string ≤ 20 | `''` | primary phone; **facilities read `phone`** (no new key there) |
+| `whatsapp` | string ≤ 20 | `''` | WhatsApp number |
 | `whatsappUrl`, `facebookUrl` | `''` / http(s) URL ≤ 500 | `''` | group / page links (meetings already had both) |
 | `youtubeUrl`, `instagramUrl` | `''` / http(s) URL ≤ 500 | `''` | |
 | `externalUrl` | `''` / http(s) URL ≤ 500 | `''` | external / registration button; **activities use their existing `link`** (no `externalUrl` key) |
 | `externalLabelAr` / `externalLabelEn` | string ≤ 80 | `''` | custom button label (UI falls back to `openPage`) |
 | `contactNoteAr` / `contactNoteEn` | string ≤ 500 | `''` | how to contact / register |
 
-- Rules: `detailKeys()` is concatenated to the 7 allow-lists; each also allows `image` and the phone/link keys it
-  lacked (`contactPhone` except clinics/facilities, `externalUrl` except activities). The new text keys must be
+- Rules: `detailKeys()` is concatenated to the allow-lists; each also allows `image` and the phone/link keys it
+  lacked (`contactPhone` except facilities, `externalUrl` except activities). The new text keys must be
   strings (`''` when cleared; the admin form never writes `null`), the shared phone/link keys keep accepting `null`.
   `CustomField.isEmpty` = all four blank.
 - Media clean-up: `orphanedMediaIds(before, after)` accepts an `image` map **or** a `gallery` list on either side;
@@ -160,7 +160,7 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
 
 | Field | Type | Default / parsing |
 |---|---|---|
-| `sections` | map `<sectionKey, bool>` | missing key = **on**; non-bool values ignored. Keys = `Sections.all`: `schedule, meetings, clinics, services, history, milestones, saints, priests, departedPriests, activities, alerts, contactInfo, socials, contactForm, assistant, media` (`media` = show optional item images; not a page) |
+| `sections` | map `<sectionKey, bool>` | missing key = **on**; non-bool values ignored. Keys = `Sections.all`: `schedule, meetings, services, history, milestones, saints, priests, departedPriests, activities, alerts, contactInfo, socials, contactForm, assistant, media` (`media` = show optional item images; not a page) |
 | `englishEnabled` | bool, default **true** (PR 3G, P2-27b) | owner-only switch controlling the public language toggle and `lang: 'en'` admin form fields; seeded `true` |
 | `homeOrder` | list of block keys | `normalizeHomeOrder`: unknown/duplicate dropped, missing appended in default order. Blocks (`HomeBlocks.defaultOrder`): `banner, alerts, nextMass, quickContacts, milestones, directory, map` |
 | `homeHidden` | list of block keys | unknown keys dropped |
@@ -177,14 +177,13 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
 | `occasions` | map (PR #17, ADR-025) | `{auto: bool (false), easter: bool (true), resurrectionDays: int 1–50 (7), schedule: {r1…r12: 'theme\|YYYY-MM-DD\|YYYY-MM-DD'}, followSeason: bool (true), seasonThemes: {seasonKey: themeKey\|'none'}}` (`OccasionConfig`; `followSeason` / `seasonThemes` ADR-043). Inclusive Cairo dates; invalid / reversed ranges dropped when read. Precedence: first matching range (with `auto`) > the active season's theme (with `followSeason`; first key in `SeasonThemes.seasonKeys` order) > the Easter ranges (with `auto` + `easter`) > `theme`. `seasonThemes` stores only differences from the defaults (holy_week → holyWeek, pascha → resurrection, nativity, epiphany, marian, fast → fasting; revivals / summer → none). Missing = manual + follow the season |
 | `themeColors` | map (PR #17) | per preset key a string of the 10 palette colours in `ThemePalette.keys` order (`primary\|onPrimary\|onPrimaryAccent\|background\|surface\|surfaceAlt\|ink\|muted\|goldText\|script`), each `#RRGGBB` or empty (= the preset's). Saved auto-corrected for contrast and re-corrected when rendered. Its own field (and write) for the rules budget. Missing = presets as built |
 | `heroVideos` | map (PR #17, ADR-026) — **legacy since PR #25 (ADR-036)** | no longer read or written by the app (the YouTube hero video library was removed); a stored value is kept untouched and the rules still accept / validate the key so saves keep working |
-| `pageHeaders` | map `<pageKey, PageCustom>` (PR #11) | `{}`. Keys = `CustomizablePages.all`: `about, schedule, education, activities, clinics, services, contact, ask`; each entry `{titleAr, titleEn` ≤ 200, `subtitleAr, subtitleEn` ≤ 300, `introAr, introEn` ≤ 1500`}` (all 6 keys written). Unknown pages / non-maps / empty entries are dropped by `fromMap`; `toMap` writes non-empty entries only. `pageHeader(key)` → `PageCustom.empty` when unset. Rendered since PR #13 (`CustomizablePageHeader` / `PageIntro`: title/subtitle override for the current language only; intro via `context.pick`) |
+| `pageHeaders` | map `<pageKey, PageCustom>` (PR #11) | `{}`. Keys = `CustomizablePages.all`: `about, schedule, education, activities, services, contact, ask`; each entry `{titleAr, titleEn` ≤ 200, `subtitleAr, subtitleEn` ≤ 300, `introAr, introEn` ≤ 1500`}` (all 6 keys written). Unknown pages / non-maps / empty entries are dropped by `fromMap`; `toMap` writes non-empty entries only. `pageHeader(key)` → `PageCustom.empty` when unset. Rendered since PR #13 (`CustomizablePageHeader` / `PageIntro`: title/subtitle override for the current language only; intro via `context.pick`) |
 | `footer` | map (PR #11, FR-G-04) | `{showPhones: true, showSocials: true, showQuickLinks: true, noteAr: '', noteEn: ''}` (`FooterConfig`); notes ≤ 500. Rendered by `Footer` since PR #13 (phones also need `contactInfo`, socials `socials`) |
 | `updatedAt`, `updatedBy` | | stampOk |
 
 - `FeatureSettings.defaults` (everything on) is used before the doc loads and when it does not exist.
-- **Seed** (`gen_seed.py`): every section on **except `clinics: false`** (PR 1) — `/clinics` stays off until the
-  church office confirms the clinics and their booking numbers. Live docs keep whatever the admin set.
-- `toMap()` always writes **all** 19 section keys explicitly. Live docs saved before PR #5 lack `media` → on; before
+- **Seed** (`gen_seed.py`): every section on. Live docs keep whatever the admin set.
+- `toMap()` always writes all section keys explicitly. Live docs saved before PR #5 lack `media` → on; before
   PR #16 lack `dailyVerse` → on; before PR #18 lack `customSections` / `customPages` → on.
 - The seed (PR #11) adds `pageHeaders: {}` and the default `footer` map; live docs get them with
   `node tool/seed_firestore.js --fill-missing` (adds absent fields only) or on the next save in /admin. Missing =
@@ -305,12 +304,6 @@ sports, exhibitions`, default `service`), `titleAr` (**req**), `titleEn`, `descA
 `davids-tones`, `hymns-school`, `maximous-youth`, `prep-boys`, `antibiotic-mime`, `karouz-school`, `servant-care`,
 `media-center`, `kalimtein`).
 
-### `clinics/{id}` — `Clinic` (Hideable, orderable)
-`specialty` (**req** key ≤40, e.g. `dental` — also the `?specialty=` URL value), `specialtyAr` (**req**),
-`specialtyEn`, `doctorName` (**req**), `degreeAr/En`, `days` (list ⊆ {1..7}, ≤7), `start`/`end` (HH:mm, end must be
-after start in admin), `bookingPhone`/`whatsapp` (≤20), `active` (bool, **missing = true**), meta. Seed: 11 generic
-placeholders («طبيب <التخصص> — يُعلن لاحقًا», no phones), all `sample: true`.
-
 ### `facilities/{id}` — `Facility` (Hideable, orderable) — shown on `/public-services`
 `type` (≤40; `service, nursery, employment, halls, other`), `nameAr` (**req**), `nameEn`, `descAr/En` (≤2000),
 `phone` (≤20), `hoursAr/En` (≤300), meta. Seed: `anba-abraam` (verified), `nursery`, `employment`, `halls`, `library`
@@ -351,8 +344,8 @@ else the category's), `visible`, `order`, `sample`. Not seeded.
 `slug` (**req**, as above; public page `/page/<slug>`), `titleAr` (**req**, ≤ 200, not blank), `titleEn` (≤ 200),
 `subtitleAr/En` (≤ 300), `image` (optional hero), `placement` (`'link'` | `'nav'` | `'section'`, PR 3D / P1-18 —
 absent falls back to `showInNav ? 'nav' : 'link'`), `categoryId` (string `[A-Za-z0-9_-]{1,128}` required when
-`placement == 'section'`, `{0,128}` otherwise — either a custom `categories/{id}` doc id or one of the 7 virtual
-`BuiltInSections` ids `builtin_schedule`, `builtin_meetings`, `builtin_activities`, `builtin_clinics`,
+`placement == 'section'`, `{0,128}` otherwise — either a custom `categories/{id}` doc id or one of the 6 virtual
+`BuiltInSections` ids `builtin_schedule`, `builtin_meetings`, `builtin_activities`,
 `builtin_services`, `builtin_about`, `builtin_contact`, ADR-075; no `categories/builtin_*` Firestore doc is ever
 created or fetched), `showInNav` (bool synced with `placement == 'nav'`, missing = **false**:
 pages are off the menu by default), `featured` (bool, default `false` — shows a «اعرف المزيد» card on `HomePage`, hint «هتظهر في «صفحات مميزة» في الرئيسية مهما كان مكانها»; sorted by `order` asc, `updatedAt` desc, unique slug),
@@ -413,7 +406,7 @@ Public read, admin write (`validAssistant`). **Missing doc / blank text / null n
 |---|---|---|
 | `model` | `''` or `gemini-[a-z0-9][a-z0-9.-]{0,52}` (≤ 60) | `AppConfig.geminiModel` = `gemini-3.1-flash-lite`; 1.x/2.x ids ignored, a rejected model falls back |
 | `instructions` | string ≤ 4000 | `defaultInstructions` (persona / tone; the scope + grounding rules are always added) |
-| `topics` | string ≤ 2000, one topic per line (`-`/`*`/`•` bullets stripped) | `defaultTopics` (times, meetings, clinics, activities, priests, saints, history, announcements, contact, bookings, donations, custom sections / pages) |
+| `topics` | string ≤ 2000, one topic per line (`-`/`*`/`•` bullets stripped) | `defaultTopics` (times, meetings, activities, facilities, priests, saints, history, announcements, contact, bookings, donations, custom sections / pages) |
 | `refusalAr`, `refusalEn` | string ≤ 500 | `defaultRefusalAr/En` |
 | `welcomeAr`, `welcomeEn` | string ≤ 500 | `askIntroText` (names only switched-on sections, ADR-051) |
 | `showSuggestions` | bool (PR #21) | `false` — no chips on /ask; when on, only the admin questions below (no built-in fallbacks) |
@@ -474,7 +467,9 @@ Doc id = Firebase Auth **UID**. Missing/unknown role is treated as **editor** (`
 - `retired` dict in `gen_seed.py` → `tool/retired_seed_ids.json`: ids earlier seeds created that are no longer in the
   seed (`alerts: school-blessing-2026, holy-week-2027, summer-2027`; `seasons: summer-2027`;
   `liturgies: sum-sun-1, sum-sun-2, sum-sun-eve, sum-fri-1, sum-fri-2, sum-fri-3`;
-  `activities: scouts, deacons, hymns, bible, summer, sports, exhibitions`; `priests: p1, p2, p3`;
+  `activities: scouts, deacons, hymns, bible, summer, sports, exhibitions`;
+  `clinics: cardio-1, dental-1, derma-1, ent-1, eye-1, gyn-1, internal-1, ortho-1, pediatrics-1, pediatrics-2, physio-1`;
+  `priests: p1, p2, p3`;
   `milestones: founding, pastoral, consecration`). `seed_firestore.js --force` deletes them **unless** the doc carries
   `updatedAt`/`updatedBy` (edited in /admin).
 - `seed_firestore.js --fill-missing` adds only absent fields to existing docs and **recurses into nested maps**
@@ -483,7 +478,7 @@ Doc id = Firebase Auth **UID**. Missing/unknown role is treated as **editor** (`
   without explicit approval).
 - `tool/known_seed_ids.json`: every id any seed ever wrote (grow-only). `gen_seed.py` asserts
   `known − current − retired = ∅`, so removing an id from the seed **requires** adding it to `retired`.
-- Seed counts (current): settings 2, alerts 4, seasons 5, liturgies 47, meetings 11, activities 11, clinics 11,
+- Seed counts (current): settings 2, alerts 4, seasons 5, liturgies 47, meetings 11, activities 11,
   facilities 5, priests 11, milestones 4, saints 2.
 
 ## Hosting data file `/data/today.json` (PR #31, ADR-040)

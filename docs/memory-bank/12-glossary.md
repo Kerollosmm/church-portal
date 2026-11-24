@@ -66,7 +66,6 @@ Season labels for admins: `opt_holy_week` … `opt_summer` in `lib/core/l10n.dar
 | إعداد خدام | Servant preparation | `servants` |
 | الكشافة | Scouts | `scouts` |
 | مدرسة الشمامسة | Deacons school | `deacons` |
-| عيادات خيرية | Charity clinics | `clinics` |
 | الحضانة / مكتب التوظيف / قاعات العزاء والمناسبات / المكتبة | Nursery / Employment office / Condolence & occasion halls / Library | `facilities.type: nursery, employment, halls, other` |
 | خدمة الأنبا أبرآم | Anba Abraam service (care for needy families) | facility `anba-abraam`, `type: 'service'` |
 

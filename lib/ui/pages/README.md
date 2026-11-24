@@ -1,7 +1,7 @@
 # pages
 
 ## Overview
-The `pages` package implements all user-facing destination screens in the Church Portal. It delivers public pages for the church homepage, daily liturgical schedules, mass bookings, community activities, Christian education (Sunday school), medical clinics, community services, Katameros daily scripture readings, custom content pages, item details, contact forms, push notification settings, and the conversational Gemini AI assistant. Every page follows the church portal's Arabic-first RTL design, adheres to strict feature toggling (Golden Rule 6), respects sample data indicators (Golden Rule 1), and anchors temporal scheduling to Cairo wall-clock time (`CairoTime`).
+The `pages` package implements all user-facing destination screens in the Church Portal. It delivers public pages for the church homepage, daily liturgical schedules, mass bookings, community activities, Christian education (Sunday school), community services, Katameros daily scripture readings, custom content pages, item details, contact forms, push notification settings, and the conversational Gemini AI assistant. Every page follows the church portal's Arabic-first RTL design, adheres to strict feature toggling (Golden Rule 6), respects sample data indicators (Golden Rule 1), and anchors temporal scheduling to Cairo wall-clock time (`CairoTime`).
 
 ## Interface
 - `about_page.dart`:
@@ -20,9 +20,6 @@ The `pages` package implements all user-facing destination screens in the Church
   - `CategoryPage`: Dynamic collection browser rendering items under an admin-defined category slug (`/section/<slug>`).
   - `ContentUnavailable`: Empty-state widget presented when a requested category or item is unpublished or disabled.
   - `EntryCard`: Standardized card rendering a collection item with image, schedule, and metadata.
-- `clinics_page.dart`:
-  - `ClinicsPage`: Specialized directory screen listing church medical clinics, physician specialties, and consultation schedules.
-  - `ClinicCard`: Card widget detailing clinic opening hours, doctor names, and booking phone numbers.
 - `contact_page.dart`:
   - `ContactPage`: Parish contact directory with physical address, Google Maps embed, phone directory, and public feedback form.
   - `ContactForm`: Interactive form enabling visitors to send inquiries or prayer requests to church administrators.
@@ -60,7 +57,7 @@ The `pages` package implements all user-facing destination screens in the Church
 - `[contact_page.dart:ContactForm]`: Inbound contact messages must be throttled by client-side anti-spam cooldown (`ContactRateLimiter`).
 - `[home_page.dart:HomePage]`: Every public section must be wrapped in feature checks observing `sectionsProvider`; disabled sections must not render or navigate (Golden Rule 6).
 - `[mass_schedule_page.dart:MassSchedulePage]`, `[readings_page.dart:ReadingsPage]`: All dates, times, and day-of-week selections must route through `CairoTime` (Africa/Cairo timezone, ISO weekdays 1–7).
-- `[about_page.dart:AboutPage]`, `[clinics_page.dart:ClinicsPage]`: Records marked `sample: true` must visually indicate unconfirmed status and must not invent facts (Golden Rule 1).
+- `[about_page.dart:AboutPage]`: Records marked `sample: true` must visually indicate unconfirmed status and must not invent facts (Golden Rule 1).
 
 ## Side Effects
 - `[contact_page.dart:ContactForm]`: Writes submitted user messages into Cloud Firestore `messages` collection.

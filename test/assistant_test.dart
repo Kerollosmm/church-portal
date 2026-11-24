@@ -54,7 +54,6 @@ String _prompt({
       settings: _church,
       liturgies: const [],
       seasons: const [],
-      clinics: const [],
       meetings: const [],
       activities: const [],
       facilities: const [],
@@ -200,12 +199,12 @@ void main() {
       final t = _prompt(
         a: AssistantSettings.fromMap({
           'instructions': 'Speak like a kind deacon.',
-          'topics': '- Mass times\n\n* Clinics\n',
+          'topics': '- Mass times\n\n* Youth meetings\n',
         }),
       );
       expect(t, contains('Speak like a kind deacon.'));
       expect(t, isNot(contains(AssistantSettings.defaultInstructions)));
-      expect(t, contains('- Mass times\n- Clinics\n'));
+      expect(t, contains('- Mass times\n- Youth meetings\n'));
       expect(t, isNot(contains('- Donations page')));
       // Fixed rules cannot be edited away.
       expect(t, contains(outOfScopeToken));
@@ -656,23 +655,16 @@ void main() {
       }
       expect(instr, contains('Phone - '));
       expect(instr, contains(s.settings.phones.first.number));
-      // Clinics are switched off in the seed: not grounded.
-      expect(s.features.enabled(Sections.clinics), isFalse);
-      expect(instr, isNot(contains('## Clinics')));
       expect(find.text('At 7 AM.'), findsOneWidget);
     });
 
-    testWidgets('clinics, custom sections, custom pages (donations) and contact types reach the first prompt',
+    testWidgets('custom sections, custom pages (donations) and contact types reach the first prompt',
         (tester) async {
       final model = await pump(tester, reply: 'Yes.', repo: _CustomRepo.new);
       await tester.enterText(find.byKey(const Key('askInput')), 'How can I donate?');
       await tester.tap(find.byTooltip('Send'));
       await tester.pumpAndSettle();
       final instr = model.calls.single.instruction;
-      expect(instr, contains('## Clinics (book by phone or WhatsApp)'));
-      for (final c in seed().clinics.where((c) => c.active)) {
-        expect(instr, contains(c.doctorName));
-      }
       expect(instr, contains('## Scouts (الكشافة) (page /section/scouts)'));
       expect(instr, contains('- Saturday troop'));
       expect(instr, contains('## Support us (page /page/support)'));
@@ -780,13 +772,13 @@ void main() {
     });
 
     // ADR-051 (issue 7): the greeting and the chips skip hidden sections.
-    testWidgets('greeting and chips skip clinics and meetings when they are switched off', (tester) async {
+    testWidgets('greeting and chips skip meetings when they are switched off', (tester) async {
       await pump(tester,
           locale: 'ar',
           repo: _HiddenRepo.new,
           settings: AssistantSettings.fromMap({
             'showSuggestions': true,
-            'suggestionsAr': 'متى القداس؟\nمواعيد العيادة؟\nاجتماع الشباب امتى؟',
+            'suggestionsAr': 'متى القداس؟\nاجتماع الشباب امتى؟',
           }));
       expect(find.text('أهلًا بك! أجيب عن مواعيد القداسات وطرق التواصل، من بيانات الكنيسة الرسمية.'), findsOneWidget);
       expect(find.textContaining('العيادات'), findsNothing);
@@ -808,25 +800,19 @@ class _Repo extends SeedRepository {
   Stream<AssistantSettings> assistantSettings() => Stream.value(assistant);
 }
 
-/// Seed with the clinics and meetings sections switched off (ADR-051).
+/// Seed with the meetings section switched off (ADR-051).
 class _HiddenRepo extends _Repo {
   _HiddenRepo(super.seed, super.assistant);
   @override
   Stream<FeatureSettings> features() => Stream.value(FeatureSettings.fromMap({
         ...seed.features.toMap(),
-        'sections': {...seed.features.toMap()['sections'] as Map, Sections.clinics: false, Sections.meetings: false},
+        'sections': {...seed.features.toMap()['sections'] as Map, Sections.meetings: false},
       }));
 }
 
-/// Seed + clinics switched on, one custom section and one custom page with a
-/// donation block.
+/// Seed + one custom section and one custom page with a donation block.
 class _CustomRepo extends _Repo {
   _CustomRepo(super.seed, super.assistant);
-  @override
-  Stream<FeatureSettings> features() => Stream.value(FeatureSettings.fromMap({
-        ...seed.features.toMap(),
-        'sections': {...seed.features.toMap()['sections'] as Map, Sections.clinics: true},
-      }));
   @override
   Stream<List<CustomCategory>> categories() => Stream.value([
         CustomCategory.fromMap('cat1', {'slug': 'scouts', 'nameAr': 'الكشافة', 'nameEn': 'Scouts', 'visible': true}),

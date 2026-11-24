@@ -215,12 +215,12 @@ void main() {
   });
 
   testWidgets('desktop: Church services menu groups the enabled services only', (tester) async {
-    final router = await _pump(tester, _seedWith(const {'clinics': false}));
+    final router = await _pump(tester, _seedWith(const {'activities': false}));
     await tester.tap(find.byTooltip('Church services'));
     await tester.pumpAndSettle();
     final menu = find.byType(PopupMenuItem<String>);
-    expect(menu, findsNWidgets(4));
-    expect(find.descendant(of: menu, matching: find.text('Clinics')), findsNothing);
+    expect(menu, findsNWidgets(3));
+    expect(find.descendant(of: menu, matching: find.text('Activities')), findsNothing);
     await tester.tap(find.descendant(of: menu, matching: find.text('Church education')));
     await tester.pumpAndSettle();
     expect(router.routerDelegate.currentConfiguration.uri.path, '/church-education');

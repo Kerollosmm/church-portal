@@ -2293,3 +2293,9 @@ supersede them.
 | 23 Nov 2026 | **Admin UX polish** (`fix/admin-ux-polish`) | ADR-081: row visibility spinner (`savingVisibility` «جارٍ الحفظ…»), `'${collection}:${id}'` lock, tap-through guard, optimistic state + rollback + `DocEditor.popMessenger`; `PendingDelete.extendAll()` eliminating multi-delete undo timer drift + inner `ScaffoldMessenger` preventing 320 px / 200% SnackBar-vs-FAB overlap; pure `validateScheduledNotificationFields` routing draft validation errors beneath inputs, `ExpansibleController` auto-expand & scroll-to-first-error (`SingleChildScrollView` + `Column`), and `englishEnabled` parity in `NotificationsAdminSection` (preserving legacy stored `titleEn`/`bodyEn` with auto-reveal on validation error). |
 
 <!-- Append new PRs to this table. -->
+
+## Remove Clinics / Doctors Section (chore/remove-clinics)
+
+- **Context:** The church does not operate medical clinics, so the entire `clinics` section was removed from the public site, admin dashboard, seed data, assistant context, and tests.
+- **Decision:** Removed `ClinicsPage`, `Clinic` model, `Sections.clinics`, `DetailKind.clinic`, `BuiltInSections.clinics`, `PresetOption.hideClinics`, admin `clinics` collection/destination, and seeded clinic records (moved to `tool/retired_seed_ids.json`). `/clinics` and `/clinics/:id` now redirect to `/`.
+- **Follow-up:** `firestore.rules` and `tool/rules_test/rules.test.mjs` were intentionally left untouched in this PR and should be cleaned up in a separate rules follow-up.

@@ -37,7 +37,6 @@ String _build({
   FeatureSettings f = FeatureSettings.defaults,
   Map<String, dynamic> d = const {},
   List<Milestone> milestones = const [],
-  List<Clinic>? clinics,
   List<Meeting>? meetings,
   List<Activity>? activities,
   List<CustomCategory> categories = const [],
@@ -47,7 +46,6 @@ String _build({
       settings: _settings,
       liturgies: const [],
       seasons: const [],
-      clinics: clinics ?? [Clinic.fromMap('c', {'specialtyAr': 'الأسنان', 'doctorName': 'د. مينا', 'bookingPhone': '0355', ...d})],
       meetings: meetings ?? [Meeting.fromMap('m', {'stage': 'youth', 'nameAr': 'اجتماع الشباب', ...d})],
       activities: activities ?? [Activity.fromMap('a', {'titleAr': 'الكورال', 'link': 'https://fb.example.org/choir', ...d})],
       facilities: [Facility.fromMap('f', {'nameAr': 'الحضانة', 'phone': '0366', ...d})],
@@ -90,10 +88,10 @@ void main() {
       expect(t, contains('ت' * 300));
       expect(t, isNot(contains('ت' * 301)));
       expect(t, contains('Place (المكان): Main hall (القاعة الكبرى)'));
-      // Every one of the 7 collections carries them.
-      expect('Place (المكان): Main hall'.allMatches(t).length, 6); // + milestones below
+      // Every one of the 6 collections carries them.
+      expect('Place (المكان): Main hall'.allMatches(t).length, 5); // + milestones below
       final withMs = _build(d: _details(), milestones: [Milestone.fromMap('x', {'titleAr': 'م', 'year': 2000, ..._details()})]);
-      expect('Place (المكان): Main hall'.allMatches(withMs).length, 7);
+      expect('Place (المكان): Main hall'.allMatches(withMs).length, 6);
     });
 
     test('a page that is not enabled adds nothing', () {
@@ -110,10 +108,9 @@ void main() {
       expect(on, contains('01011112222'));
       expect(on, contains('01033334444'));
       expect(on, contains('Call after vespers'));
-      expect(on, contains('booking 0355'));
       expect(on, contains('Phone 0366'));
       final off = _build(d: _details(contacts: false));
-      for (final n in ['01011112222', '01033334444', 'Call after vespers', '0355', '0366']) {
+      for (final n in ['01011112222', '01033334444', 'Call after vespers', '0366']) {
         expect(off, isNot(contains(n)), reason: n);
       }
     });
@@ -165,7 +162,7 @@ void main() {
           {'titleAr': 'ع' * 150, 'titleEn': 'T' * 150, 'valueAr': 'ق' * 2000, 'valueEn': 'V' * 2000},
         ],
       };
-      final t = _build(d: d, clinics: const [], meetings: const [], activities: const []);
+      final t = _build(d: d, meetings: const [], activities: const []);
       expect(t, contains('${'T' * 100}…'));
       expect(t, isNot(contains('T' * 101)));
       expect(t, contains('${'V' * 300}…'));

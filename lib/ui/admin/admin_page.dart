@@ -595,7 +595,6 @@ List<AdminDest> adminDestinations(String role) => [
       // Services & activities
       AdminDest('facilities', adminIcon('services'), 'الخدمات العامة', 'Public services', group: AdminGroup.services),
       AdminDest('activities', adminIcon('activities'), 'الأنشطة والكورالات', 'Activities', group: AdminGroup.services),
-      AdminDest('clinics', adminIcon('clinics'), 'العيادات', 'Clinics', group: AdminGroup.services),
       // Pages
       const AdminDest('features', Icons.toggle_on_outlined, 'الأقسام والرئيسية', 'Sections & home',
           group: AdminGroup.pages),

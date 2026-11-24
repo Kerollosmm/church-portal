@@ -360,10 +360,6 @@ void main() {
                 placeAr: 'مذبح الأنبا موسى', seasonKey: 'revival_moses'),
           ],
           seasons: seasons,
-          clinics: const [
-            Clinic(id: 'c', specialty: 'dental', specialtyAr: 'الأسنان', specialtyEn: '', doctorName: 'د. مينا', degreeAr: 'ماجستير',
-                days: [5], whatsapp: '01012345678'),
-          ],
           meetings: const [
             Meeting(id: 'm', stage: 'youth', nameAr: 'اجتماع الشباب', nameEn: '', start: '19:00', end: '20:00', hallAr: 'قاعة البابا',
                 notes: 'يبدأ بعد العشية'),
@@ -391,8 +387,6 @@ void main() {
       final t = build();
       expect(t, contains('Friday: قداس الجمعة [mass] 07:00 AM – 09:00 AM at الكنيسة الكبرى - للشباب'));
       expect(t, contains('Directions: آخر شارع 45'));
-      expect(t, contains('الأسنان: د. مينا, ماجستير'));
-      expect(t, contains('WhatsApp 01012345678'));
       expect(t, contains('اجتماع الشباب [youth]'));
       expect(t, contains('at قاعة البابا'));
       expect(t, contains('notes: يبدأ بعد العشية'));
@@ -436,7 +430,6 @@ void main() {
             nameAr: 'كنيسة', nameEn: 'Church', addressAr: '', addressEn: '', historyAr: 'تاريخ', historyEn: 'History text'),
         liturgies: const [],
         seasons: const [],
-        clinics: const [],
         meetings: const [],
         activities: const [],
         facilities: const [],
@@ -466,7 +459,6 @@ void main() {
         settings: settings,
         liturgies: const [],
         seasons: const [],
-        clinics: const [],
         meetings: const [],
         activities: const [],
         facilities: const [],
@@ -486,7 +478,6 @@ void main() {
           Liturgy(id: 'expired', type: 'mass', nameAr: 'قداس قديم', nameEn: 'Old mass', date: DateTime(2026, 12, 10), start: '08:00', end: '10:00'),
         ],
         seasons: const [],
-        clinics: const [],
         meetings: const [],
         activities: const [],
         facilities: const [],
@@ -517,32 +508,10 @@ void main() {
     });
   });
 
-  group('clinics', () {
-    final clinics = [
-      const Clinic(id: 'd1', specialty: 'dental', specialtyAr: 'أسنان', specialtyEn: 'Dental', doctorName: 'B', days: [7]),
-      const Clinic(id: 'p1', specialty: 'pediatrics', specialtyAr: 'أطفال', specialtyEn: 'Pediatrics', doctorName: 'A', days: [5, 7]),
-      const Clinic(id: 'p2', specialty: 'pediatrics', specialtyAr: 'أطفال', specialtyEn: 'Pediatrics', doctorName: 'C', days: [1]),
-      const Clinic(id: 'x', specialty: 'dental', specialtyAr: 'أسنان', specialtyEn: 'Dental', doctorName: 'Z', days: [5], active: false),
-    ];
-    final friday = cairo(2026, 11, 6, 9);
-    test('available today uses the Cairo weekday', () {
-      expect(isClinicAvailableToday(clinics[1], friday), isTrue);
-      expect(isClinicAvailableToday(clinics[0], friday), isFalse);
+  group('schedule time and link helpers', () {
+    test('cairoWeekday uses Cairo time', () {
       // 23:30 UTC Thursday is already Friday 01:30 in Cairo.
       expect(cairoWeekday(DateTime.utc(2026, 11, 5, 23, 30)), 5);
-    });
-    test('filter by specialty, hide inactive, open-today first', () {
-      expect(filterClinics(clinics, now: friday).map((c) => c.id), ['p1', 'd1', 'p2']);
-      expect(filterClinics(clinics, specialty: 'pediatrics', now: friday).map((c) => c.id), ['p1', 'p2']);
-      expect(filterClinics(clinics, specialty: 'dental', now: friday).map((c) => c.id), ['d1']);
-      // The admin's drag order wins after "open today".
-      final ordered = [
-        const Clinic(id: 'a', specialty: 'dental', specialtyAr: '', specialtyEn: '', doctorName: 'A', days: [5], order: 20),
-        const Clinic(id: 'b', specialty: 'pediatrics', specialtyAr: '', specialtyEn: '', doctorName: 'B', days: [5], order: 10),
-        const Clinic(id: 'c', specialty: 'ent', specialtyAr: '', specialtyEn: '', doctorName: 'C', days: [1], order: 5),
-      ];
-      expect(filterClinics(ordered, now: friday).map((c) => c.id), ['b', 'a', 'c']);
-      expect(clinicSpecialties(clinics).keys, ['dental', 'pediatrics']);
     });
     test('links', () {
       expect(whatsappLink('0101 234 5678'), 'https://wa.me/201012345678');

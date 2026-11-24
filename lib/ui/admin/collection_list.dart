@@ -1887,7 +1887,7 @@ String publicPathFor(CollectionDef def, {required bool english}) {
 
 /// Public detail page of an item (PR #13 routes), or null when the item has
 /// none: its collection has no detail pages, `detailsEnabled` is explicitly
-/// false (missing = on, PR #14), the item is hidden, or it is an inactive clinic
+/// false (missing = on, PR #14), or the item is hidden.
 /// (not listed publicly, so its page shows "not available"). `?lang=en` when the dashboard is in English.
 String? itemPublicPathFor(CollectionDef def, String id, Map<String, dynamic> data, {required bool english}) {
   // Custom categories / pages (ADR-027): their own page by slug.
@@ -1899,7 +1899,6 @@ String? itemPublicPathFor(CollectionDef def, String id, Map<String, dynamic> dat
   }
   final kind = detailKindForCollection(def.name);
   if (kind == null || data['detailsEnabled'] == false || data['visible'] == false) return null;
-  if (kind == DetailKind.clinic && data['active'] == false) return null;
   final path = detailPathFor(kind, id);
   return english ? '$path?lang=en' : path;
 }

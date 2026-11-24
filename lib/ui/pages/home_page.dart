@@ -180,7 +180,6 @@ class _DirEntry {
 
 const _directory = [
   _DirEntry(Icons.access_time_filled_rounded, 'massSchedule', 'dir_mass', '/mass-schedule'),
-  _DirEntry(Icons.local_hospital_rounded, 'clinics', 'dir_clinics', '/clinics'),
   _DirEntry(Icons.school_rounded, 'education', 'dir_edu', '/church-education'),
   _DirEntry(Icons.groups_rounded, 'activities', 'dir_act', '/church-activities'),
   _DirEntry(Icons.volunteer_activism_rounded, 'publicServices', 'dir_services', '/public-services'),

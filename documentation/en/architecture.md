@@ -25,7 +25,7 @@ User Device (Web Browser / Android App)
 ```
 
 ### Free-Tier (Spark Plan) Constraints & Solutions
-1. **No Cloud Functions:** All business rules (next mass calculation, alert filtering, clinic availability, season replacement) run as pure Dart in the client domain layer (`lib/domain/`).
+1. **No Cloud Functions:** All business rules (next mass calculation, alert filtering, season replacement) run as pure Dart in the client domain layer (`lib/domain/`).
 2. **No Cloud Storage Bucket:** Spark plans cannot provision Cloud Storage buckets without billing. Images uploaded via `/admin` are resized (≤ 800px) and compressed to WebP (~250 KB) in the client browser, then stored as base64 strings in Firestore `media/{id}` documents. The public UI loads these lazily with in-memory caching.
 3. **App Check Protection:** Firebase AI Logic API calls are strictly gated behind App Check tokens to prevent quota exhaustion and unauthorized external scraping.
 
@@ -49,7 +49,7 @@ lib/
 │   ├── models.dart            # Immutable entity models with tolerant JSON deserialization
 │   ├── cairo_time.dart        # Africa/Cairo timezone calculations and IANA DST rules
 │   ├── schedule.dart          # Next-mass computation, liturgical window overrides, and schedule tabs
-│   ├── rules.dart             # Alert filtering, clinic availability, phone helpers, and rate limiting
+│   ├── rules.dart             # Alert filtering, phone helpers, and rate limiting
 │   ├── features.dart          # Section toggles, route guards, home block ordering, and settings
 │   ├── time_format.dart       # Bilingual time formatting (Latin and Arabic-Indic numerals)
 │   └── assistant_context.dart # Grounding prompt builder for the AI assistant
@@ -89,7 +89,6 @@ Routing is implemented with `go_router` using Flutter's `PathUrlStrategy` for cl
 | `/mass-schedule` | `MassSchedulePage` | Controlled by `Sections.schedule`. |
 | `/church-education` | `MeetingsPage` | Controlled by `Sections.meetings`. |
 | `/church-activities` | `ActivitiesPage` | Controlled by `Sections.activities`. |
-| `/clinics` | `ClinicsPage` | Controlled by `Sections.clinics`. Optional `?specialty=` filter. |
 | `/public-services` | `PublicServicesPage`| Controlled by `Sections.services`. |
 | `/contact` | `ContactPage` | Accessible if `contactInfo`, `socials`, or `contactForm` is enabled. |
 | `/section/:slug` | `CustomSectionPage` | Controlled by `customSections` toggle and section visibility. |
@@ -121,7 +120,6 @@ All application data resides in Cloud Firestore (`europe-west1`). Read operation
 | `liturgies` | Regular weekly Divine Liturgies, Vespers, and Praise times. | Read | Full CRUD |
 | `seasons` | Holy Seasons (Pascha, Nativity, revivals) with special replacement liturgies. | Read | Full CRUD |
 | `meetings` | Sunday schools and youth/adult fellowships by age group. | Read | Full CRUD |
-| `clinics` | Charity medical clinics, specialties, and doctor schedules. | Read | Full CRUD |
 | `facilities` | Public parish facilities (nursery, library, mourning halls). | Read | Full CRUD |
 | `activities` | Scouts, deacon schools, hymns institutes, sports teams. | Read | Full CRUD |
 | `priests` | Serving and departed priests (`status: "serving"` or `"departed"`). | Read | Full CRUD |

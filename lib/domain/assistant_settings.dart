@@ -49,10 +49,9 @@ const exceptionalSeasonKeys = [
 
 /// Which public sections an allowed-topic line needs (ADR-042): a line that
 /// mentions one of the words is dropped when none of its sections is on, so
-/// the assistant never offers clinics, meetings… that the admin switched off.
+/// the assistant never offers meetings, activities… that the admin switched off.
 /// Applies to the admin's own topic lines as well as the defaults.
 const topicSectionWords = <List<String>, List<String>>{
-  ['clinic', 'عياد', 'عيادة']: ['clinics'],
   ['meeting', 'sunday school', 'اجتماع', 'مدارس الأحد', 'التربية الكنسية']: ['meetings'],
   ['activit', 'choir', 'نشاط', 'أنشطة', 'كورال']: ['activities'],
   ['public service', 'nursery', 'library', 'employment', 'خدمات عامة', 'الخدمات العامة', 'حضانة', 'مكتبة', 'توظيف']: ['services'],
@@ -79,13 +78,12 @@ List<List<String>> topicSections(String line) {
 }
 
 /// The built-in /ask welcome (ADR-051, issue 7): it names only the topics
-/// whose sections are on (liturgy times, clinics, meetings, contacts), so
+/// whose sections are on (liturgy times, meetings, contacts), so
 /// it never offers a section the admin switched off. Used when the admin
 /// left the welcome text blank.
 String askIntroText({required bool arabic, required bool Function(String section) enabled}) {
   final parts = <(String, String)>[
     if (enabled('schedule')) ('مواعيد القداسات', 'liturgy times'),
-    if (enabled('clinics')) ('العيادات', 'clinics'),
     if (enabled('meetings')) ('الاجتماعات', 'meetings'),
     if (enabled('contactInfo') || enabled('contactForm')) ('طرق التواصل', 'contacts'),
   ];
@@ -327,12 +325,11 @@ class AssistantSettings {
   static const defaultInstructions =
       'You are the friendly information desk of the church. Be warm, polite and brief (at most about 6 lines). '
       'Use bullet points for lists and give times like 06:30 AM. '
-      'Do not give medical, legal or spiritual-direction advice beyond pointing to the right clinic, meeting or priest. '
+      'Do not give medical, legal or spiritual-direction advice beyond pointing to the right meeting or priest. '
       'Do not ask for or collect personal data.';
 
   static const defaultTopics = 'Liturgy / mass, vespers and praise times, and holy seasons\n'
       'Sunday school and meetings\n'
-      'Clinics and their times\n'
       'Activities and choirs\n'
       'Public services\n'
       'Priests and departed fathers\n'
@@ -351,9 +348,9 @@ class AssistantSettings {
       "I couldn't find this in the church's website data. You can search St-Takla.org or contact us:";
 
   static const defaultRefusalAr =
-      'عذرًا، أنا مساعد الكنيسة وأجيب فقط عن أسئلة الكنيسة وخدماتها: مواعيد القداسات والاجتماعات والعيادات والأنشطة والآباء الكهنة والقديسين والتواصل والعنوان والحجوزات والتبرعات. كيف أساعدك في شيء من ذلك؟';
+      'عذرًا، أنا مساعد الكنيسة وأجيب فقط عن أسئلة الكنيسة وخدماتها: مواعيد القداسات والاجتماعات والأنشطة والآباء الكهنة والقديسين والتواصل والعنوان والحجوزات والتبرعات. كيف أساعدك في شيء من ذلك؟';
   static const defaultRefusalEn =
       "Sorry, I'm the church's assistant and can only help with questions about this church and its services: "
-      'mass and meeting times, clinics, activities, priests, saints, contact, location, bookings and donations. '
+      'mass and meeting times, activities, priests, saints, contact, location, bookings and donations. '
       'How can I help with one of those?';
 }

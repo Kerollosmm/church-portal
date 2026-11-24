@@ -103,7 +103,6 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
       ..watch(featuresStreamProvider)
       ..watch(liturgiesProvider)
       ..watch(seasonsProvider)
-      ..watch(clinicsProvider)
       ..watch(meetingsProvider)
       ..watch(activitiesProvider)
       ..watch(facilitiesProvider)
@@ -141,7 +140,6 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
         ref.read(assistantSettingsProvider.future),
         ref.read(liturgiesProvider.future),
         ref.read(seasonsProvider.future),
-        ref.read(clinicsProvider.future),
         ref.read(meetingsProvider.future),
         ref.read(activitiesProvider.future),
         ref.read(facilitiesProvider.future),
@@ -209,7 +207,6 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
       settings: ref.read(settingsProvider).requireValue,
       liturgies: ref.read(liturgiesProvider).value ?? const [],
       seasons: ref.read(seasonsProvider).value ?? const [],
-      clinics: ref.read(clinicsProvider).value ?? const [],
       meetings: ref.read(meetingsProvider).value ?? const [],
       activities: ref.read(activitiesProvider).value ?? const [],
       facilities: ref.read(facilitiesProvider).value ?? const [],
@@ -240,7 +237,6 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
     final sections = [for (final s in Sections.all) if (f.enabled(s)) s].join(',');
     final details = assistantDetailSignature(
       features: f,
-      clinics: ref.read(clinicsProvider).value ?? const [],
       meetings: ref.read(meetingsProvider).value ?? const [],
       activities: ref.read(activitiesProvider).value ?? const [],
       facilities: ref.read(facilitiesProvider).value ?? const [],

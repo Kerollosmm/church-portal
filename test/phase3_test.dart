@@ -338,15 +338,15 @@ void main() {
       expect(applied.last.canonicalUrl, 'https://maximos-domadios-church.web.app/about');
       expect(applied.last.noIndex, isFalse);
 
-      router.go('/clinics'); // clinics: false in the seed
-      await tester.pumpAndSettle();
-      expect(applied.last.noIndex, isTrue);
-      expect(applied.last.canonicalUrl, isNull);
-
       router.go('/unknown-404');
       await tester.pumpAndSettle();
       expect(applied.last.noIndex, isTrue);
       expect(applied.last.canonicalUrl, isNull);
+
+      router.go('/clinics'); // old clinics route redirects to home
+      await tester.pumpAndSettle();
+      expect(applied.last.canonicalUrl, 'https://maximos-domadios-church.web.app/');
+      expect(applied.last.noIndex, isFalse);
 
       router.go('/mass-schedule');
       await tester.pumpAndSettle();
@@ -368,7 +368,7 @@ void main() {
           .toList();
       final sections = (jsonDecode(File('assets/seed/seed.json').readAsStringSync()) as Map<String, dynamic>)['settings']
           ['features']['sections'] as Map<String, dynamic>;
-      expect(sections['clinics'], isFalse);
+      expect(sections.containsKey('clinics'), isFalse);
       expect(locs, isNot(contains('https://maximos-domadios-church.web.app/clinics')));
       expect(locs, isNot(contains('https://maximos-domadios-church.web.app/admin')));
       expect(locs, isNot(contains('https://maximos-domadios-church.web.app/ask')));

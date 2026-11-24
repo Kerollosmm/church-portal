@@ -15,9 +15,9 @@ FeatureSettings _features([Map<String, bool> off = const {}]) => FeatureSettings
 void main() {
   group('sitemap (ADR-038)', () {
     test('fixed pages follow their section switches like FeatureGate', () {
-      final paths = sitemapPaths(SitemapContent(features: _features({Sections.clinics: false})));
-      expect(paths, ['/', '/about', '/mass-schedule', '/church-education', '/church-activities', '/public-services', '/contact']);
-      expect(sitemapPaths(SitemapContent(features: _features())), contains('/clinics'));
+      final paths = sitemapPaths(SitemapContent(features: _features({Sections.meetings: false})));
+      expect(paths, ['/', '/about', '/mass-schedule', '/church-activities', '/public-services', '/contact']);
+      expect(sitemapPaths(SitemapContent(features: _features())), contains('/church-education'));
     });
 
     test('detail pages: listed, details on, section on — each of the 7 prefixes', () {
@@ -25,20 +25,15 @@ void main() {
         features: _features(),
         meetings: [Meeting.fromMap('m1', {'nameAr': 'اجتماع'}), Meeting.fromMap('m2', {'nameAr': 'x', 'visible': false})],
         activities: [Activity.fromMap('a1', {'titleAr': 'كورال', 'detailsEnabled': false}), Activity.fromMap('a2', {'titleAr': 'y'})],
-        clinics: [
-          Clinic.fromMap('c1', {'specialtyAr': 'أسنان'}),
-          Clinic.fromMap('c2', {'specialtyAr': 'z', 'active': false}),
-        ],
         facilities: [Facility.fromMap('f 1', {'nameAr': 'حضانة'})],
         priests: [Priest.fromMap('p1', {'nameAr': 'أبونا'})],
         saints: [Saint.fromMap('s1', {'nameAr': 'القديس'})],
         milestones: [Milestone.fromMap('ms1', {'titleAr': 'تأسيس'})],
       );
       final paths = sitemapPaths(c);
-      expect(paths, containsAll(['/church-education/m1', '/church-activities/a2', '/clinics/c1', '/public-services/f%201', '/about/priests/p1', '/about/saints/s1', '/about/milestones/ms1']));
+      expect(paths, containsAll(['/church-education/m1', '/church-activities/a2', '/public-services/f%201', '/about/priests/p1', '/about/saints/s1', '/about/milestones/ms1']));
       expect(paths, isNot(contains('/church-education/m2'))); // hidden
       expect(paths, isNot(contains('/church-activities/a1'))); // detailsEnabled: false
-      expect(paths, isNot(contains('/clinics/c2'))); // inactive clinic is not listed
       for (final kind in DetailKind.values) {
         expect(paths.any((p) => p.startsWith('${kind.basePath}/')), isTrue, reason: kind.name);
       }
@@ -46,13 +41,11 @@ void main() {
 
     test('a switched-off section drops its list page and its detail pages', () {
       final c = SitemapContent(
-        features: _features({Sections.clinics: false, Sections.saints: false}),
-        clinics: [Clinic.fromMap('c1', {'specialtyAr': 'أسنان'})],
+        features: _features({Sections.meetings: false, Sections.saints: false}),
         saints: [Saint.fromMap('s1', {'nameAr': 'القديس'})],
       );
       final paths = sitemapPaths(c);
-      expect(paths, isNot(contains('/clinics')));
-      expect(paths, isNot(contains('/clinics/c1')));
+      expect(paths, isNot(contains('/church-education')));
       expect(paths, isNot(contains('/about/saints/s1')));
       expect(paths, contains('/about')); // other /about sections still on
     });
@@ -96,7 +89,6 @@ void main() {
     test('detailItemOpens matches detailStateFor for every kind', () {
       final f = _features();
       expect(detailItemOpens(Meeting.fromMap('m', {'nameAr': 'x'}), f), isTrue);
-      expect(detailItemOpens(Clinic.fromMap('c', {'specialtyAr': 'x', 'active': false}), f), isFalse);
       expect(detailItemOpens(Priest.fromMap('p', {'nameAr': 'x', 'status': 'departed'}), _features({Sections.departedPriests: false})),
           isFalse);
       expect(detailItemId(Saint.fromMap('s9', {'nameAr': 'x'})), 's9');
@@ -104,7 +96,7 @@ void main() {
     });
 
     test('valid sitemaps.org XML, escaped, no duplicates', () {
-      final xml = sitemapXml(['/', '/page/a', '/clinics/a%26b', '/page/a&b']);
+      final xml = sitemapXml(['/', '/page/a', '/church-education/a%26b', '/page/a&b']);
       expect(xml, startsWith('<?xml version="1.0" encoding="UTF-8"?>'));
       expect(xml, contains('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'));
       expect(xml, contains('<loc>https://maximos-domadios-church.web.app/</loc>'));
@@ -140,9 +132,6 @@ void main() {
           {'id': 'm1', 'data': {'nameAr': 'اجتماع', 'startsAt': '2026-11-04T10:00:00.000Z'}}
         ],
         'activities': [],
-        'clinics': [
-          {'id': 'c1', 'data': {'specialtyAr': 'أسنان'}}
-        ],
         'facilities': [],
         'priests': [],
         'saints': [],
@@ -156,24 +145,26 @@ void main() {
       })) as Map<String, dynamic>;
       final paths = sitemapPaths(sitemapContentFromExport(export, seedFeatures: seedFeatures));
       expect(paths, containsAll(['/church-education/m1', '/section/youth', '/page/donate']));
-      expect(paths.where((p) => p.startsWith('/clinics')), isEmpty); // clinics off in the seed's features
+      expect(paths.where((p) => p.startsWith('/clinics')), isEmpty);
       // A stored doc wins over the seed.
       export['features'] = {
-        'sections': {Sections.clinics: true},
+        'sections': {Sections.meetings: false},
       };
-      expect(sitemapPaths(sitemapContentFromExport(export, seedFeatures: seedFeatures)), contains('/clinics/c1'));
+      expect(
+        sitemapPaths(sitemapContentFromExport(export, seedFeatures: seedFeatures)),
+        isNot(contains('/church-education/m1')),
+      );
       expect(() => sitemapContentFromExport({'features': null}), throwsFormatException);
     });
 
     test('sitemapContentFromExport skips soft-deleted items with deletedAt != null', () {
       final export = {
-        'features': {'sections': {Sections.clinics: true}},
-        'meetings': [],
-        'activities': [],
-        'clinics': [
-          {'id': 'c1', 'data': {'specialtyAr': 'أسنان'}},
-          {'id': 'c2', 'data': {'specialtyAr': 'باطنة', 'deletedAt': '2026-11-14T10:00:00.000Z'}},
+        'features': {'sections': {Sections.meetings: true}},
+        'meetings': [
+          {'id': 'm1', 'data': {'nameAr': 'اجتماع'}},
+          {'id': 'm2', 'data': {'nameAr': 'اجتماع محذوف', 'deletedAt': '2026-11-14T10:00:00.000Z'}},
         ],
+        'activities': [],
         'facilities': [],
         'priests': [],
         'saints': [],
@@ -182,7 +173,7 @@ void main() {
         'pages': [],
       };
       final content = sitemapContentFromExport(export);
-      expect(content.clinics.map((c) => c.id), ['c1']);
+      expect(content.meetings.map((m) => m.id), ['m1']);
     });
   });
 }

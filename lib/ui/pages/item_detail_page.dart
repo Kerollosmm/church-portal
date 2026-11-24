@@ -25,11 +25,10 @@ import '../widgets/item_image.dart';
 import '../widgets/program_details.dart';
 import '../widgets/remind_me.dart';
 import 'activities_page.dart' show activityIcon;
-import 'clinics_page.dart' show ClinicCard;
 import 'education_page.dart' show meetingGroupOf, stageLabels;
 import 'public_services_page.dart' show facilityIcon;
 
-/// Public detail page of one item (`/clinics/<id>`, `/about/priests/<id>`…,
+/// Public detail page of one item (`/church-education/<id>`, `/about/priests/<id>`…,
 /// ADR-020). Resolves the item from the collection stream the list page
 /// already uses (no extra Firestore read); only the inline gallery images
 /// (`media/{id}`) are fetched, lazily, when this page mounts.
@@ -41,7 +40,6 @@ class ItemDetailPage extends ConsumerWidget {
   StreamProvider<List<Object>> get _provider => switch (kind) {
         DetailKind.meeting => meetingsProvider,
         DetailKind.activity => activitiesProvider,
-        DetailKind.clinic => clinicsProvider,
         DetailKind.facility => facilitiesProvider,
         DetailKind.priest => priestsProvider,
         DetailKind.saint => saintsProvider,
@@ -113,7 +111,7 @@ String _idOf(Object o) => detailItemId(o);
 
 ItemDetails _detailsOf(Object o) => detailItemDetails(o);
 
-/// Shown on its list page: visible (and, for clinics, active).
+/// Shown on its list page: visible.
 bool _publiclyListed(Object o) => detailItemListed(o);
 
 /// One labelled row of the "Key information" card (label above value, so
@@ -182,18 +180,12 @@ class _Entry {
   /// follows the visitor's language later.
   final Map<String, String> reminderTitle;
 
-  /// Happens at the church (meetings, activities, clinics, services): the
+  /// Happens at the church (meetings, activities, services): the
   /// page offers directions to the church.
   final bool onSite;
 
-  /// Clinics: the church office phone when the clinic has no phone/WhatsApp.
-  final bool officeFallback;
-
   /// Activities (like their card): a mobile contact phone is also WhatsApp.
   final bool whatsappFromPhone;
-
-  /// Pre-filled WhatsApp message (clinics: booking request).
-  final String? whatsappText;
 
   const _Entry({
     required this.title,
@@ -210,9 +202,7 @@ class _Entry {
     this.end = '',
     this.reminderTitle = const {},
     this.onSite = false,
-    this.officeFallback = false,
     this.whatsappFromPhone = false,
-    this.whatsappText,
   });
 
   static _Entry of(BuildContext context, WidgetRef ref, Object item) {
@@ -256,36 +246,6 @@ class _Entry {
           summary: context.pick(a.descAr, a.descEn),
           onSite: true,
           whatsappFromPhone: true,
-        );
-      case Clinic c:
-        final now = ref.watch(nowProvider).value ?? DateTime.now();
-        final doctor = !context.isAr && ClinicCard.isPlaceholderDoctor(c)
-            ? context.tr('doctorTba', {'s': c.specialtyEn.isNotEmpty ? c.specialtyEn : c.specialtyAr})
-            : c.doctorName;
-        final days = c.days.map((d) => weekdayLabel(context, d)).join(context.isAr ? '، ' : ', ');
-        return _Entry(
-          title: context.pick(c.specialtyAr, c.specialtyEn),
-          subtitle: doctor,
-          icon: Icons.local_hospital_rounded,
-          details: c.details,
-          cover: c.image,
-          imageStyle: features.imageStyleFor('clinics', c.imageStyle),
-          pills: [if (isClinicAvailableToday(c, now)) Pill(context.tr('availableToday'), icon: Icons.check_circle)],
-          facts: [
-            _Fact(Icons.medical_services_outlined, context.tr('factDoctor'), doctor),
-            _Fact(Icons.workspace_premium_outlined, context.tr('factQualification'), context.pick(c.degreeAr, c.degreeEn)),
-            _Fact(Icons.calendar_today_outlined, context.tr('factDays'), days),
-            if (c.start.isNotEmpty) _Fact.widget(Icons.schedule_rounded, context.tr('factTime'), TimeRangeText(c.start, c.end)),
-          ],
-          calendarDays: c.days,
-          reminderTitle: {'ar': c.specialtyAr, 'en': c.specialtyEn},
-          start: c.start,
-          end: c.end,
-          onSite: true,
-          officeFallback: true,
-          whatsappText: context.isAr
-              ? 'أرغب في حجز موعد بعيادة ${c.specialtyAr} (${c.doctorName})'
-              : 'I would like to book an appointment at the ${c.specialtyEn} clinic ($doctor)',
         );
       case Facility f:
         return _Entry(
@@ -352,7 +312,6 @@ class _Entry {
 String _titleOf(BuildContext context, Object o) => switch (o) {
       Meeting m => context.pick(m.nameAr, m.nameEn),
       Activity a => context.pick(a.titleAr, a.titleEn),
-      Clinic c => context.pick(c.specialtyAr, c.specialtyEn),
       Facility f => context.pick(f.nameAr, f.nameEn),
       Priest p => context.isAr ? p.name : (p.nameEn.isNotEmpty ? p.nameEn : p.name),
       Saint s => context.pick(s.nameAr, s.nameEn),
@@ -432,7 +391,6 @@ class _DetailView extends ConsumerWidget {
       DetailKind.milestone => 'accent_milestone',
       DetailKind.meeting => 'accent_education',
       DetailKind.activity => 'accent_activities',
-      DetailKind.clinic => 'accent_clinics',
       DetailKind.facility => 'accent_services',
     });
     if (kind != DetailKind.saint) return PageHeader(title: e.title, subtitle: e.subtitle, icon: e.icon, accent: accent);
@@ -625,7 +583,7 @@ class _DetailView extends ConsumerWidget {
       if (e.calendarDays.isNotEmpty && e.start.isNotEmpty)
         Builder(builder: (c) {
           // The earliest coming session over all the item's weekdays (a
-          // clinic may run on several days); today's counts until it starts.
+          // item may run on several days); today's counts until it starts.
           final cNow = CairoTime.fromInstant(now);
           final sm = parseHm(e.start) ?? 0;
           DateTime? target;
@@ -683,10 +641,6 @@ class _DetailView extends ConsumerWidget {
     final wa = d.whatsapp.trim().isNotEmpty
         ? d.whatsapp.trim()
         : (e.whatsappFromPhone && isEgyptianMobile(phone) ? phone : '');
-    String? office;
-    if (e.officeFallback && phone.isEmpty && wa.isEmpty && ref.watch(featuresProvider).enabled(Sections.contactInfo)) {
-      office = ref.watch(settingsProvider).value?.phones.where((p) => p.number.isNotEmpty).firstOrNull?.number;
-    }
     return [
       if (phone.isNotEmpty)
         ActionChipButton(
@@ -704,16 +658,7 @@ class _DetailView extends ConsumerWidget {
           label: context.tr('whatsapp'),
           semanticLabel: actionSemanticLabel(context.tr('whatsapp'), e.title),
           color: whatsappGreen,
-          onTap: () => openWhatsApp(wa, text: e.whatsappText),
-        ),
-      if (office != null)
-        ActionChipButton(
-          key: const Key('detailCallOffice'),
-          icon: Icons.call,
-          label: context.tr('callChurchOffice'),
-          semanticLabel: actionSemanticLabel(context.tr('callChurchOffice'), e.title),
-          color: context.pal.bar,
-          onTap: () => callPhone(office!),
+          onTap: () => openWhatsApp(wa),
         ),
     ];
   }

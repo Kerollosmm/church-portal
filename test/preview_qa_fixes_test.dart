@@ -64,7 +64,7 @@ final _testNow = CairoTime.at(2026, 11, 15, 12 * 60).toUtc();
 SeedData _loadSeed({Map<String, dynamic> featuresOverride = const {}}) {
   final raw = jsonDecode(File('assets/seed/seed.json').readAsStringSync()) as Map<String, dynamic>;
   final features = Map<String, dynamic>.from(raw['settings']['features'] as Map);
-  features['sections'] = {...(features['sections'] as Map), 'clinics': true};
+  features['sections'] = {...(features['sections'] as Map), 'meetings': true};
   features.addAll(featuresOverride);
   raw['settings']['features'] = features;
   return SeedData(raw);

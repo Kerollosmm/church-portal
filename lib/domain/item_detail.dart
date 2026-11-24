@@ -6,14 +6,13 @@ import 'features.dart';
 import 'models.dart';
 
 /// The 7 collections whose items can have a public detail page.
-enum DetailKind { meeting, activity, clinic, facility, priest, saint, milestone }
+enum DetailKind { meeting, activity, facility, priest, saint, milestone }
 
 extension DetailKindX on DetailKind {
   /// Route prefix of the item's detail page (`<basePath>/<id>`).
   String get basePath => switch (this) {
         DetailKind.meeting => '/church-education',
         DetailKind.activity => '/church-activities',
-        DetailKind.clinic => '/clinics',
         DetailKind.facility => '/public-services',
         DetailKind.priest => '/about/priests',
         DetailKind.saint => '/about/saints',
@@ -34,7 +33,6 @@ extension DetailKindX on DetailKind {
   String get collection => switch (this) {
         DetailKind.meeting => 'meetings',
         DetailKind.activity => 'activities',
-        DetailKind.clinic => 'clinics',
         DetailKind.facility => 'facilities',
         DetailKind.priest => 'priests',
         DetailKind.saint => 'saints',
@@ -184,7 +182,6 @@ List<T> pickRelated<T>(List<T> items, T self, {bool Function(T)? sameGroup, int 
 String detailItemId(Object o) => switch (o) {
       Meeting m => m.id,
       Activity a => a.id,
-      Clinic c => c.id,
       Facility f => f.id,
       Priest p => p.id,
       Saint s => s.id,
@@ -196,7 +193,6 @@ String detailItemId(Object o) => switch (o) {
 ItemDetails detailItemDetails(Object o) => switch (o) {
       Meeting m => m.details,
       Activity a => a.details,
-      Clinic c => c.details,
       Facility f => f.details,
       Priest p => p.details,
       Saint s => s.details,
@@ -204,9 +200,8 @@ ItemDetails detailItemDetails(Object o) => switch (o) {
       _ => ItemDetails.none,
     };
 
-/// Shown on its list page: visible (and, for clinics, active).
+/// Shown on its list page: visible.
 bool detailItemListed(Object o) => switch (o) {
-      Clinic c => c.visible && c.active,
       Hideable h => h.visible,
       _ => false,
     };

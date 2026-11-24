@@ -124,7 +124,7 @@ The seed content in `assets/seed/seed.json` is generated deterministically by `t
 | `node seed_firestore.js --dry-run` | Simulates writes without modifying Firestore. | **Zero Risk** | Always run first before real writes. |
 | `node seed_firestore.js --only <col>` | Writes only specified collections (e.g. `meetings,activities`). | **Low Risk** | Standard updates when adding new baseline categories. |
 | `node seed_firestore.js --only settings --fill-missing` | Adds absent top-level fields to existing settings without overwriting. | **Low Risk** | Use after deploying new feature settings schemas. |
-| Default (No flags) | Creates missing documents; skips existing ones. | **Medium Risk** | **Recreates deleted documents!** (e.g. removed clinics will reappear). |
+| Default (No flags) | Creates missing documents; skips existing ones. | **Medium Risk** | **Recreates deleted documents!** |
 | **`--force`** | **Overwrites all documents** and removes retired IDs. | **CRITICAL RISK** | **FORBIDDEN ON PRODUCTION.** Completely wipes non-developer admin edits. |
 
 ### Permanent Deletion of Seeded Items

@@ -247,7 +247,7 @@ String formatLooseDateValue(int year, [int? month, int? day]) {
   return '$y-${two(m)}-${two(d)}';
 }
 
-/// http(s) URL with a host; with [allowPath] also an in-app path like /clinics.
+/// http(s) URL with a host; with [allowPath] also an in-app path like /about.
 bool isValidUrl(String v, {bool allowPath = false}) {
   if (allowPath && v.startsWith('/') && !v.startsWith('//')) return !v.contains(' ');
   final u = Uri.tryParse(v);

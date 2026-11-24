@@ -34,7 +34,6 @@ abstract class ContentRepository {
   Stream<List<Liturgy>> liturgies();
   Stream<List<Meeting>> meetings();
   Stream<List<Activity>> activities();
-  Stream<List<Clinic>> clinics();
   Stream<List<Facility>> facilities();
   Stream<List<Priest>> priests();
   Stream<List<Milestone>> milestones();
@@ -83,8 +82,6 @@ class SeedRepository implements ContentRepository {
   Stream<List<Meeting>> meetings() => _once(seed.meetings);
   @override
   Stream<List<Activity>> activities() => _once(seed.activities);
-  @override
-  Stream<List<Clinic>> clinics() => _once(seed.clinics);
   @override
   Stream<List<Facility>> facilities() => _once(seed.facilities);
   @override
@@ -584,8 +581,6 @@ class FirestoreRepository implements ContentRepository {
   Stream<List<Meeting>> meetings() => _col('meetings', Meeting.fromMap, seed.meetings);
   @override
   Stream<List<Activity>> activities() => _col('activities', Activity.fromMap, seed.activities);
-  @override
-  Stream<List<Clinic>> clinics() => _col('clinics', Clinic.fromMap, seed.clinics);
   @override
   Stream<List<Facility>> facilities() => _col('facilities', Facility.fromMap, seed.facilities);
   @override

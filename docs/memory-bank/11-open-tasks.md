@@ -5,6 +5,8 @@ Status as of 6 Nov 2026 (ADR-056 Phase 2 plan; ADR-055 / PR #49; ADR-054 / PR #4
 
 ## Top open items (owner's list, 4 Nov 2026 — details in the sections below)
 
+0. **Follow-up: `firestore.rules` cleanup (`clinics`)** — Remove `clinics` rules (`validClinic`, `match /clinics/{id}`, `sections.clinics`, `pageHeaders.clinics`, `seasonPreset.previous.clinics`, `imageStyles.clinics`) and `tool/rules_test/rules.test.mjs` clinics tests in a dedicated rules PR (left untouched per owner request when removing the clinics feature).
+
 1. ~~Footer note «تعرض البيانات المحفوظة مع التطبيق» shows on the live site while Firestore works~~ — fixed in PR #30 (ADR-038) → *Live data follow-ups*.
 2. Sentry web source maps + Android symbols need a Sentry auth token → *Error tracking — Sentry*.
 3. Sentry project privacy: *Prevent Storing of IP Addresses* + server-side data scrubbers → *Error tracking — Sentry*.

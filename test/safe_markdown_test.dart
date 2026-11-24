@@ -66,7 +66,7 @@ void main() {
       for (final bad in ['javascript:alert(1)', 'data:text/html,x', '//evil.org', 'file:///etc', 'ftp://x.org', 'https:/x']) {
         expect(safeLinkTarget(bad), isNull, reason: bad);
       }
-      for (final ok in ['https://maximos-domadios-church.web.app', 'http://x.org/a', 'tel:+203555', '/clinics']) {
+      for (final ok in ['https://maximos-domadios-church.web.app', 'http://x.org/a', 'tel:+203555', '/church-education']) {
         expect(safeLinkTarget(ok), ok, reason: ok);
       }
     });

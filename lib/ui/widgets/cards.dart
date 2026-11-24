@@ -569,7 +569,7 @@ class ActionChipButton extends StatelessWidget {
   final VoidCallback? onTap;
 
   /// What screen readers announce instead of the short [label], naming the
-  /// target (e.g. "Call — Dental clinic"), so repeated "Call" buttons on a
+  /// target (e.g. "Call — Youth meeting"), so repeated "Call" buttons on a
   /// page can be told apart.
   final String? semanticLabel;
   const ActionChipButton(
@@ -606,7 +606,7 @@ class ActionChipButton extends StatelessWidget {
   }
 }
 
-/// "Call — Dental clinic": an action label plus the item it acts on.
+/// "Call — Youth meeting": an action label plus the item it acts on.
 String actionSemanticLabel(String action, String target) => target.isEmpty ? action : '$action — $target';
 
 // Darkened brand fills so white button text meets WCAG AA (>= 4.5:1).
@@ -650,7 +650,7 @@ class DetailTapArea extends StatelessWidget {
 class DetailsLink extends StatelessWidget {
   final String path;
 
-  /// Item title, announced with the action ("Details — Dental clinic").
+  /// Item title, announced with the action ("Details — Youth meeting").
   final String title;
 
   /// Item id (key `detailsLink-<id>` for tests / automation).
