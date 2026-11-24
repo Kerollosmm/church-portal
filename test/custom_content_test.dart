@@ -2800,7 +2800,7 @@ void main() {
         activitiesList: const [],
         sections: const {Sections.meetings: true},
       );
-      final (emptyRouter, _) = await _pump(tester, '/church-activities', size: const Size(420, 3000), repo: emptyActRepo);
+      await _pump(tester, '/church-activities', size: const Size(420, 3000), repo: emptyActRepo);
       expect(find.byKey(const Key('sectionPage-extra-church-activities')), findsOneWidget);
       expect(find.byType(EmptyState), findsNothing);
 
@@ -2819,7 +2819,7 @@ void main() {
         activitiesList: const [],
         sections: const {Sections.meetings: true},
       );
-      final (hiddenRouter, _) = await _pump(tester, '/church-activities', size: const Size(420, 3000), repo: hiddenActRepo);
+      await _pump(tester, '/church-activities', size: const Size(420, 3000), repo: hiddenActRepo);
       expect(find.byKey(const Key('sectionPage-extra-church-activities')), findsNothing);
       expect(find.byType(EmptyState), findsOneWidget);
 
