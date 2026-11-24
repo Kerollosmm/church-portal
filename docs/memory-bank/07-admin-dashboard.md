@@ -315,7 +315,7 @@ For each `CollectionDef`:
   remaining original deadlines on failed renewals and updating the active Undo bar if an un-renewed item expires early).
   The soft-deleted document immediately vanishes from
   public collection views (`_docs` and `_col` in `FirestoreRepository`) and sitemap exports (`sitemapContentFromExport`).
-  Tapping «تراجع» / «تراجع عن الكل» (`_undoAllPending`) atomically cancels all pending timers, restores all rows in the UI immediately via optimistic `_restoringIds`, and clears `deletedAt: null` concurrently across the batch after each item's serialized write chain settles. If the 10 seconds elapse without undo, the deletion
+  Tapping «تراجع» / «تراجع عن الكل» (`_undoAllPending`) atomically cancels all pending timers, restores all rows in the UI immediately via optimistic `_restoringIds`, and clears `deletedAt: null` concurrently across the batch after each item's serialized write chain settles (`_checkLazyPurge` skips pending, `_restoringIds`, and `_inFlightDeleteWrites` docs via `_isProtectedFromPurge` so an expired snapshot during restore can never hard-delete an item being undone). If the 10 seconds elapse without undo, the deletion
   commits to hard delete `widget.repo.delete(def.name, d.id)` and cleans up orphaned media (`removeOrphanedDocMedia`).
   Pending-deletion items stay in `_lastDocs` until commit so their slugs remain reserved in `takenSlugs`, and scheduling
   deletion captures `repo`, `def`, `media` and document data in closure. **Page refresh / navigation away (`dispose()`):**

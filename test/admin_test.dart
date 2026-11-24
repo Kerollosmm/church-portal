@@ -2358,6 +2358,69 @@ void main() {
       );
       expect(repo.deletedIds, ['liturgies/l1']);
     });
+
+    testWidgets('_checkLazyPurge skips documents actively restoring during undo even if snapshot deletedAt expired', (tester) async {
+      final repo = _ControlledUpdateBackend(initialCollections: {
+        'liturgies': [
+          AdminDoc('l1', {
+            'type': 'mass',
+            'nameAr': 'قداس الأحد',
+            'weekday': 7,
+            'start': '07:00',
+            'end': '09:30',
+            'visible': true,
+          }),
+        ],
+      });
+      addTearDown(repo.dispose);
+      final def = collectionById('liturgies')!;
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: def),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Hold the soft-delete write so Undo must await it while _restoringIds is active.
+      final holdSoft = repo.hold('liturgies', 'l1');
+      await tester.tap(find.byKey(const ValueKey('delete-l1')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Trigger Undo while soft-delete write is still unacknowledged.
+      await tester.tap(find.widgetWithText(SnackBarAction, 'تراجع'));
+      await tester.pump();
+
+      // Simulate a rebuild receiving an expired deletedAt snapshot (>10s old) while
+      // _undoAllPending is still awaiting the in-flight write / restore.
+      repo.collections['liturgies']!.first.data['deletedAt'] =
+          DateTime.now().toUtc().subtract(const Duration(seconds: 20));
+      repo.emitSnapshot('liturgies');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // Must NOT hard-delete while restoring.
+      expect(repo.deletedIds, isEmpty);
+      expect(find.text('قداس الأحد'), findsOneWidget);
+
+      // Hold the subsequent restore write as well and emit another expired snapshot.
+      final holdRestore = repo.hold('liturgies', 'l1');
+      holdSoft.complete();
+      await tester.pump();
+      repo.collections['liturgies']!.first.data['deletedAt'] =
+          DateTime.now().toUtc().subtract(const Duration(seconds: 25));
+      repo.emitSnapshot('liturgies');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(repo.deletedIds, isEmpty);
+
+      // Complete restore and verify zero hard-deletes and item restored cleanly.
+      holdRestore.complete();
+      await tester.pumpAndSettle();
+      expect(repo.deletedIds, isEmpty);
+      expect(find.text('قداس الأحد'), findsOneWidget);
+      expect(repo.collections['liturgies']!.first.data['deletedAt'], isNull);
+    });
   });
 
   group('UnsavedBar', () {

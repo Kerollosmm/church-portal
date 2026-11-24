@@ -1432,16 +1432,21 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     }
   }
 
+  bool _isProtectedFromPurge(String id) =>
+      _pendingDelete.isPending(id) ||
+      _restoringIds.contains(id) ||
+      _inFlightDeleteWrites.containsKey(id);
+
   void _checkLazyPurge(List<AdminDoc> docs, CollectionDef targetDef) {
     final now = DateTime.now().toUtc();
-    if (docs.any((d) => isExpiredSoftDelete(d.data, now) && !_pendingDelete.isPending(d.id))) {
+    if (docs.any((d) => isExpiredSoftDelete(d.data, now) && !_isProtectedFromPurge(d.id))) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           purgeExpiredSoftDeletes(
             widget.repo,
             targetDef,
             docs,
-            isLocalPending: _pendingDelete.isPending,
+            isLocalPending: _isProtectedFromPurge,
             purging: _purging,
           );
         }
