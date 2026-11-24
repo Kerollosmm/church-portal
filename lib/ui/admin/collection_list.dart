@@ -2122,6 +2122,20 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     // The editor may save in several writes (gallery / extraFields go on
     // their own): the first one creates a new document, the rest merge into it.
     var id = d?.id;
+    // Resolve everything that depends on this State (its context, widget and
+    // fields) now, before pushing: the route's builder re-runs on every
+    // rebuild of the route and may outlive this screen (e.g. the admin
+    // section is switched while the editor is open). Reading `_messenger`
+    // there after dispose hits `context` on an unmounted State and throws.
+    final repo = widget.repo;
+    final popMessenger = _messenger;
+    final englishEnabled = _englishEnabled;
+    final List<AdminDoc> existingDocs = editDef.name == def.name
+        ? [
+            for (final x in _lastDocs)
+              if (_isVisibleDoc(x)) x,
+          ]
+        : const [];
     Navigator.of(context).push(MaterialPageRoute<void>(
       fullscreenDialog: true,
       builder: (_) => DocEditor(
@@ -2131,21 +2145,16 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         data: d?.data,
         docId: d?.id,
         newDefaults: {...editDef.newDefaults, ...extraDefaults},
-        onSave: (data) async => id = await widget.repo.save(editDef.name, id, data),
-        media: widget.repo.media,
+        onSave: (data) async => id = await repo.save(editDef.name, id, data),
+        media: repo.media,
         dynamicChoices: dynamicChoices,
         linkTargets: linkTargets,
         takenSlugs: takenSlugs,
-        existingDocs: editDef.name == def.name
-            ? [
-                for (final x in _lastDocs)
-                  if (_isVisibleDoc(x)) x,
-              ]
-            : const [],
+        existingDocs: existingDocs,
         seasons: seasons,
-        englishEnabled: _englishEnabled,
+        englishEnabled: englishEnabled,
         initialNotice: initialNotice,
-        popMessenger: _messenger,
+        popMessenger: popMessenger,
       ),
     ));
   }
