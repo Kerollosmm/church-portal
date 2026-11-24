@@ -781,6 +781,47 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     return !streamVisible;
   }
 
+  /// Renders an admin row whose main body opens [onTap] (`DocEditor`), keeping [trailing]
+  /// (visibility toggle / desktop reorder buttons / duplicate) outside `ListTile`'s `InkWell`
+  /// and pinned to the top-end corner so rapid taps on or near the eye can never leak to [onTap].
+  Widget _splitActionRow({
+    Key? tileKey,
+    bool dense = false,
+    EdgeInsetsGeometry? contentPadding,
+    Widget? leading,
+    required Widget title,
+    Widget? subtitle,
+    required VoidCallback onTap,
+    Widget? trailing,
+    double trailingEndPadding = 8,
+  }) {
+    final effectivePadding = contentPadding ??
+        EdgeInsetsDirectional.only(
+          start: 16,
+          end: trailing == null ? 16 : 4,
+        );
+    final tile = ListTile(
+      key: tileKey,
+      dense: dense,
+      contentPadding: effectivePadding,
+      leading: leading,
+      title: title,
+      subtitle: subtitle,
+      onTap: onTap,
+    );
+    if (trailing == null) return tile;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: tile),
+        Padding(
+          padding: EdgeInsetsDirectional.only(top: dense ? 2 : 4, end: trailingEndPadding),
+          child: trailing,
+        ),
+      ],
+    );
+  }
+
   double _listBottomPadding(BuildContext context) {
     final scale = MediaQuery.textScalerOf(context).scale(1.0).clamp(1.0, 2.5);
     final safeBottom = MediaQuery.paddingOf(context).bottom;
@@ -877,7 +918,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       margin: const EdgeInsets.only(bottom: 10),
       color: hidden ? context.pal.surfaceAlt.withValues(alpha: 0.7) : context.pal.surface,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        ListTile(
+        _splitActionRow(
           leading: dragIndex != null
               ? ReorderableDragStartListener(index: dragIndex, child: const Icon(Icons.drag_indicator))
               : null,
@@ -1010,10 +1051,10 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   Widget _sectionPageRow(BuildContext context, CollectionDef pagesDef, AdminDoc p) {
     final hidden = _effectiveHidden(p, targetDef: pagesDef);
     final sub = _subtitle(context, p, pagesDef);
-    return ListTile(
-      key: Key('sectionPageRow-${p.id}'),
+    return _splitActionRow(
+      tileKey: Key('sectionPageRow-${p.id}'),
       dense: true,
-      contentPadding: const EdgeInsetsDirectional.only(start: 20, end: 8),
+      contentPadding: const EdgeInsetsDirectional.only(start: 20, end: 4),
       leading: Icon(Icons.description_outlined, size: 18, color: context.pal.muted),
       title: Wrap(
         crossAxisAlignment: WrapCrossAlignment.center,
@@ -1066,10 +1107,10 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     final unconfirmed = e.data['sample'] == true;
     final sub = _subtitle(context, e, entriesDef);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      ListTile(
-        key: ValueKey('entry-${e.id}'),
+      _splitActionRow(
+        tileKey: ValueKey('entry-${e.id}'),
         dense: true,
-        contentPadding: const EdgeInsetsDirectional.only(start: 20, end: 8),
+        contentPadding: const EdgeInsetsDirectional.only(start: 20, end: 4),
         leading: Icon(Icons.subdirectory_arrow_left_rounded, size: 18, color: context.pal.muted),
         title: Wrap(
           crossAxisAlignment: WrapCrossAlignment.center,
@@ -1146,7 +1187,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       margin: const EdgeInsets.only(bottom: 8),
       color: hidden ? context.pal.surfaceAlt.withValues(alpha: 0.7) : context.pal.surface,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        ListTile(
+        _splitActionRow(
           leading: dragIndex != null
               ? ReorderableDragStartListener(index: dragIndex, child: const Icon(Icons.drag_indicator))
               : null,
@@ -1500,12 +1541,26 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       ),
     );
     _undoSnackBarController = undoController;
-    undoController.closed.then((_) {
+    undoController.closed.then((reason) {
       if (identical(_undoSnackBarController, undoController)) {
         _undoSnackBarController = null;
         _undoSnackBarCount = 0;
         _undoSnackBarTimer?.cancel();
         _undoSnackBarTimer = null;
+        if (reason == SnackBarClosedReason.timeout &&
+            mounted &&
+            _pendingDelete.hasPending &&
+            _pendingEntries.values.isNotEmpty) {
+          final last = _pendingEntries.values.last;
+          _presentUndoSnackBar(
+            messenger,
+            title: last.title,
+            fallbackRepo: last.repo,
+            fallbackCollection: last.collection,
+            failedMsg: failedMsg,
+            resetTimer: true,
+          );
+        }
       }
     });
     if (resetTimer) {
@@ -1514,6 +1569,17 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         _undoSnackBarController = null;
         _undoSnackBarCount = 0;
         if (messenger.mounted) messenger.removeCurrentSnackBar();
+        if (_pendingDelete.hasPending && _pendingEntries.values.isNotEmpty) {
+          final last = _pendingEntries.values.last;
+          _presentUndoSnackBar(
+            messenger,
+            title: last.title,
+            fallbackRepo: last.repo,
+            fallbackCollection: last.collection,
+            failedMsg: failedMsg,
+            resetTimer: true,
+          );
+        }
       });
     }
   }

@@ -1552,6 +1552,50 @@ void main() {
       expect(find.textContaining('delete failed'), findsOneWidget);
     });
 
+    testWidgets('slow batch renewal extending past 10s keeps Undo SnackBar active until renewed items settle',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _ControlledUpdateBackend(initialCollections: {
+        'saints': [
+          AdminDoc('s1', {'nameAr': 'مارمرقس', 'visible': true, 'order': 10}),
+          AdminDoc('s2', {'nameAr': 'مارجرجس', 'visible': true, 'order': 20}),
+        ],
+      });
+      addTearDown(repo.dispose);
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('saints')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Delete s1 at t=0.
+      await tester.tap(find.byKey(const ValueKey('delete-s1')));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 2));
+
+      // Hold s1's renewal write, delete s2 at t=2s, let s1 expire while held,
+      // then complete s1's renewal at t=11s -> s1 is extended cleanly to t=21s.
+      final s1Renew = repo.hold('saints', 's1');
+      await tester.tap(find.byKey(const ValueKey('delete-s2')));
+      await tester.pump();
+
+      await tester.pump(const Duration(seconds: 9)); // now t=11s
+      s1Renew.complete();
+      await tester.pump();
+
+      // At t=12s (10s since s2's _presentUndoSnackBar), s2 has committed, s1 is still pending until t=21s.
+      await tester.pump(const Duration(seconds: 2));
+      expect(find.text('تراجع'), findsOneWidget);
+
+      await tester.tap(find.text('تراجع'));
+      await tester.pumpAndSettle();
+      expect(repo.collections['saints']!.any((d) => d.id == 's1'), isTrue);
+    });
+
     testWidgets('CollectionListScreen multi-delete extends batch window so undoAll at 12s restores both items', (tester) async {
       tester.view.physicalSize = const Size(800, 1000);
       tester.view.devicePixelRatio = 1;
@@ -4171,23 +4215,28 @@ void main() {
       await tester.ensureVisible(btn);
       await tester.pumpAndSettle();
       final idleSize = tester.getSize(btn);
+      final idleTopLeft = tester.getTopLeft(btn);
       expect(idleSize.width, greaterThanOrEqualTo(48));
       expect(idleSize.height, greaterThanOrEqualTo(48));
 
-      // Tap 1 starts saving -> rapid second/third taps + outer-edge tap + mid-tap completion must not open DocEditor.
+      // 4+ rapid taps on eye center, corners, and trailing margin beneath eye must not open DocEditor.
       final c = repo.hold('priests', 'p1');
       await tester.tap(btn);
-      await tester.tap(btn); // Before rebuild: second tap ignored by _togglingVisibility
+      await tester.tap(btn); // Tap 2 before rebuild: ignored by _togglingVisibility
       await tester.pump();
 
       final savingSize = tester.getSize(btn);
+      final savingTopLeft = tester.getTopLeft(btn);
       expect(savingSize.width, greaterThanOrEqualTo(48));
       expect(savingSize.height, greaterThanOrEqualTo(48));
+      expect((savingTopLeft - idleTopLeft).distance, lessThanOrEqualTo(0.1));
       expect(find.descendant(of: btn, matching: find.byType(CircularProgressIndicator)), findsOneWidget);
 
-      await tester.tap(btn, warnIfMissed: false);
+      await tester.tap(btn, warnIfMissed: false); // Tap 3 while saving
       final outerCorner = tester.getTopLeft(btn) + const Offset(2, 2);
-      await tester.tapAt(outerCorner);
+      await tester.tapAt(outerCorner); // Tap 4 on outer 48x48 rim while saving
+      // Trailing space directly beneath eye button is outside ListTile InkWell and never opens DocEditor.
+      await tester.tapAt(tester.getRect(btn).bottomCenter + const Offset(0, 6));
       await tester.pump();
       expect(find.byType(DocEditor), findsNothing);
 
@@ -4202,6 +4251,11 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.byType(DocEditor), findsNothing);
       expect(repo.updates.where((u) => u.collection == 'priests' && u.id == 'p1'), hasLength(1));
+
+      // Tapping the row body (title) still opens DocEditor normally.
+      await tester.tap(find.text('أبونا فلان'));
+      await tester.pumpAndSettle();
+      expect(find.byType(DocEditor), findsOneWidget);
     });
 
     testWidgets('row visibility in-flight completion after dispose or repo swap does not throw', (tester) async {

@@ -277,10 +277,12 @@ For each `CollectionDef`:
   switch the old list is never shown while the new one loads.
 - 👁 **hide/show** (`update(visible)`) — only when the collection has a `visible` field (not seasons). All four row
   builders (`_tile`, `_categoryTile`, `_sectionPageRow`, `_entryRow`) share `_visibilityButton` alongside the static
-  «ظاهر / مخفي» `_Tag`: tapping replaces the eye icon with an inline spinner (`savingVisibility` «جارٍ الحفظ…») inside a fixed
-  `>= 48×48` padded hit target (`MaterialTapTargetSize.padded`), disables only that row's visibility toggle button under a
-  composite `'${collection}:${id}'` key while an always-active opaque `GestureDetector` absorbs rapid repeat taps (even if a write
-  settles mid-tap) so they cannot fall through to `ListTile.onTap` (tapping the rest of the row still opens `DocEditor`),
+  «ظاهر / مخفي» `_Tag`: all four row builders isolate `_visibilityButton` (and trailing row controls) outside `ListTile`'s
+  `InkWell` via `_splitActionRow` anchored at the top-end corner (`CrossAxisAlignment.start`), and tapping replaces the eye
+  icon with an inline spinner (`savingVisibility` «جارٍ الحفظ…») inside a fixed `48×48` padded hit target
+  (`MaterialTapTargetSize.padded`), disables only that row's visibility toggle button under a composite `'${collection}:${id}'`
+  key while an always-active opaque `GestureDetector` absorbs rapid repeat taps (even if a write settles mid-tap or titles wrap
+  on narrow viewports) so they cannot fall through to `ListTile.onTap` (tapping the row body still opens `DocEditor`),
   reverts visual state + shows `saveFailed` on failure, and keeps tooltip/semantics clear («إظهار في الموقع» / «إخفاء من الموقع»).
   List scrollables also apply text-scale- and safe-area-aware bottom padding (`_listBottomPadding`) so the last card's actions stay
   clear of the `+` FAB at 320 px / 200 %. `CollectionListScreen` also passes its own inner `ScaffoldMessenger` (`popMessenger`) to
