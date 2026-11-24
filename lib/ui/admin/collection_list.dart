@@ -1412,7 +1412,11 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     try {
       await repo.update(activeDef.name, id, {'deletedAt': deleteNow});
     } catch (e) {
-      _showSnack(messenger, SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
+      _showSnack(
+        messenger,
+        SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))),
+        deferWhileUndo: true,
+      );
       return;
     }
     if (!mounted) return;
@@ -1438,7 +1442,11 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           if (!mounted) return;
           setState(() {});
           _syncUndoBarAfterExpiry(messenger, failedMsg: failedMsg);
-          _showSnack(messenger, SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
+          _showSnack(
+            messenger,
+            SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))),
+            deferWhileUndo: true,
+          );
           return;
         }
         if (!mounted) return;
@@ -1453,6 +1461,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       fallbackCollection: activeDef.name,
       failedMsg: failedMsg,
       resetTimer: true,
+      clearQueue: _undoSnackBarController == null,
     );
 
     if (priorPending.isNotEmpty) {
@@ -1520,6 +1529,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     required String fallbackCollection,
     required String failedMsg,
     required bool resetTimer,
+    bool clearQueue = false,
   }) {
     if (!mounted || messenger == null || !messenger.mounted) return;
     final pendingCount = _pendingDelete.pendingIds.length;
@@ -1534,9 +1544,9 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     }
     _undoSnackBarController = null;
     _undoSnackBarCount = pendingCount;
-    // Clear any queued informational SnackBars and remove the active bar immediately
-    // so the Undo bar displays right away instead of waiting behind exits or queues.
-    messenger.clearSnackBars();
+    // Clear prior non-undo queues only when opening a fresh Undo bar, and remove the
+    // active bar immediately so automatic refreshes never wipe queued notifications.
+    if (clearQueue) messenger.clearSnackBars();
     messenger.removeCurrentSnackBar();
     final undoController = messenger.showSnackBar(
       SnackBar(

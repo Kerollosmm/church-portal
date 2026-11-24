@@ -1689,6 +1689,61 @@ void main() {
       await tester.pumpAndSettle();
     });
 
+    testWidgets('refreshing Undo bar preserves queued SnackBar and failed batch commit errors', (tester) async {
+      tester.view.physicalSize = const Size(900, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _ControlledUpdateBackend(initialCollections: {
+        'saints': [
+          AdminDoc('s1', {'nameAr': 'مارمرقس', 'visible': true, 'order': 10}),
+          AdminDoc('s2', {'nameAr': 'مارجرجس', 'visible': true, 'order': 20}),
+        ],
+      });
+      addTearDown(repo.dispose);
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('saints')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Delete s1 at t=0, then delete s2 at t=5s with s1's renewal held & failing so s1 expires at t=10s
+      // (calling _syncUndoBarAfterExpiry -> _presentUndoSnackBar(clearQueue: false)) while s2 stays until t=15s.
+      await tester.tap(find.byKey(const ValueKey('delete-s1')));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 5));
+
+      final s1Renew = repo.hold('saints', 's1');
+      final s1DelHold = repo.holdDelete('saints', 's1');
+      await tester.tap(find.byKey(const ValueKey('delete-s2')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      s1Renew.completeError(FirebaseException(plugin: 'cloud_firestore', code: 'unavailable', message: 'Offline'));
+      await tester.pump();
+
+      final scaffoldCtx = tester.element(find.byType(FloatingActionButton));
+      ScaffoldMessenger.of(scaffoldCtx).showSnackBar(
+        const SnackBar(content: Text('Queued external note'), duration: Duration(seconds: 2)),
+      );
+      await tester.pump();
+
+      // Advance to t=10s so s1 attempts commit and fails -> _syncUndoBarAfterExpiry refreshes Undo
+      // with clearQueue: false, preserving both Queued external note and s1's deferred commit error.
+      await tester.pump(const Duration(seconds: 5));
+      s1DelHold.completeError(FirebaseException(plugin: 'cloud_firestore', code: 'aborted', message: 'Aborted'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('Queued external note'), findsOneWidget);
+
+      // After Queued external note (2s) and s2 expiry (t=15s), deferred s1 aborted error surfaces too.
+      for (var i = 0; i < 12; i++) {
+        await tester.pump(const Duration(milliseconds: 500));
+      }
+      expect(repo.deletedIds, contains('saints/s2'));
+      expect(find.textContaining('aborted'), findsOneWidget);
+    });
+
     testWidgets('CollectionListScreen multi-delete extends batch window so undoAll at 12s restores both items', (tester) async {
       tester.view.physicalSize = const Size(800, 1000);
       tester.view.devicePixelRatio = 1;
