@@ -80,7 +80,7 @@ const navItems = [
 const askNavItem = NavItem('ask', '/ask', Icons.auto_awesome_rounded);
 
 /// Where the phone Back arrow goes from [location]: an item detail page
-/// (`/clinics/<id>`, `/about/priests/<id>`…) returns to the page listing it
+/// (`/church-education/<id>`, `/about/priests/<id>`…) returns to the page listing it
 /// (milestones: About, or Home when the admin lists them on Home only,
 /// ADR-052); every other route goes Home.
 /// Whether the shell shows the full desktop link bar (no phone Back arrow).
@@ -91,7 +91,7 @@ bool shellIsWide(BuildContext context) {
 }
 
 /// Where the phone Back arrow goes from [location]: an item detail page
-/// (`/clinics/<id>`, `/about/priests/<id>`…) returns to the page listing it
+/// (`/church-education/<id>`, `/about/priests/<id>`…) returns to the page listing it
 /// (milestones: About, or Home when the admin lists them on Home only,
 /// ADR-052); every other route goes Home.
 String parentRouteOf(String location, [FeatureSettings features = FeatureSettings.defaults]) {
@@ -334,7 +334,7 @@ class _AppShellState extends ConsumerState<AppShell> {
         ref.watch(nowProvider.select((n) => todaySettings.liveBadgeOn(n.value ?? DateTime.now(), location)));
     final showTopBar = ready && !isLandscapeShort && (TopUtilityBar.shownOn(todaySettings.copticStrip, location) || liveBadge);
     final topBarH = showTopBar ? TopUtilityBar.heightFor(context) : 0.0;
-    // No Clinics shortcut in the bar (owner request, 4 Nov 2026): clinics stay
+    // Mass times highlight button.
     // reachable from the drawer / Services menu and Home when their section is on.
     final settings = ref.watch(settingsProvider).value;
     // Full church name (admin-editable in settings); bundled l10n name until settings load.

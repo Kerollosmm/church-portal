@@ -128,13 +128,13 @@ void main() {
       await tester.pumpWidget(buildTestApp(initialLocation: '/church-education/m1'));
       await tester.pumpAndSettle();
 
-      expect(find.text('ClinicDetailScreen'), findsOneWidget);
+      expect(find.text('EducationDetailScreen'), findsOneWidget);
 
       final popped = await tester.binding.handlePopRoute();
       expect(popped, isTrue);
       await tester.pumpAndSettle();
 
-      expect(find.text('ClinicsScreen'), findsOneWidget);
+      expect(find.text('EducationScreen'), findsOneWidget);
     });
 
     testWidgets('battery route navigates to notifications on back press and shows tooltip', (tester) async {

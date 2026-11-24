@@ -16,8 +16,8 @@ void main() {
   group('sitemap (ADR-038)', () {
     test('fixed pages follow their section switches like FeatureGate', () {
       final paths = sitemapPaths(SitemapContent(features: _features({Sections.meetings: false})));
-      expect(paths, ['/', '/about', '/mass-schedule', '/church-education', '/church-activities', '/public-services', '/contact']);
-      expect(sitemapPaths(SitemapContent(features: _features())), contains('/clinics'));
+      expect(paths, ['/', '/about', '/mass-schedule', '/church-activities', '/public-services', '/contact']);
+      expect(sitemapPaths(SitemapContent(features: _features())), contains('/church-education'));
     });
 
     test('detail pages: listed, details on, section on — each of the 7 prefixes', () {
@@ -132,9 +132,6 @@ void main() {
           {'id': 'm1', 'data': {'nameAr': 'اجتماع', 'startsAt': '2026-11-04T10:00:00.000Z'}}
         ],
         'activities': [],
-        'clinics': [
-          {'id': 'c1', 'data': {'specialtyAr': 'أسنان'}}
-        ],
         'facilities': [],
         'priests': [],
         'saints': [],
@@ -148,7 +145,7 @@ void main() {
       })) as Map<String, dynamic>;
       final paths = sitemapPaths(sitemapContentFromExport(export, seedFeatures: seedFeatures));
       expect(paths, containsAll(['/church-education/m1', '/section/youth', '/page/donate']));
-      expect(paths.where((p) => p.startsWith('/clinics')), isEmpty); // clinics off in the seed's features
+      expect(paths.where((p) => p.startsWith('/clinics')), isEmpty);
       // A stored doc wins over the seed.
       export['features'] = {
         'sections': {Sections.meetings: true},
@@ -160,12 +157,11 @@ void main() {
     test('sitemapContentFromExport skips soft-deleted items with deletedAt != null', () {
       final export = {
         'features': {'sections': {Sections.meetings: true}},
-        'meetings': [],
-        'activities': [],
-        'clinics': [
-          {'id': 'c1', 'data': {'specialtyAr': 'أسنان'}},
-          {'id': 'c2', 'data': {'specialtyAr': 'باطنة', 'deletedAt': '2026-11-14T10:00:00.000Z'}},
+        'meetings': [
+          {'id': 'm1', 'data': {'nameAr': 'اجتماع'}},
+          {'id': 'm2', 'data': {'nameAr': 'اجتماع محذوف', 'deletedAt': '2026-11-14T10:00:00.000Z'}},
         ],
+        'activities': [],
         'facilities': [],
         'priests': [],
         'saints': [],

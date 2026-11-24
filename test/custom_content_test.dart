@@ -2804,11 +2804,6 @@ void main() {
       expect(find.byKey(const Key('sectionPage-extra-church-activities')), findsOneWidget);
       expect(find.byType(EmptyState), findsNothing);
 
-      emptyRouter.go('/church-education');
-      await tester.pumpAndSettle();
-      expect(find.byKey(const Key('sectionPage-extra-clinics')), findsOneWidget);
-      expect(find.byType(EmptyState), findsNothing);
-
       // Empty primary collection + hidden/unlinked page => EmptyState renders
       final hiddenActRepo = _BuiltInSectionRepo(
         pagesList: const [
@@ -2820,25 +2815,12 @@ void main() {
             categoryId: BuiltInSections.activities,
             visible: false,
           ),
-          CustomPage(
-            id: 'page-unlinked',
-            slug: 'extra-clinics',
-            titleAr: 'رابط',
-            placement: PagePlacements.link,
-            categoryId: BuiltInSections.meetings,
-            visible: true,
-          ),
         ],
         activitiesList: const [],
         sections: const {Sections.meetings: true},
       );
       final (hiddenRouter, _) = await _pump(tester, '/church-activities', size: const Size(420, 3000), repo: hiddenActRepo);
       expect(find.byKey(const Key('sectionPage-extra-church-activities')), findsNothing);
-      expect(find.byType(EmptyState), findsOneWidget);
-
-      hiddenRouter.go('/church-education');
-      await tester.pumpAndSettle();
-      expect(find.byKey(const Key('sectionPage-extra-clinics')), findsNothing);
       expect(find.byType(EmptyState), findsOneWidget);
 
       // Responsive layout check at 320, 400, 1400 px in RTL Arabic and LTR English

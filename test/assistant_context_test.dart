@@ -88,10 +88,10 @@ void main() {
       expect(t, contains('ت' * 300));
       expect(t, isNot(contains('ت' * 301)));
       expect(t, contains('Place (المكان): Main hall (القاعة الكبرى)'));
-      // Every one of the 7 collections carries them.
-      expect('Place (المكان): Main hall'.allMatches(t).length, 6); // + milestones below
+      // Every one of the 6 collections carries them.
+      expect('Place (المكان): Main hall'.allMatches(t).length, 5); // + milestones below
       final withMs = _build(d: _details(), milestones: [Milestone.fromMap('x', {'titleAr': 'م', 'year': 2000, ..._details()})]);
-      expect('Place (المكان): Main hall'.allMatches(withMs).length, 7);
+      expect('Place (المكان): Main hall'.allMatches(withMs).length, 6);
     });
 
     test('a page that is not enabled adds nothing', () {
@@ -108,10 +108,9 @@ void main() {
       expect(on, contains('01011112222'));
       expect(on, contains('01033334444'));
       expect(on, contains('Call after vespers'));
-      expect(on, contains('booking 0355'));
       expect(on, contains('Phone 0366'));
       final off = _build(d: _details(contacts: false));
-      for (final n in ['01011112222', '01033334444', 'Call after vespers', '0355', '0366']) {
+      for (final n in ['01011112222', '01033334444', 'Call after vespers', '0366']) {
         expect(off, isNot(contains(n)), reason: n);
       }
     });

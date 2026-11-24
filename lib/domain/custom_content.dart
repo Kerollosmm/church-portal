@@ -5,7 +5,7 @@
 // * `entries/{id}`: an item assigned to a category (`categoryId`).
 // * `pages/{id}`: a generic page (/page/<slug>) built from ordered blocks.
 //
-// The built-in sections (clinics, meetings, activities…) are NOT migrated:
+// The built-in sections (meetings, activities…) are NOT migrated:
 // they keep their own collections, fields and pages and coexist with these
 // (see ADR-027 in docs/memory-bank/10-decisions-and-history.md).
 

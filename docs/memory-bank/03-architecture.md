@@ -27,12 +27,12 @@ lib/
   config/app_config.dart    AppConfig: geminiModel (default model), recaptchaSiteKey (reCAPTCHA Enterprise), App Check debug flags, adminPath
   domain/                   PURE DART (no Flutter/Firebase imports) — unit-tested business logic
     models.dart             ChurchSettings, PhoneEntry, Altar, Alert, Season, Liturgy, Meeting, Activity,
-                            Clinic, Facility, Priest, Milestone, Saint (+ tolerant fromMap, parseHm, parseDate)
+                            Facility, Priest, Milestone, Saint (+ tolerant fromMap, parseHm, parseDate)
     features.dart           Sections, HomeBlocks, ThemePresets, FeatureSettings, routeSections,
                             normalizeHomeOrder, Hideable, publicItems
     schedule.dart           computeNextMass (runningNow / alsoRunning, ADR-049), occurrencesForDay,
                             occurrencesAround, effectiveLiturgiesForDay, parallelServices, seasons helpers, ScheduleTab, regularLiturgiesForTab, vespersAndPraise, seasonalSchedule
-    rules.dart              alerts, clinics, digits/phones (Egypt), wa.me/tel links, contact validation,
+    rules.dart              alerts, digits/phones (Egypt), wa.me/tel links, contact validation,
                             ContactRateLimiter
     cairo_time.dart         CairoTime (fromInstant, at, startOfDay, calendarDate)
     time_format.dart        formatTimeLatin/Arabic, ranges, weekday names, formatDate, formatLooseDate
@@ -259,7 +259,7 @@ flowchart LR
 | `featuresStreamProvider` | `StreamProvider<FeatureSettings>` | `settings/features` |
 | `featuresProvider` | `Provider<FeatureSettings>` | value or `FeatureSettings.defaults` (all on) |
 | `featuresReadyProvider` | `Provider<bool>` | true once the features stream has a value or error; `FeatureGate` waits on it |
-| `alertsProvider`, `liturgiesProvider`, `meetingsProvider`, `activitiesProvider`, `clinicsProvider`, `facilitiesProvider`, `priestsProvider`, `milestonesProvider`, `saintsProvider` | `StreamProvider<List<T>>` | wrapped by `_public` → `publicItems` (drops `visible == false`, stable sort by `order`) |
+| `alertsProvider`, `liturgiesProvider`, `meetingsProvider`, `activitiesProvider`, `facilitiesProvider`, `priestsProvider`, `milestonesProvider`, `saintsProvider` | `StreamProvider<List<T>>` | wrapped by `_public` → `publicItems` (drops `visible == false`, stable sort by `order`) |
 | `categoriesProvider`, `customPagesProvider` | `StreamProvider<List<…>>` | PR #18: `categories` / `pages` through `publicCategories` / `publicPages` (visible, valid slug, unique, by `order`); empty when the collections do not exist |
 | `entriesProvider` | `StreamProvider<List<CategoryEntry>>` | every entry; pages filter with `entriesOf` |
 | `contactSettingsProvider` | `StreamProvider<ContactSettings>` | `settings/contact`, code defaults when missing (and in seed mode) |
@@ -304,13 +304,11 @@ flowchart LR
 | `/mass-schedule` | `MassSchedulePage` | schedule |
 | `/church-education` | `EducationPage` | meetings |
 | `/church-activities` | `ActivitiesPage` | activities |
-| `/clinics` (`?specialty=<key>`) | `ClinicsPage(initialSpecialty)` | clinics |
 | `/public-services` | `PublicServicesPage` | services |
 | `/contact` | `ContactPage` | any of contactInfo, socials, contactForm |
 | `/ask` | `AssistantGate` → `assistant_page.AssistantPage` (deferred) | assistant (+ the page itself checks `assistantVisibleProvider`) |
 | `/church-education/:id` | `ItemDetailPage(DetailKind.meeting)` | meetings (prefix-aware `sectionsForPath`) |
 | `/church-activities/:id` | `ItemDetailPage(activity)` | activities |
-| `/clinics/:id` | `ItemDetailPage(clinic)` | clinics |
 | `/public-services/:id` | `ItemDetailPage(facility)` | services |
 | `/about/priests/:id` | `ItemDetailPage(priest)` | any of priests, departedPriests (+ the page checks the section matching the father's status) |
 | `/about/saints/:id` | `ItemDetailPage(saint)` | saints |
@@ -320,6 +318,7 @@ flowchart LR
 | `/admin` (`AppConfig.adminPath`) | `admin_page.AdminPage` (deferred, `fullScreen` placeholder) | outside the shell, not gated, not linked anywhere public |
 | `/activities` | redirect → `/church-activities` (query preserved) | — |
 | `/priests` | redirect → `/about` (query preserved) | — |
+| `/clinics`, `/clinics/:id` | redirect → `/` (query preserved) | — |
 | `/notices` | redirect → `/notifications` (query preserved) | — |
 | `/donations` | redirect → `/page/donations` (query preserved) | — |
 | anything else | `errorBuilder` → `AppShell` + "Page not found" + Back home | — |
@@ -333,12 +332,12 @@ flowchart LR
 
 **Map Interaction Guard (`MapInteractionGuard`, `map_embed.dart`, `map_embed_web.dart`):** On web, the keyless Google Maps iframe is initially set to `pointer-events: none` and `tabIndex = -1` covered by an interact shield (`Key('mapInteractShield')`, «اضغط للتفاعل مع الخريطة» / `mapTapToInteract`). Page wheel, touch, and Home/End/PageUp keyboard scrolling pass freely over the map until clicked. Clicking unlocks map interaction and displays a floating lock button (`Key('mapLockScrollBtn')`, «قفل الخريطة للتمرير» / `mapLockScroll`), with automatic re-locking when the mouse leaves the map bounds.
 
-**Item detail pages** (PR #13, ADR-020): the 7 routes above are generated from `DetailKind.values`
+**Item detail pages** (PR #13, ADR-020): the 6 routes above are generated from `DetailKind.values`
 (`'${kind.basePath}/:id'`, flat routes inside the `ShellRoute`, so the list page is not built underneath).
 `ItemDetailPage` watches the collection's existing stream provider (`meetingsProvider` … `milestonesProvider`) and
 finds the item by id — **no extra Firestore read**; only inline gallery / cover bytes (`media/{id}`) are fetched,
 through `MediaCache`, when the page mounts. `detailStateFor` (pure, `domain/item_detail.dart`): missing, hidden
-(clinics also inactive) or `detailsEnabled` explicitly `false` (missing = on since PR #14, ADR-021) → «هذه الصفحة غير متاحة حاليًا» (`Key('itemUnavailable')`) with a
+or `detailsEnabled` explicitly `false` (missing = on since PR #14, ADR-021) → «هذه الصفحة غير متاحة حاليًا» (`Key('itemUnavailable')`) with a
 Back-to-section button, `noindex`; a priest whose status section is off (departed father while `departedPriests`
 is off, serving while `priests` is off) → `SectionUnavailable`, `noindex`; otherwise the page, indexable with its
 canonical URL (`setDocumentRouteMeta(path: detailPathFor(kind, id), …)`, called after `FeatureGate`'s so it wins).
@@ -388,7 +387,7 @@ Deferred isolation is mechanically enforced in CI via `node tool/check_web_bundl
 
 ## App shell & navigation (`lib/ui/widgets/app_shell.dart`)
 
-- `navItems`: home, massSchedule, clinics, education, activities, publicServices, about, contact; `askNavItem` added
+- `navItems`: home, massSchedule, education, activities, publicServices, about, contact; `askNavItem` added
   when `assistantVisibleProvider`. `visibleNavItems(f, showAsk:)` filters by `f.routeEnabled(path)`.
 - Wide layout evaluated via `shellIsWide(BuildContext context)` (`width / textScale.clamp(1.0, 3.0) >= 1024`; large system text forces the compact bar): text links
   (home/about/education), a **Services** popup (activities, public services, contact, ask), gold **Mass times**

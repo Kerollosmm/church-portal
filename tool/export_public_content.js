@@ -27,7 +27,7 @@ if (!out) {
 
 // Collections with public pages (lib/domain/item_detail.dart DetailKind +
 // ADR-027 categories / pages). `entries` has no page of its own.
-const COLLECTIONS = ['meetings', 'activities', 'clinics', 'facilities', 'priests', 'saints', 'milestones', 'categories', 'pages'];
+const COLLECTIONS = ['meetings', 'activities', 'facilities', 'priests', 'saints', 'milestones', 'categories', 'pages'];
 
 function plain(v) {
   if (v instanceof admin.firestore.Timestamp) return v.toDate().toISOString();

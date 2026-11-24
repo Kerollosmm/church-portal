@@ -248,28 +248,8 @@ the same day with overlapping times in different venues (`parallelServices`) get
   summer, sports, exhibitions; unknown last), stable within a category (admin order kept). Icon per category
   (`activityIcon`). Schedule, ages, "Open page" link (YouTube/Facebook styled), call + WhatsApp (mobiles only).
 
-### `/clinics` (`?specialty=<key>`) — `clinics_page.dart` `ClinicsPage`
-- Specialty chips from active clinics (`clinicSpecialties`, first-seen order) + "All"; the URL param pre-selects
-  (and `didUpdateWidget` follows URL changes). "Available today" switch.
-- `filterClinics`: active only, by specialty; **open today first**, then admin `order`, then specialty, then doctor.
-- `ClinicCard`: specialty pill, "Available today" pill (`isClinicAvailableToday`: Cairo ISO weekday ∈ `days`),
-  doctor, degree, days, time, **Call • Book** (`tel:`) and **WhatsApp** (`https://wa.me/20…?text=<booking message>`).
-  When a clinic has **neither** booking phone nor WhatsApp, a **«الاتصال بمكتب الكنيسة / Call church office»**
-  button calls the first church phone (`settings/church.phones`), only while section `contactInfo` is on (PR 1, J2).
-  In English, a placeholder (`sample`) doctor name «… — يُعلن لاحقًا» is shown as "<specialtyEn> doctor — to be
-  announced" (`ClinicCard.isPlaceholderDoctor` + l10n `doctorTba`); the stored Arabic name is unchanged (BUG-17).
-- The seed ships section `clinics` **off** (PR 1): enable it in /admin → Sections only once the church office
-  confirms the clinics. **Live state:** the owner deleted the 11 seeded placeholder clinics on 3 Nov 2026 and
-  switched the section **off** on 4 Nov 2026 (live `settings/features` read, updated 07:51 Cairo; a new clinic added
-  that morning stays hidden while the section is off). While off, the page, nav entry, home directory card, footer
-  link and assistant grounding are hidden; the admin screen stays.
-- Entry points (when the section is on): phone drawer / desktop Services menu, the Home directory card,
-  footer quick links, public services cross-link. **Never the app bar** (owner request, 4 Nov 2026).
-- Subtitle `clinicsIntro` asks visitors to confirm with the church.
-- Link to `/public-services` when that section is on.
-
 ### `/public-services` — `public_services_page.dart` `PublicServicesPage`
-- Clinics shortcut card (if clinics on) + facilities grid (`facilityIcon` by type, description, hours, call button).
+- Facilities grid (`facilityIcon` by type, description, hours, call button).
 
 ### `/contact` — `contact_page.dart` `ContactPage`
 - `_InfoColumn`: phones (`PhoneRow`, call + WhatsApp for `isMobile`) and address/transport (section `contactInfo`);
@@ -451,25 +431,25 @@ on); owners can press **Send test error**. Details: `03-architecture.md` → *Er
 - Footer (FR-G-04, PR #13): church name, address (if contactInfo on), clickable church phone numbers
   (`Key('footerPhone-<number>')`, `footer.showPhones` and contactInfo on), official social icon buttons (48 dp,
   tooltips; `Key('footerSocial-whatsappChannel|whatsapp|facebook|youtube|instagram')`, `footer.showSocials` and
-  socials on), quick links (mass, clinics, education, contact — enabled ones; `footer.showQuickLinks`), the admin
+  socials on), quick links (mass, education, contact — enabled ones; `footer.showQuickLinks`), the admin
   note (`footer.noteAr/En`, `Key('footerNote')`), ©, and «تعرض البيانات المحفوظة مع التطبيق» while serving the seed.
   Defaults show phones, socials and quick links; phones and social icons wait for `settings/features`
   (`featuresReadyProvider`) so switched-off ones never flash.
 
 ## Feature toggles (`settings/features`, `lib/domain/features.dart`)
 
-- 19 sections (`Sections.all`; `media` is not a page — it shows/hides all optional item images; `dailyVerse` (PR #16)
+- 18 sections (`Sections.all`; `media` is not a page — it shows/hides all optional item images; `dailyVerse` (PR #16)
   is the hero verse of the day; `customSections` / `customPages` (PR #18) gate `/section/*` and `/page/*` with their
   menu entries);
   **missing key = on**; before the doc loads and when it does not exist, everything is on.
 - A switched-off section disappears from: home blocks/CTAs/directory, app-bar links, Services menu, drawer, footer
-  links, cross-links (e.g. clinics ↔ public services), and the **assistant's grounding**. Its route renders
+  links, and the **assistant's grounding**. Its route renders
   `SectionUnavailable` («هذا القسم غير متاح حاليًا» + Back to home).
 - Multi-section pages stay up while **any** of their sections is on (`routeSections`): `/about` (history, saints,
   priests, departedPriests) and `/contact` (contactInfo, socials, contactForm); the page hides the switched-off parts.
 - `/` is never gated; unknown paths are always allowed by `routeEnabled`.
 - **Prefix-aware (PR #11, `sectionsForPath`)**: detail sub-routes are gated by their parent section —
-  `/clinics/*` (clinics), `/church-education/*` (meetings), `/church-activities/*` (activities), `/public-services/*`
+  `/church-education/*` (meetings), `/church-activities/*` (activities), `/public-services/*`
   (services), `/about/priests/*` (priests or departedPriests), `/about/saints/*` (saints), `/about/milestones/*`
   (milestones); other sub-paths follow their top-level page. The routes exist since PR #13 (`ItemDetailPage`).
   Back from a detail page: `parentRouteOf(location, features)` → `DetailKind.parentPathIn(features)`; milestones go
@@ -559,10 +539,6 @@ for evening revivals.
 ### Alerts (`visibleAlerts`, `lib/domain/rules.dart`)
 Shown only when `active` and now ∈ `[startsAt, endsAt]` (open-ended if null); sorted by `priority` desc, then most
 recent `startsAt`. In `admin_schema.dart`, `priority` (0–1000, higher shows first) is directly accessible in the basic form fields (not collapsed in advanced). Links: a single leading `/` = in-app route (`context.go`), `//…` or scheme = external. Public shortcut `/notices` redirects to `/notifications`.
-
-### Clinics
-`isClinicAvailableToday` (Cairo weekday ∈ days and active); `filterClinics` ordering as above; phones normalised for
-`tel:` (`telLink`) and `wa.me` (`toInternationalDigits`: `0…` → `20…`, `+`/`00` stripped).
 
 ### Phones (`normalizeEgyptianPhone`)
 Accepts Arabic-Indic/Persian digits, spaces, dashes, `+20`/`0020`/bare `20` prefixes. Valid: mobile `01[0125]` + 8

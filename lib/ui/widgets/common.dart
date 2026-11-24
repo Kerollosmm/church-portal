@@ -700,7 +700,7 @@ class Footer extends ConsumerWidget {
       ('education', '/church-education'),
       ('contact', '/contact'),
       if (features.pushSettings.enabled) ('notifications', '/notifications'),
-      // Clinics is off on the live site: never offer it before the switches
+      // Only offer routes whose section switches are enabled.
       // have arrived (same rule as the Services menu, app_shell.dart).
     ].where((l) => features.routeEnabled(l.$2)).toList();
     final phones = ready && s != null && footer.showPhones && features.enabled(Sections.contactInfo)

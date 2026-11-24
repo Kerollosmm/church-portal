@@ -183,7 +183,7 @@ class PresetRequest {
   });
 
   /// The checklist defaults per season kind (owner SOP): Holy Week / Pascha /
-  /// Nativity replace the weekly schedule, hide meetings and clinics, stop
+  /// Nativity replace the weekly schedule, hide meetings, stop
   /// the hero motion and hide wedding bookings; revivals add evening prayers
   /// on top of the regular masses, so nothing is replaced or hidden. The
   /// fasts (`fast`, Great Lent, the Apostles' fast, Kiahk — the Nativity fast

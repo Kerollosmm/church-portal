@@ -255,25 +255,24 @@ void main() {
     test('the built-in welcome names only switched-on sections', () {
       bool all(String _) => true;
       expect(askIntroText(arabic: true, enabled: all),
-          'أهلًا بك! أجيب عن مواعيد القداسات والعيادات والاجتماعات وطرق التواصل، من بيانات الكنيسة الرسمية.');
-      bool noClinicsMeetings(String s) => s != 'clinics' && s != 'meetings';
-      final ar = askIntroText(arabic: true, enabled: noClinicsMeetings);
+          'أهلًا بك! أجيب عن مواعيد القداسات والاجتماعات وطرق التواصل، من بيانات الكنيسة الرسمية.');
+      bool noMeetings(String s) => s != 'meetings';
+      final ar = askIntroText(arabic: true, enabled: noMeetings);
       expect(ar, 'أهلًا بك! أجيب عن مواعيد القداسات وطرق التواصل، من بيانات الكنيسة الرسمية.');
-      expect(ar, isNot(contains('العيادات')));
-      expect(askIntroText(arabic: false, enabled: noClinicsMeetings),
+      expect(askIntroText(arabic: false, enabled: noMeetings),
           "Welcome! I answer questions about liturgy times and contacts using the church's official data.");
       expect(askIntroText(arabic: false, enabled: all),
-          "Welcome! I answer questions about liturgy times, clinics, meetings and contacts using the church's official data.");
+          "Welcome! I answer questions about liturgy times, meetings and contacts using the church's official data.");
       expect(askIntroText(arabic: true, enabled: (_) => false), contains('أسئلتك عن الكنيسة'));
     });
 
     test('suggested questions about a hidden section are dropped', () {
       final s = AssistantSettings.fromMap({
         'showSuggestions': true,
-        'suggestionsAr': 'متى القداس؟\nمواعيد العيادة؟\nاجتماع الشباب امتى؟',
+        'suggestionsAr': 'متى القداس؟\nاجتماع الشباب امتى؟',
       });
-      expect(s.visibleSuggestions(true), hasLength(3));
-      expect(s.visibleSuggestions(true, (sec) => sec != 'clinics' && sec != 'meetings'), ['متى القداس؟']);
+      expect(s.visibleSuggestions(true), hasLength(2));
+      expect(s.visibleSuggestions(true, (sec) => sec != 'meetings'), ['متى القداس؟']);
     });
   });
 

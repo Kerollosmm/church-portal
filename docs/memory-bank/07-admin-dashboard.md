@@ -58,15 +58,12 @@ Grouped under `AdminGroup` headers (`nav-group-<name>`): **7 editor groups** (`1
 2. **Schedule (`schedule`)**: `liturgies`, `meetings`, `today`, `seasons` (merged `SeasonsHubScreen` with tabs «قائمة المواسم» / «تجهيز الموسم»; deep links to `'seasonPreset'` open tab 1)
 3. **Announcements (`announcements`)**: `alerts`, `app` (`AppAndNotificationsScreen` — announcements & notification types; technical VAPID/queues/APK moved to owner `advanced`)
 4. **Church (`church`)**: `priests` (unified serving + departed priests with «الكل / يخدم / متنيح» filter, P2-20), `saints`, `milestones`, `church`
-5. **Services & activities (`services`)**: `facilities`, `activities`, `clinics`
+5. **Services & activities (`services`)**: `facilities`, `activities`
 6. **Pages (`pages`)**: `features`, `pages` («الصفحات المخصصة», with «صفحة تبرعات جاهزة» template since PR 3D), `categories` («الأقسام المخصصة» — unified sections & nested items since PR 3D)
 7. **Messages (`messages`)**: `messages` (shows unread inbox count badge `nav-messages-badge` when > 0)
 8. **Settings (owner only, `ownerSettings`)**: `admins`, `contactCats`, `assistant`, `seasonSettings`, `advanced` (`AdvancedOwnerScreen` with tabs `System & queues` and `App install & APK`).
 
 Deep links to `'entries'` redirect to `'categories'`, `'departedPriests'` redirect to `'priests'`, and `'seasonPreset'` routes to `SeasonsHubScreen(initialTab: 1)`.
-The **Clinics** screen («العيادات») stays in the menu although the owner deleted the 11 placeholder clinics (3 Nov 2026) and
-switched the clinics section off (4 Nov 2026) — it is where real clinics would be added before switching the
-section back on.
 Every entry has its own icon (`adminIcon`), and every screen displays an `AdminScreenHeader` (`Key('screen-title')` + `Key('screen-help')`, P2-19) wrapping cleanly at 320 px / 200% text. The nav is a `Material` (not a coloured `Container`, which hid the tiles'
 ink), so the selected entry shows the gold highlight; icons are burgundy, labels ink, and the selected entry's icon
 and label are both burgundy (`ListTile.iconColor/textColor/selectedColor`, PR #23).
@@ -108,7 +105,7 @@ Starts with `AdminScreenHeader`, then **«محتاج انتباهك» (`attentio
   YouTube links; the hero always plays the bundled clip, switched by *Hero motion & video*. The dashboard itself
   always uses the Golden hour palette.
 - **Page titles, subtitles & intro notes** (PR #12): one collapsible row per customizable page (`about, schedule,
-  education, activities, clinics, services, contact, ask` — `ValueKey('page-<key>')`, `maintainState: true`) with
+  education, activities, services, contact, ask` — `ValueKey('page-<key>')`, `maintainState: true`) with
   title AR/EN ≤ 200, subtitle AR/EN ≤ 300, intro AR/EN ≤ 1500 (`ValueKey('features-page-<key>-<field>')`); a
   **«مخصّص / Customized»** badge while any field is filled and **«إعادة للافتراضي / Reset»** to clear the page
   (empty = the page's built-in text). A too-long field opens its row on Save.
@@ -260,7 +257,7 @@ For each `CollectionDef`:
 - Live list (`repo.watch(collection)`) filtered by the screen filter (`def.matches`), sorted by `sortAdminDocs`
   (orderable: by `order`; others by `order`/weekday, then start, then id).
 - **Search** (all string values + id) and filter chips **all / visible / hidden / unconfirmed**; "showing N of M". On **Priests (`priests`)**, an extra status filter row **«الكل / يخدم / متنيح»** (`priestFilter-all/serving/departed`) lets editors filter serving vs departed fathers; tapping **Add** while filtered to «متنيح» defaults `status: 'departed'`.
-- **Open on site** (`Key('admin-openOnSite')`, «عرض بالموقع»): opens `CollectionDef.publicPath` (e.g. `/clinics`,
+- **Open on site** (`Key('admin-openOnSite')`, «عرض بالموقع»): opens `CollectionDef.publicPath` (e.g. `/public-services`,
   `+ ?lang=en` when the dashboard is in English — `publicPathFor`) in a new tab on web (`Uri.base.resolve`), or
   navigates there on mobile.
 - Tile: title (`titleKeys`), subtitle (weekday, date, time range, season/stage/category/type/specialty labels,
@@ -269,7 +266,7 @@ For each `CollectionDef`:
   switch the old list is never shown while the new one loads.
 - 👁 **hide/show** (`update(visible)`) — only when the collection has a `visible` field (not seasons).
 - **Drag to reorder** — or tap **Move up / Move down** on each tile (`ValueKey('moveUp-<id>')`, WCAG 2.5.7) —
-  (`reorder(collection, ids, base:)` → `order` = base + 10, 20, 30… in one batch) for orderable collections — clinics,
+  (`reorder(collection, ids, base:)` → `order` = base + 10, 20, 30… in one batch) for orderable collections — facilities,
   facilities, activities, priests, saints, milestones — and only when search is empty, filter = all
   and > 1 item. Serving and departed priests never cross-reorder; **departed fathers use base 1000** (`reorderBase(def, status: 'departed')`: 1010, 1020…) and `_reorder` sends only that status group's IDs, so the two groups keep non-colliding `order` ranges inside `priests` (BUG-13, P2-20).
   Liturgies and meetings use the numeric **Order** field instead.
@@ -300,7 +297,6 @@ For each `CollectionDef`:
 | seasons | seasons | – | – | – | key choice, names, starts/ends, active |
 | liturgies | liturgies | – (order field) | ✔ | ✔ | needs weekday **or** one-off date; end may be before start (midnight); checkbox «يحل محل قداسات اليوم المعتادة (قداس العيد)» = `replacesDay` (ADR-050) |
 | meetings | meetings | – (order field) | ✔ | ✔ | stage choice |
-| clinics | clinics | ✔ | ✔ | ✔ | `active` missing = true |
 | facilities | facilities | ✔ | ✔ | ✔ | "Public services" |
 | activities | activities | ✔ | ✔ | ✔ | category choice |
 | priests | priests | ✔ | ✔ | ✔ | unified serving & departed (`status`: `serving`/`departed`, missing = serving; filter chips; separate `0+` / `1000+` order ranges) |
@@ -326,7 +322,7 @@ For each `CollectionDef`:
 - New docs write all collected values (+ `newDefaults`); **existing docs write only changed fields**
   (`changedFields`, deep compare) with merge — never overwriting another admin's concurrent edits to other fields.
 - **Hidden EN drafts exclusion (PR 3G, P2-27b):** When `englishEnabled` is false, `DocEditor.collect` preserves `_initialValues[f.key]` for top-level English fields (`f.lang == 'en'`) and `_Row.collect` preserves `initial[f.key]` for object-list rows, so typed or pre-existing English drafts in hidden fields are excluded from the collected payload and never overwrite stored data or trigger validation errors.
-- **Top-of-form layout, Field groups & Advanced options (PR #12, PR 3F / P2-24):** `FieldDef.group` — `basic` fields stay open at the top, and on item/service collections (`priests`, `meetings`, `clinics`, `facilities`, `activities`, `categories`) cover `image` and primary phone (`contactPhone` / `bookingPhone` / `phone`) sit open at the top of `basic` (`saints` and `milestones` keep `_plainContactsGroup`). Secondary fields (English names/descriptions, `order`, `slug`, secondary links, `imageStyle`) carry `advanced: true` and sit in the collapsed **«خيارات متقدمة» (`advancedGroup`)** card (`maintainState: true`); on Save, `_openInvalidGroups()` expands any closed `FieldGroup` or `advancedGroup` containing an invalid field before `_formKey.currentState!.validate()`. On the 7 detail collections
+- **Top-of-form layout, Field groups & Advanced options (PR #12, PR 3F / P2-24):** `FieldDef.group` — `basic` fields stay open at the top, and on item/service collections (`priests`, `meetings`, `facilities`, `activities`, `categories`) cover `image` and primary phone (`contactPhone` / `phone`) sit open at the top of `basic` (`saints` and `milestones` keep `_plainContactsGroup`). Secondary fields (English names/descriptions, `order`, `slug`, secondary links, `imageStyle`) carry `advanced: true` and sit in the collapsed **«خيارات متقدمة» (`advancedGroup`)** card (`maintainState: true`); on Save, `_openInvalidGroups()` expands any closed `FieldGroup` or `advancedGroup` containing an invalid field before `_formKey.currentState!.validate()`. On the 6 detail collections
   `details` (**«صفحة التفاصيل والحقول الإضافية»**: «إظهار صفحة التفاصيل / Show the detail page» switch — **on by default** since PR #14 (missing field = on, new items saved with `true`; hint explains that tapping the card opens the full page and that switching it off hides the page and the «التفاصيل» link), details AR/EN ≤ 10,000, up to
   15 *extra fields* rows title AR / title EN ≤ 150 — a title in **either** language is required, checked per row
   by `FieldDef.rowRequireAnyOf` + `validateRowAnyOf` («أدخل عنوانًا بالعربية أو بالإنجليزية», like rules'
@@ -367,10 +363,10 @@ For each `CollectionDef`:
 - **Cover-image link validation & placement hints (Phase 4 PR1, ADR-074):** a stored cover image whose link is not a usable https image link is never dropped silently: `DocEditor` keeps the raw map (`_initValue` / `_collectImage`), `validateDocument` returns `invalidCoverImage` («لينك الصورة مش صالح — صلّح اللينك أو امسح الصورة.»), the save is blocked, and the error-summary entry scrolls to the image field, where the bad link is offered back for editing and «إزالة الصورة» is available. Uploading a replacement image from the device also unblocks the save (the staged upload in `_pending` replaces the stored link; CodeRabbit + Sentry review on PR #86). No migration: an old doc keeps its data until the admin fixes or removes the image. The `placement` dropdown shows a one-line hint under each option (`opt_placement_<option>_hint` in `admin_strings.dart`): «لينك بس» / «الصفحة ليها لينك، ومش ظاهرة في القوايم.»، «في القايمة» / «تظهر في قايمة الموقع.»، «جوه قسم» / «تظهر جوه قسم تختاره.».
 - Every save stamps `updatedAt` (server time) and `updatedBy` (email) via `AdminRepository._stamp`.
 - Boolean defaults: `missingBool` (value assumed when an existing doc lacks the field, e.g. `visible` = true,
-  clinic `active` = true) vs `newBool` (value for new docs, e.g. `sample` = false).
+  departed `active` = true) vs `newBool` (value for new docs, e.g. `sample` = false).
 
 ### Optional image field (`FieldType.image`, PR #5)
-On priests, departed fathers, saints, milestones, activities, alerts and seasons — and since PR #12 meetings, clinics
+On priests, departed fathers, saints, milestones, activities, alerts and seasons — and since PR #12 meetings, facilities
 and facilities (in the *Photos & gallery* card on the 7 detail collections) — the form has **«الصورة (اختياري) /
 Image (optional)»** with a 96 px preview and:
 - **Upload image** (رفع صورة): opens the device gallery/file picker (`image_picker`). The file is resized and
@@ -514,7 +510,7 @@ Bottom bar anchored to the bottom of the viewport whenever an editor is dirty:
 - `AdminBackend` is an interface so widget tests use an in-memory fake; keep new admin I/O behind it.
   `AdminBackend.media` (default null) exposes the `MediaRepository`; `DocEditor` takes `media`, `pickImage` and
   `prepareImage` so tests inject bytes and a fake store (`test/media_test.dart`).
-- PR #10 a11y details: selected clinic-day `FilterChip`s and the theme `ChoiceChip`s use a white label/checkmark on the
+- PR #10 a11y details: selected weekday `FilterChip`s and the theme `ChoiceChip`s use a white label/checkmark on the
   dark fill (`chipTheme` also sets `checkmarkColor` / `secondaryLabelStyle` white); the image field stacks preview
   above its buttons below 420 px or at ≥ 1.5× text; the search clear button («مسح البحث» / Clear search) and the
   admin Home button (`backHome`) have tooltips.

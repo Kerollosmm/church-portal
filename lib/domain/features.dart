@@ -589,7 +589,7 @@ class FeatureSettings {
   List<String> get visibleHomeBlocks => homeOrder.where(showHomeBlock).toList();
 
   /// Whether a public route (or one of its detail sub-routes, such as
-  /// `/clinics/<id>`) is available. Unknown routes are always allowed.
+  /// `/church-education/<id>`) is available. Unknown routes are always allowed.
   bool routeEnabled(String path) {
     if (path == '/notifications' || path.startsWith('/notifications/')) return pushSettings.enabled;
     final sections = sectionsForPath(path);
@@ -634,8 +634,8 @@ const aboutSubRouteSections = <String, List<String>>{
 };
 
 /// Sections behind [path] (any one enabled keeps it alive), or null for a
-/// route no section controls. Prefix-aware: `/clinics/<id>` is gated like
-/// `/clinics`, `/about/priests/<id>` by the (serving or departed) priests
+/// route no section controls. Prefix-aware: `/church-education/<id>` is gated like
+/// `/church-education`, `/about/priests/<id>` by the (serving or departed) priests
 /// sections, `/about/saints/<id>` by saints and `/about/milestones/<id>` by
 /// milestones; any other sub-path follows its top-level page.
 List<String>? sectionsForPath(String path) {

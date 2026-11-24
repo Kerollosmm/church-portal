@@ -28,7 +28,7 @@ import 'activities_page.dart' show activityIcon;
 import 'education_page.dart' show meetingGroupOf, stageLabels;
 import 'public_services_page.dart' show facilityIcon;
 
-/// Public detail page of one item (`/clinics/<id>`, `/about/priests/<id>`…,
+/// Public detail page of one item (`/church-education/<id>`, `/about/priests/<id>`…,
 /// ADR-020). Resolves the item from the collection stream the list page
 /// already uses (no extra Firestore read); only the inline gallery images
 /// (`media/{id}`) are fetched, lazily, when this page mounts.
@@ -111,7 +111,7 @@ String _idOf(Object o) => detailItemId(o);
 
 ItemDetails _detailsOf(Object o) => detailItemDetails(o);
 
-/// Shown on its list page: visible (and, for clinics, active).
+/// Shown on its list page: visible.
 bool _publiclyListed(Object o) => detailItemListed(o);
 
 /// One labelled row of the "Key information" card (label above value, so
@@ -180,18 +180,12 @@ class _Entry {
   /// follows the visitor's language later.
   final Map<String, String> reminderTitle;
 
-  /// Happens at the church (meetings, activities, clinics, services): the
+  /// Happens at the church (meetings, activities, services): the
   /// page offers directions to the church.
   final bool onSite;
 
-  /// Clinics: the church office phone when the clinic has no phone/WhatsApp.
-  final bool officeFallback;
-
   /// Activities (like their card): a mobile contact phone is also WhatsApp.
   final bool whatsappFromPhone;
-
-  /// Pre-filled WhatsApp message (clinics: booking request).
-  final String? whatsappText;
 
   const _Entry({
     required this.title,
@@ -208,9 +202,7 @@ class _Entry {
     this.end = '',
     this.reminderTitle = const {},
     this.onSite = false,
-    this.officeFallback = false,
     this.whatsappFromPhone = false,
-    this.whatsappText,
   });
 
   static _Entry of(BuildContext context, WidgetRef ref, Object item) {
@@ -591,7 +583,7 @@ class _DetailView extends ConsumerWidget {
       if (e.calendarDays.isNotEmpty && e.start.isNotEmpty)
         Builder(builder: (c) {
           // The earliest coming session over all the item's weekdays (a
-          // clinic may run on several days); today's counts until it starts.
+          // item may run on several days); today's counts until it starts.
           final cNow = CairoTime.fromInstant(now);
           final sm = parseHm(e.start) ?? 0;
           DateTime? target;
@@ -649,10 +641,6 @@ class _DetailView extends ConsumerWidget {
     final wa = d.whatsapp.trim().isNotEmpty
         ? d.whatsapp.trim()
         : (e.whatsappFromPhone && isEgyptianMobile(phone) ? phone : '');
-    String? office;
-    if (e.officeFallback && phone.isEmpty && wa.isEmpty && ref.watch(featuresProvider).enabled(Sections.contactInfo)) {
-      office = ref.watch(settingsProvider).value?.phones.where((p) => p.number.isNotEmpty).firstOrNull?.number;
-    }
     return [
       if (phone.isNotEmpty)
         ActionChipButton(
@@ -670,16 +658,7 @@ class _DetailView extends ConsumerWidget {
           label: context.tr('whatsapp'),
           semanticLabel: actionSemanticLabel(context.tr('whatsapp'), e.title),
           color: whatsappGreen,
-          onTap: () => openWhatsApp(wa, text: e.whatsappText),
-        ),
-      if (office != null)
-        ActionChipButton(
-          key: const Key('detailCallOffice'),
-          icon: Icons.call,
-          label: context.tr('callChurchOffice'),
-          semanticLabel: actionSemanticLabel(context.tr('callChurchOffice'), e.title),
-          color: context.pal.bar,
-          onTap: () => callPhone(office!),
+          onTap: () => openWhatsApp(wa),
         ),
     ];
   }

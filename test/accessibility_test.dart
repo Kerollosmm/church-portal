@@ -108,7 +108,7 @@ SeedData _seed({
     raw['alerts'] = {
       'internal-meetings': {
         ...base,
-        'titleAr': 'تنبيه العيادات',
+        'titleAr': 'تنبيه الاجتماعات',
         'titleEn': 'Meetings notice',
         'bodyAr': '',
         'bodyEn': '',
@@ -584,9 +584,7 @@ void main() {
 
     testWidgets('compact app-bar buttons are at least 48x48 dp', (tester) async {
       await _pumpApp(tester, size: const Size(400, 800));
-      // Mass times is the only highlight button; the bar has no Clinics
-      // shortcut (owner request, 4 Nov 2026), even with clinics switched on.
-      expect(find.descendant(of: find.byType(AppBar), matching: find.byTooltip('Clinics')), findsNothing);
+      // Mass times and Menu are at least 48x48 dp.
       for (final label in ['Mass times', 'Menu']) {
         final button = find.ancestor(of: find.byTooltip(label), matching: find.byType(IconButton)).first;
         final size = tester.getSize(button);

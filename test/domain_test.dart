@@ -360,10 +360,6 @@ void main() {
                 placeAr: 'مذبح الأنبا موسى', seasonKey: 'revival_moses'),
           ],
           seasons: seasons,
-          clinics: const [
-            Clinic(id: 'c', specialty: 'dental', specialtyAr: 'الأسنان', specialtyEn: '', doctorName: 'د. مينا', degreeAr: 'ماجستير',
-                days: [5], whatsapp: '01012345678'),
-          ],
           meetings: const [
             Meeting(id: 'm', stage: 'youth', nameAr: 'اجتماع الشباب', nameEn: '', start: '19:00', end: '20:00', hallAr: 'قاعة البابا',
                 notes: 'يبدأ بعد العشية'),
@@ -391,8 +387,6 @@ void main() {
       final t = build();
       expect(t, contains('Friday: قداس الجمعة [mass] 07:00 AM – 09:00 AM at الكنيسة الكبرى - للشباب'));
       expect(t, contains('Directions: آخر شارع 45'));
-      expect(t, contains('الأسنان: د. مينا, ماجستير'));
-      expect(t, contains('WhatsApp 01012345678'));
       expect(t, contains('اجتماع الشباب [youth]'));
       expect(t, contains('at قاعة البابا'));
       expect(t, contains('notes: يبدأ بعد العشية'));

@@ -36,7 +36,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
-import 'helpers/admin_pickers.dart';
 
 FieldDef _f(FieldType t, {bool required = false, num? min, num? max, bool allowPath = false, int maxLength = 0}) =>
     FieldDef('k', 'ك', 'k', t, required: required, min: min, max: max, allowPath: allowPath, maxLength: maxLength);
@@ -320,8 +319,8 @@ void main() {
       expect(validateFieldValue(_f(FieldType.url), 'https://www.facebook.com/x'), isNull);
       expect(validateFieldValue(_f(FieldType.url), 'facebook.com/x'), 'invalidUrl');
       expect(validateFieldValue(_f(FieldType.url), 'javascript:alert(1)'), 'invalidUrl');
-      expect(validateFieldValue(_f(FieldType.url), '/clinics'), 'invalidUrl');
-      expect(validateFieldValue(_f(FieldType.url, allowPath: true), '/clinics'), isNull);
+      expect(validateFieldValue(_f(FieldType.url), '/church-education'), 'invalidUrl');
+      expect(validateFieldValue(_f(FieldType.url, allowPath: true), '/church-education'), isNull);
       expect(validateFieldValue(_f(FieldType.url, allowPath: true), '//evil.com'), 'invalidUrl');
       expect(validateFieldValue(_f(FieldType.phone), '03 536 8888'), isNull);
       expect(validateFieldValue(_f(FieldType.phone), '٠١٠١٢٣٤٥٦٧٨'), isNull);
@@ -335,9 +334,9 @@ void main() {
       final lit = collectionById('liturgies')!;
       expect(validateDocument(lit, {'weekday': null, 'date': null}), 'needWeekdayOrDate');
       expect(validateDocument(lit, {'weekday': 5, 'start': '23:00', 'end': '01:00'}), isNull); // crosses midnight
-      final clinic = collectionById('clinics')!;
-      expect(validateDocument(clinic, {'start': '20:00', 'end': '16:00'}), 'endBeforeStart');
-      expect(validateDocument(clinic, {'start': '16:00', 'end': '20:00'}), isNull);
+      final meeting = collectionById('meetings')!;
+      expect(validateDocument(meeting, {'start': '20:00', 'end': '16:00'}), 'endBeforeStart');
+      expect(validateDocument(meeting, {'start': '16:00', 'end': '20:00'}), isNull);
       final alert = collectionById('alerts')!;
       expect(
           validateDocument(alert, {'startsAt': DateTime.utc(2027, 1, 2), 'endsAt': DateTime.utc(2027, 1, 1)}),
@@ -362,7 +361,7 @@ void main() {
   group('schema', () {
     test('every public content collection has an editor, with visibility where it is shown publicly', () {
       final names = adminCollections.map((c) => c.name).toSet();
-      expect(names, containsAll(['alerts', 'seasons', 'liturgies', 'meetings', 'activities', 'clinics', 'facilities', //
+      expect(names, containsAll(['alerts', 'seasons', 'liturgies', 'meetings', 'activities', 'facilities', //
         'priests', 'milestones', 'saints']));
       for (final c in adminCollections.where((c) => c.name != 'seasons')) {
         expect(c.hasVisible, isTrue, reason: c.id);
@@ -417,7 +416,7 @@ void main() {
 
       const fnFor = {
         'alerts': 'validAlert', 'seasons': 'validSeason', 'liturgies': 'validLiturgy', 'meetings': 'validMeeting', //
-        'activities': 'validActivity', 'clinics': 'validClinic', 'facilities': 'validFacility',
+        'activities': 'validActivity', 'facilities': 'validFacility',
         'priests': 'validPriest', 'milestones': 'validMilestone', 'saints': 'validSaint',
       };
       final seed = jsonDecode(File('assets/seed/seed.json').readAsStringSync()) as Map<String, dynamic>;
@@ -457,7 +456,7 @@ void main() {
   });
 
   group('PR #12: customization schema', () {
-    const detailCols = ['meetings', 'activities', 'clinics', 'facilities', 'priests', 'milestones', 'saints'];
+    const detailCols = ['meetings', 'activities', 'facilities', 'priests', 'milestones', 'saints'];
     FieldDef fd(CollectionDef c, String k) => c.fields.firstWhere((f) => f.key == k, orElse: () => throw k);
 
     test('imageList type, field groups and the image collections', () {
@@ -474,14 +473,14 @@ void main() {
       ]);
       expect(const FieldDef('x', 'x', 'x', FieldType.text).group, FieldGroup.basic);
       expect(imageCollections,
-          ['alerts', 'seasons', 'meetings', 'activities', 'clinics', 'facilities', 'priests', 'milestones', 'saints',
+          ['alerts', 'seasons', 'meetings', 'activities', 'facilities', 'priests', 'milestones', 'saints',
             'entries', 'pages']);
       for (final c in adminCollections) {
         expect(c.fields.any((f) => f.key == 'image'), imageCollections.contains(c.name), reason: c.id);
       }
     });
 
-    test('the 7 detail collections carry grouped details, media and contacts fields', () {
+    test('the 6 detail collections carry grouped details, media and contacts fields', () {
       for (final c in adminCollections.where((c) => detailCols.contains(c.name))) {
         final keys = c.fields.map((f) => f.key).toList();
         expect(keys.toSet().length, keys.length, reason: '${c.id}: duplicate keys');
@@ -515,7 +514,7 @@ void main() {
         }
         // One input per stored key: the collection's own phone / link field
         // doubles as the primary phone / external link (ItemDetails.fromMap).
-        final phone = switch (c.name) { 'clinics' => 'bookingPhone', 'facilities' => 'phone', _ => 'contactPhone' };
+        final phone = c.name == 'facilities' ? 'phone' : 'contactPhone';
         final link = c.name == 'activities' ? 'link' : 'externalUrl';
         final phoneGroup =
             ['saints', 'milestones'].contains(c.name) ? FieldGroup.contacts : FieldGroup.basic;
@@ -524,7 +523,7 @@ void main() {
           'externalLabelAr', 'externalLabelEn', 'contactNoteAr', 'contactNoteEn']) {
           expect(fd(c, k).group, FieldGroup.contacts, reason: '${c.id}.$k');
         }
-        if (['clinics', 'facilities'].contains(c.name)) expect(keys, isNot(contains('contactPhone')));
+        if (['facilities'].contains(c.name)) expect(keys, isNot(contains('contactPhone')));
         if (c.name == 'activities') expect(keys, isNot(contains('externalUrl')));
         for (final k in [phone, 'whatsapp']) {
           expect(fd(c, k).type, FieldType.phone, reason: '${c.id}.$k');
@@ -609,31 +608,28 @@ void main() {
       const on = {'detailsEnabled': true};
       expect(path('m1', 'meetings', on), '/church-education/m1');
       expect(path('a1', 'activities', on), '/church-activities/a1');
-      expect(path('c1', 'clinics', on, english: true), '/clinics/c1?lang=en');
+      expect(path('m1', 'meetings', on, english: true), '/church-education/m1?lang=en');
       expect(path('f1', 'facilities', on), '/public-services/f1');
       expect(path('p1', 'priests', on), '/about/priests/p1');
       expect(path('p2', 'priests', {...on, 'status': 'departed'}), '/about/priests/p2');
       expect(path('s1', 'saints', on), '/about/saints/s1');
       expect(path('h1', 'milestones', on), '/about/milestones/h1');
       // Untouched items (no field) have a page since PR #14.
-      expect(path('c1', 'clinics', const {}), '/clinics/c1');
+      expect(path('m1', 'meetings', const {}), '/church-education/m1');
       // No detail page (switched off, hidden, or a collection without one): no link.
-      expect(path('c1', 'clinics', const {'detailsEnabled': false}), isNull);
-      // Inactive clinics are not listed publicly, so their page is unavailable (CodeRabbit review).
-      expect(path('c1', 'clinics', const {'active': false}), isNull);
-      expect(path('c1', 'clinics', const {'active': true}), '/clinics/c1');
-      expect(path('c1', 'clinics', const {'detailsEnabled': true, 'visible': false}), isNull);
+      expect(path('m1', 'meetings', const {'detailsEnabled': false}), isNull);
+      expect(path('m1', 'meetings', const {'detailsEnabled': true, 'visible': false}), isNull);
       expect(path('l1', 'liturgies', on), isNull);
-      expect(path('x/y', 'clinics', on), '/clinics/x%2Fy');
+      expect(path('x/y', 'meetings', on), '/church-education/x%2Fy');
     });
   });
 
   group('admin list helpers', () {
-    final def = collectionById('clinics')!;
+    final def = collectionById('facilities')!;
     final docs = [
-      const AdminDoc('a', {'doctorName': 'Dr Mina', 'specialtyAr': 'الأسنان', 'order': 20, 'visible': false}),
-      const AdminDoc('b', {'doctorName': 'Dr Bishoy', 'specialtyAr': 'الأطفال', 'order': 10, 'sample': true}),
-      const AdminDoc('c', {'doctorName': 'Dr Kero', 'specialtyAr': 'الباطنة'}),
+      const AdminDoc('a', {'nameEn': 'Nursery', 'nameAr': 'الحضانة', 'order': 20, 'visible': false}),
+      const AdminDoc('b', {'nameEn': 'Library', 'nameAr': 'المكتبة', 'order': 10, 'sample': true}),
+      const AdminDoc('c', {'nameEn': 'Halls', 'nameAr': 'القاعات'}),
     ];
 
     test('sorts orderable collections by order, unordered last', () {
@@ -641,8 +637,8 @@ void main() {
     });
 
     test('search and filters', () {
-      expect(filterAdminDocs(def, docs, query: 'mina').map((d) => d.id), ['a']);
-      expect(filterAdminDocs(def, docs, query: 'الأطفال').map((d) => d.id), ['b']);
+      expect(filterAdminDocs(def, docs, query: 'nursery').map((d) => d.id), ['a']);
+      expect(filterAdminDocs(def, docs, query: 'المكتبة').map((d) => d.id), ['b']);
       expect(filterAdminDocs(def, docs, filter: ListFilter.hidden).map((d) => d.id), ['a']);
       expect(filterAdminDocs(def, docs, filter: ListFilter.visible).map((d) => d.id), ['b', 'c']);
       expect(filterAdminDocs(def, docs, filter: ListFilter.unconfirmed).map((d) => d.id), ['b']);
@@ -667,9 +663,9 @@ void main() {
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
       Map<String, dynamic>? saved;
-      final def = collectionById('clinics')!;
+      final def = collectionById('facilities')!;
       await tester.pumpWidget(_app(DocEditor(
-        title: 'Add clinic',
+        title: 'Add service',
         fields: def.fields,
         def: def,
         popOnSave: false,
@@ -680,35 +676,29 @@ void main() {
       expect(saved, isNull);
       expect(find.text('Required'), findsWidgets);
 
-      await tester.enterText(find.byKey(const ValueKey('field-specialty')), 'dental');
-      await tester.enterText(find.byKey(const ValueKey('field-specialtyAr')), 'الأسنان');
-      await tester.enterText(find.byKey(const ValueKey('field-doctorName')), 'د. مينا');
+      await tester.enterText(find.byKey(const ValueKey('field-nameAr')), 'الحضانة');
       // Primary phone sits at the top in the open basic section (P2-24);
       // order sits inside the collapsible "Advanced options" card.
-      await tester.enterText(find.byKey(const ValueKey('field-bookingPhone')), '010 1234 5678');
+      await tester.enterText(find.byKey(const ValueKey('field-phone')), '010 1234 5678');
       await tester.tap(find.byKey(const ValueKey('group-advanced')));
       await tester.pumpAndSettle();
       await tester.enterText(find.byKey(const ValueKey('field-order')), 'abc'); // invalid
       await tester.tap(find.byKey(const Key('editor-save')));
       await tester.pumpAndSettle();
       expect(saved, isNull);
-      // Times come from the 12-hour picker since ADR-049 (read-only fields; stored 24h).
-      await pickTime(tester, 'start', 16, 0);
-      await pickTime(tester, 'end', 20, 0);
       await tester.enterText(find.byKey(const ValueKey('field-order')), '30');
       await tester.tap(find.byKey(const Key('editor-save')));
       await tester.pumpAndSettle();
       expect(saved, isNotNull);
-      expect(saved!['doctorName'], 'د. مينا');
+      expect(saved!['nameAr'], 'الحضانة');
       // New doc: every field, except an unset image style (ADR-023: missing =
       // section default, so a new doc does not write it).
       expect(saved!.keys, containsAll(def.fields.map((f) => f.key).where((k) => k != 'imageStyle')));
       expect(saved!.containsKey('imageStyle'), isFalse);
-      expect(saved!['bookingPhone'], '01012345678');
+      expect(saved!['phone'], '01012345678');
       expect(saved!['order'], 30);
       expect(saved!['visible'], isTrue); // new items start visible
       expect(saved!['sample'], isFalse);
-      expect(saved!['active'], isTrue);
       expect(find.text('Saved'), findsOneWidget);
     });
 
@@ -949,15 +939,16 @@ void main() {
       await tester.pumpWidget(_app(Scaffold(
         body: FeaturesEditor(initial: FeatureSettings.defaults, onSave: (f) async => saved = f),
       )));
-      final clinicsSwitch = find.descendant(
-          of: find.byKey(const ValueKey('section-clinics')), matching: find.byType(Switch));
-      await tester.tap(clinicsSwitch);
+      final meetingsSwitch = find.descendant(
+          of: find.byKey(const ValueKey('section-meetings')), matching: find.byType(Switch));
+      await tester.tap(meetingsSwitch);
       await tester.tap(find.byKey(const ValueKey('theme-navy')));
       await tester.enterText(find.byKey(const ValueKey('features-bannerEn')), 'Christmas times are out');
       await tester.pump();
       await tester.tap(find.byKey(const Key('features-save')));
       await tester.pumpAndSettle();
       expect(saved, isNotNull);
+      expect(saved!.enabled(Sections.meetings), isFalse);
       expect(saved!.enabled(Sections.schedule), isTrue);
       expect(saved!.theme, 'navy');
       expect(saved!.bannerEn, 'Christmas times are out');
@@ -1001,17 +992,17 @@ void main() {
       }
       expect(find.byKey(const ValueKey('pageCustomized-ask')), findsOneWidget);
       expect(find.byKey(const ValueKey('pageCustomized-about')), findsOneWidget);
-      expect(find.byKey(const ValueKey('pageCustomized-clinics')), findsNothing);
+      expect(find.byKey(const ValueKey('pageCustomized-education')), findsNothing);
       expect(find.text('Customized'), findsNWidgets(2));
       // Collapsed rows keep their fields mounted.
-      expect(page('clinics', 'titleEn'), findsNothing);
-      expect(page('clinics', 'titleEn').hitTestable(), findsNothing);
-      await tester.tap(find.byKey(const ValueKey('page-clinics')));
+      expect(page('education', 'titleEn'), findsNothing);
+      expect(page('education', 'titleEn').hitTestable(), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('page-education')));
       await tester.pumpAndSettle();
-      await tester.enterText(page('clinics', 'titleEn'), 'Our clinics');
-      await tester.enterText(page('clinics', 'introAr'), 'الكشف بالحجز المسبق');
+      await tester.enterText(page('education', 'titleEn'), 'Our education');
+      await tester.enterText(page('education', 'introAr'), 'اجتماعات الكنيسة');
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('pageCustomized-clinics')), findsOneWidget);
+      expect(find.byKey(const ValueKey('pageCustomized-education')), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('page-ask')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('pageReset-ask')));
@@ -1020,12 +1011,12 @@ void main() {
       expect(find.byKey(const ValueKey('pageReset-ask')), findsNothing, reason: 'nothing left to reset');
       await tester.tap(find.byKey(const Key('features-save')));
       await tester.pumpAndSettle();
-      expect(saved!.pageHeaders.keys, ['about', 'clinics']);
-      expect(saved!.pageHeader('clinics'), const PageCustom(titleEn: 'Our clinics', introAr: 'الكشف بالحجز المسبق'));
+      expect(saved!.pageHeaders.keys, ['about', 'education']);
+      expect(saved!.pageHeader('education'), const PageCustom(titleEn: 'Our education', introAr: 'اجتماعات الكنيسة'));
       expect(saved!.pageHeader('about'), const PageCustom(subtitleAr: 'تاريخنا'));
       expect(saved!.toMap()['pageHeaders'], {
         'about': const PageCustom(subtitleAr: 'تاريخنا').toMap(),
-        'clinics': const PageCustom(titleEn: 'Our clinics', introAr: 'الكشف بالحجز المسبق').toMap(),
+        'education': const PageCustom(titleEn: 'Our education', introAr: 'اجتماعات الكنيسة').toMap(),
       });
     });
 
@@ -1120,7 +1111,7 @@ void main() {
   });
 
   group('PR #10: selected chip contrast & narrow 200% reflow', () {
-    testWidgets('selected theme ChoiceChip and clinic weekday FilterChip use a white label', (tester) async {
+    testWidgets('selected theme ChoiceChip and weekday FilterChip use a white label', (tester) async {
       tester.view.physicalSize = const Size(1200, 5000);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
@@ -1132,9 +1123,11 @@ void main() {
       expect(chip.labelStyle?.color, Colors.white);
       expect(contrastRatio(Colors.white, AppColors.burgundy), greaterThanOrEqualTo(4.5));
 
-      final def = collectionById('clinics')!;
+      final def = CollectionDef('days_test', 'أيام', 'Days', [
+        FieldDef('days', 'الأيام', 'Days', FieldType.weekdays),
+      ], ['days']);
       await tester.pumpWidget(_app(DocEditor(
-        title: 'Clinic',
+        title: 'Days',
         fields: def.fields,
         def: def,
         data: const {'days': [5]},
@@ -2762,16 +2755,16 @@ void main() {
   });
 
   group('PR 3E: P2-18 grouped navigation, badge, season hub & owner guards', () {
-    testWidgets('shows 7 editor groups (18 entries) for editor and all 8 groups (23 entries) for owner', (tester) async {
+    testWidgets('shows 7 editor groups (17 entries) for editor and all 8 groups (22 entries) for owner', (tester) async {
       tester.view.physicalSize = const Size(1280, 2600);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
 
       final editorDests = adminDestinations(AdminRoles.editor);
       final ownerDests = adminDestinations(AdminRoles.owner);
-      expect(editorDests, hasLength(18));
-      expect(ownerDests, hasLength(23));
-      expect(ownerDests.map((d) => d.icon).toSet(), hasLength(23));
+      expect(editorDests, hasLength(17));
+      expect(ownerDests, hasLength(22));
+      expect(ownerDests.map((d) => d.icon).toSet(), hasLength(22));
       expect(editorDests.any((d) => d.group == AdminGroup.ownerSettings), isFalse);
 
       final repo = _TestAdminBackend();
@@ -4880,7 +4873,7 @@ void main() {
 
       testWidgets('FeaturesEditor resets dirty state on browser back discard via onBrowserBackDiscard', (tester) async {
         final doc = AdminDoc('features', {
-          'sections': {'clinics': true},
+          'sections': {'meetings': true},
         });
         final repo = _TestAdminBackend(initialDocs: {
           'settings/features': doc.data,
@@ -5030,7 +5023,7 @@ void main() {
       testWidgets('FeaturesEditor defers browser back discard until active save completes', (tester) async {
         final completer = Completer<void>();
         final doc = AdminDoc('features', {
-          'sections': {'clinics': true},
+          'sections': {'meetings': true},
           'bannerAr': 'Initial Banner',
         });
         final repo = _DelayedSaveBackend(completer.future, initialDocs: {
@@ -5226,7 +5219,7 @@ void main() {
       testWidgets('FeaturesScreen never shows updatedElsewhere banner on failed save with rollback', (tester) async {
         final initialDoc = AdminDoc('features', {
           'updatedAt': DateTime.utc(2026, 11, 1, 10),
-          'sections': {'clinics': true},
+          'sections': {'meetings': true},
         });
         final backend = _FailingRollbackSaveBackend(initialDocs: {
           'settings/features': initialDoc.data,

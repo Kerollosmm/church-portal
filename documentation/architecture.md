@@ -54,7 +54,6 @@ CI/CD. التفاصيل الأعمق بالإنجليزية في [`docs/memory-b
 | `/mass-schedule` | مواعيد القداسات | `schedule` |
 | `/church-education` | التربية الكنسية والاجتماعات | `meetings` |
 | `/church-activities` | الأنشطة والكورالات | `activities` |
-| `/clinics` | العيادات (`?specialty=` اختياري) | `clinics` |
 | `/public-services` | الخدمات العامة | `services` |
 | `/contact` | تواصل معنا | `contactInfo` أو `socials` أو `contactForm` |
 | `/section/<slug>` | قسم مخصص | `customSections` + `visible` للقسم |
@@ -77,7 +76,6 @@ CI/CD. التفاصيل الأعمق بالإنجليزية في [`docs/memory-b
 | `liturgies` | القداسات والعشيات والتسابيح | عامة | مشرف |
 | `seasons` | المواسم (أسبوع الآلام، القيامة، الميلاد، النهضات…) | عامة | مشرف |
 | `meetings` | الاجتماعات ومدارس الأحد | عامة | مشرف |
-| `clinics` | العيادات (القسم موقوف منذ 4 نوفمبر 2026) | عامة | مشرف |
 | `facilities` | الخدمات العامة | عامة | مشرف |
 | `activities` | الأنشطة والكورالات | عامة | مشرف |
 | `priests` | الآباء الكهنة (`status`: `serving` / `departed`) | عامة | مشرف |
@@ -158,7 +156,7 @@ Firestore في المتصفح يحتفظ بنسخة محلية (cache بحجم 4
 - السر الوحيد المطلوب: `FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL` (مفتاح حساب خدمة JSON). متغيرات المستودع:
   `RECAPTCHA_SITE_KEY` (موجود)، و `SENTRY_DSN` اختياري (غير موجود؛ البناء يستخدم الـ DSN العام في الكود).
 - **تحذير مهم:** لا تشغّل `seed.yml` بخيار `force` على الإنتاج أبدًا (يستبدل تعديلات المشرفين). وحتى بدون `force`
-  البذر **يعيد إنشاء أي مستند محذوف** موجود في `seed.json` (مثل العيادات الـ 11 التي حذفها المالك). التفاصيل في
+  البذر **يعيد إنشاء أي مستند محذوف** موجود في `seed.json`. التفاصيل في
   [operations.md](operations.md).
 - الدمج إلى `main` يكون **Squash merge** بعد نجاح CI، ولا يُدفع إلى `main` مباشرة.
 

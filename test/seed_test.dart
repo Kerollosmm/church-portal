@@ -17,7 +17,7 @@ void main() {
   test('seed covers every collection', () {
     for (final c in [
       'settings', 'alerts', 'seasons', 'liturgies', 'meetings', 'activities', //
-      'clinics', 'facilities', 'priests', 'milestones', 'saints',
+      'facilities', 'priests', 'milestones', 'saints',
     ]) {
       expect(seed.collection(c), isNotEmpty, reason: c);
     }

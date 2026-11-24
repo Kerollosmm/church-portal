@@ -99,22 +99,18 @@ SeedData _seed({
 }) {
   final raw = jsonDecode(File('assets/seed/seed.json').readAsStringSync()) as Map<String, dynamic>;
   final f = Map<String, dynamic>.from(raw['settings']['features'] as Map);
-  f['sections'] = {...(f['sections'] as Map), 'clinics': true, ...sections};
+  f['sections'] = {...(f['sections'] as Map), ...sections};
   f.addAll(features);
   raw['settings']['features'] = f;
   final d = _detailFields(enabled: enabled, extra: extra);
   (raw['meetings'] as Map)['d-meeting'] = {
     'stage': 'youth', 'nameAr': 'اجتماع تجربة', 'nameEn': 'Test meeting', 'weekday': 5, //
-    'start': '19:00', 'end': '20:30', 'hallAr': 'القاعة الكبرى', 'hallEn': 'Main hall', 'order': 999, ...d,
+    'start': '19:00', 'end': '20:30', 'hallAr': 'القاعة الكبرى', 'hallEn': 'Main hall', 'contactPhone': '034000000', 'order': 999, ...d,
   };
   (raw['activities'] as Map)['d-activity'] = {
     'category': 'choir', 'titleAr': 'نشاط تجربة', 'titleEn': 'Test activity', 'descAr': 'وصف', //
     'descEn': 'Description', 'contactPhone': '01001234567', 'order': 999, ...d,
     'link': 'https://example.org/activity',
-  };
-  (raw['clinics'] as Map)['d-clinic'] = {
-    'specialty': 'dental', 'specialtyAr': 'أسنان', 'specialtyEn': 'Dental', 'doctorName': 'د. تجربة', //
-    'days': [1, 3], 'start': '17:00', 'end': '20:00', 'bookingPhone': '034000000', 'active': true, 'order': 999, ...d,
   };
   (raw['facilities'] as Map)['d-facility'] = {
     'type': 'library', 'nameAr': 'مرفق تجربة', 'nameEn': 'Test facility', 'descAr': 'وصف', 'descEn': 'Description', //
@@ -208,7 +204,6 @@ void main() {
     test('parentRouteOf: detail routes go to their section, everything else home', () {
       expect(parentRouteOf('/church-education/angels'), '/church-education');
       expect(parentRouteOf('/church-activities/x'), '/church-activities');
-      expect(parentRouteOf('/clinics/dental-1/'), '/clinics');
       expect(parentRouteOf('/public-services/library?lang=en'), '/public-services');
       expect(parentRouteOf('/about/priests/bemwa'), '/about');
       expect(parentRouteOf('/about/saints/moses-black'), '/about');
@@ -220,7 +215,7 @@ void main() {
           parentRouteOf('/about/milestones/since-1980',
               const FeatureSettings(sections: {'history': false, 'saints': false, 'priests': false, 'departedPriests': false})),
           '/');
-      for (final top in ['/', '/clinics', '/about', '/contact', '/ask', '/nope/x/y', '/about/priests']) {
+      for (final top in ['/', '/about', '/contact', '/ask', '/nope/x/y', '/about/priests']) {
         expect(parentRouteOf(top), '/', reason: top);
       }
     });
@@ -233,13 +228,13 @@ void main() {
         expect(detailKindForCollection(k.collection), k);
         expect(sectionsForPath(p), isNotNull, reason: 'gated like its section: $p');
       }
-      expect(parseDetailPath('/clinics'), isNull);
-      expect(parseDetailPath('/clinics/a/b'), isNull);
-      expect(parentRouteOf('/clinics/%ZZ'), '/clinics');
+      expect(parseDetailPath('/church-education'), isNull);
+      expect(parseDetailPath('/church-education/a/b'), isNull);
+      expect(parentRouteOf('/church-education/%ZZ'), '/church-education');
     });
 
     testWidgets('a malformed or unknown id shows "not available", never a crash', (tester) async {
-      final (router, _) = await _pump(tester, initial: '/clinics/%ZZ');
+      final (router, _) = await _pump(tester, initial: '/church-education/%ZZ');
       expect(tester.takeException(), isNull);
       expect(find.byType(AppShell), findsOneWidget);
       router.go('/about/milestones/does-not-exist');
@@ -247,7 +242,7 @@ void main() {
       expect(find.byKey(const Key('itemUnavailable')), findsOneWidget);
     });
 
-    testWidgets('all 7 sub-routes resolve inside the shell (no 404)', (tester) async {
+    testWidgets('all 6 sub-routes resolve inside the shell (no 404)', (tester) async {
       final (router, _) = await _pump(tester);
       for (final e in _detailRoutes.entries) {
         router.go(e.value.$1);
@@ -269,7 +264,7 @@ void main() {
         expect(_path(router), e.$3, reason: e.$1);
       }
       // Top-level pages keep the Back-to-Home arrow.
-      router.go('/clinics');
+      router.go('/church-education');
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('backParent')), findsNothing);
       await tester.tap(find.byKey(const Key('backHome')));
@@ -278,13 +273,13 @@ void main() {
     });
 
     testWidgets('wide screens: no back arrow on detail pages either', (tester) async {
-      await _pump(tester, size: const Size(1400, 2400), initial: '/clinics/d-clinic');
+      await _pump(tester, size: const Size(1400, 2400), initial: '/church-education/d-meeting');
       expect(find.byKey(const Key('backParent')), findsNothing);
       expect(find.byKey(const Key('backHome')), findsNothing);
     });
 
     testWidgets('a switched-off section closes its detail routes too', (tester) async {
-      await _pump(tester, seed: _seed(sections: const {'clinics': false}), initial: '/clinics/d-clinic');
+      await _pump(tester, seed: _seed(sections: const {'meetings': false}), initial: '/church-education/d-meeting');
       expect(find.byKey(const Key('sectionUnavailable')), findsOneWidget);
       expect(find.byKey(const Key('itemDetailPage')), findsNothing);
     });
@@ -320,10 +315,9 @@ void main() {
     testWidgets('rich layout: facts, long text, custom fields, contacts, links + indexable SEO', (tester) async {
       final specs = <DocumentHeadSpec>[];
       debugOnRouteMeta = specs.add;
-      await _pump(tester, initial: '/clinics/d-clinic');
+      await _pump(tester, initial: '/church-education/d-meeting');
       expect(find.byKey(const Key('itemDetailPage')), findsOneWidget);
-      expect(find.text('Dental'), findsWidgets);
-      expect(find.text('د. تجربة'), findsWidgets);
+      expect(find.text('Test meeting'), findsWidgets);
       // On mobile (default 400px), single back arrow is in AppShell (INV-NAV-02)
 
       expect(find.byKey(const Key('backParent')), findsOneWidget);
@@ -340,8 +334,8 @@ void main() {
         expect(find.byKey(Key(k)), findsOneWidget, reason: k);
       }
       expect(find.text('Registration form'), findsOneWidget); // custom external label
-      expect(find.bySemanticsLabel('Facebook — Dental'), findsOneWidget);
-      expect(specs.last.canonicalUrl, '$kCanonicalOrigin/clinics/d-clinic');
+      expect(find.bySemanticsLabel('Facebook — Test meeting'), findsOneWidget);
+      expect(specs.last.canonicalUrl, '$kCanonicalOrigin/church-education/d-meeting');
       expect(specs.last.noIndex, isFalse);
     });
 
@@ -351,7 +345,7 @@ void main() {
 
       for (final width in [360.0, 400.0, 1023.0]) {
 
-        await _pump(tester, initial: '/clinics/d-clinic', size: Size(width, 2400));
+        await _pump(tester, initial: '/church-education/d-meeting', size: Size(width, 2400));
 
         expect(find.byKey(const Key('backParent')), findsOneWidget, reason: 'width $width');
 
@@ -367,7 +361,7 @@ void main() {
 
       for (final width in [1024.0, 1400.0]) {
 
-        await _pump(tester, initial: '/clinics/d-clinic', size: Size(width, 2400));
+        await _pump(tester, initial: '/church-education/d-meeting', size: Size(width, 2400));
 
         expect(find.byKey(const Key('backParent')), findsNothing, reason: 'width $width');
 
@@ -381,7 +375,7 @@ void main() {
 
       // Large system text on desktop: 1400 with textScale 2.0 -> unscaled 700 < 1024 -> phone mode
 
-      await _pump(tester, initial: '/clinics/d-clinic', size: const Size(1400, 2400), textScale: 2.0);
+      await _pump(tester, initial: '/church-education/d-meeting', size: const Size(1400, 2400), textScale: 2.0);
 
       expect(find.byKey(const Key('backParent')), findsOneWidget);
 
@@ -411,7 +405,7 @@ void main() {
           seed: _seed(enabled: false, patch: (raw) {
             (raw['saints'] as Map)['hidden'] = {'nameAr': 'مخفي', 'nameEn': 'Hidden', 'visible': false, ..._detailFields()};
           }),
-          initial: '/clinics/d-clinic');
+          initial: '/church-education/d-meeting');
       expect(find.byKey(const Key('itemUnavailable')), findsOneWidget);
       expect(find.byKey(const Key('itemDetailPage')), findsNothing);
       expect(specs.last.noIndex, isTrue);
@@ -430,7 +424,7 @@ void main() {
     testWidgets('a failed item stream shows the error state and is not indexable', (tester) async {
       final specs = <DocumentHeadSpec>[];
       debugOnRouteMeta = specs.add;
-      await _pump(tester, repo: _ErrorRepository(_seed()), initial: '/clinics/d-clinic');
+      await _pump(tester, repo: _ErrorRepository(_seed()), initial: '/public-services/d-facility');
       expect(find.text('Could not load data'), findsOneWidget);
       expect(specs.last.noIndex, isTrue);
       expect(specs.last.canonicalUrl, isNull);
@@ -501,19 +495,9 @@ void main() {
       }
     });
 
-    testWidgets('activity mobile phone doubles as WhatsApp; clinic without phones offers the office', (tester) async {
-      final (router, _) = await _pump(tester,
-          seed: _seed(patch: (raw) {
-            final c = (raw['clinics'] as Map)['d-clinic'] as Map;
-            c['bookingPhone'] = '';
-            c['whatsapp'] = '';
-          }),
-          initial: '/church-activities/d-activity');
+    testWidgets('activity mobile phone doubles as WhatsApp', (tester) async {
+      await _pump(tester, initial: '/church-activities/d-activity');
       expect(find.byKey(const Key('detailWhatsapp')), findsOneWidget);
-      router.go('/clinics/d-clinic');
-      await tester.pumpAndSettle();
-      expect(find.byKey(const Key('detailCall')), findsNothing);
-      expect(find.byKey(const Key('detailCallOffice')), findsOneWidget);
     });
 
     for (final lang in const ['ar', 'en']) {
@@ -606,15 +590,12 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.bySemanticsLabel('Facebook — Test meeting'), findsOneWidget);
 
-      final (router2, _) = await _pump(tester,
+      await _pump(tester,
           size: const Size(1400, 6000),
           seed: _seed(extra: const {'showContacts': false, 'showSocials': false}),
           initial: '/church-activities');
       expect(find.bySemanticsLabel('Call — Test activity'), findsNothing);
       expect(find.bySemanticsLabel('Open page — Test activity'), findsNothing);
-      router2.go('/clinics');
-      await tester.pumpAndSettle();
-      expect(find.bySemanticsLabel(RegExp(r'^Call • Book — Dental$')), findsNothing);
 
       final (router3, _) = await _pump(tester,
           size: const Size(1400, 6000), seed: _seed(sections: const {'socials': false}), initial: '/church-education');
@@ -625,10 +606,10 @@ void main() {
       expect(find.bySemanticsLabel('Call — Test activity'), findsOneWidget);
     });
 
-    testWidgets('meeting, clinic and facility cards show an optional image', (tester) async {
+    testWidgets('meeting and facility cards show an optional image', (tester) async {
       final (router, _) = await _pump(tester,
           size: const Size(1400, 6000), media: _FakeMedia(), seed: _seed(enabled: false, extra: image));
-      for (final p in ['/church-education', '/clinics', '/public-services']) {
+      for (final p in ['/church-education', '/public-services']) {
         router.go(p);
         await tester.pumpAndSettle();
         expect(find.byKey(const Key('itemImage')), findsOneWidget, reason: p);
@@ -670,14 +651,14 @@ void main() {
       final (router, _) = await _pump(tester,
           seed: _seed(features: {
             'pageHeaders': {
-              'clinics': {...header('clinics'), 'titleEn': '', 'subtitleEn': '', 'introEn': ''},
+              'education': {...header('education'), 'titleEn': '', 'subtitleEn': '', 'introEn': ''},
             }
           }),
-          initial: '/clinics');
-      expect(find.text('Charity specialty clinics'), findsWidgets);
+          initial: '/church-education');
+      expect(find.text('Church education'), findsWidgets);
       expect(find.byKey(const Key('pageIntro')), findsNothing);
       // Arabic-only title: English visitors keep the English built-in title.
-      expect(find.text('عنوان clinics'), findsNothing);
+      expect(find.text('عنوان education'), findsNothing);
       router.go('/about');
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('pageIntro')), findsNothing);
@@ -783,11 +764,11 @@ void main() {
         (tester) async {
       final (router, _) = await _pump(tester, size: const Size(400, 3000));
       const calendar = {
-        '/church-education/d-meeting': true, '/clinics/d-clinic': true, '/church-activities/d-activity': false, //
+        '/church-education/d-meeting': true, '/church-activities/d-activity': false, //
         '/about/saints/d-saint': false, '/about/milestones/d-milestone': false, '/about/priests/d-priest': false,
       };
       const directions = {
-        '/church-education/d-meeting': true, '/clinics/d-clinic': true, '/church-activities/d-activity': true, //
+        '/church-education/d-meeting': true, '/church-activities/d-activity': true, //
         '/public-services/d-facility': true, '/about/saints/d-saint': false, '/about/priests/d-priest': false,
       };
       for (final e in calendar.entries) {

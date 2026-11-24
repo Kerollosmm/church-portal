@@ -214,7 +214,7 @@ void main() {
       expect(p.remindsFor(EventKey.seasonService('1')), isTrue);
       expect(p.remindsFor(EventKey.meeting('1')), isTrue);
       expect(p.remindsFor(EventKey.dayEvent('1')), isFalse);
-      expect(p.remindsFor(EventKey.custom('clinic', '1')), isFalse);
+      expect(p.remindsFor(EventKey.custom('other', '1')), isFalse);
       expect(PushSettings.fromMap({'push': false}).remindsFor(EventKey.liturgy('1')), isFalse);
     });
   });

@@ -778,7 +778,7 @@ void main() {
           repo: _HiddenRepo.new,
           settings: AssistantSettings.fromMap({
             'showSuggestions': true,
-            'suggestionsAr': 'متى القداس؟\nمواعيد العيادة؟\nاجتماع الشباب امتى؟',
+            'suggestionsAr': 'متى القداس؟\nاجتماع الشباب امتى؟',
           }));
       expect(find.text('أهلًا بك! أجيب عن مواعيد القداسات وطرق التواصل، من بيانات الكنيسة الرسمية.'), findsOneWidget);
       expect(find.textContaining('العيادات'), findsNothing);

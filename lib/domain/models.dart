@@ -126,7 +126,7 @@ class CustomField {
   Map<String, dynamic> toMap() => {'titleAr': titleAr, 'titleEn': titleEn, 'valueAr': valueAr, 'valueEn': valueEn};
 }
 
-/// Optional item detail page shared by meetings, activities, clinics,
+/// Optional item detail page shared by meetings, activities,
 /// facilities, priests, milestones and saints (not liturgies, seasons or
 /// alerts). Every field is optional. Detail pages are opt-OUT (PR #14): a
 /// missing `detailsEnabled` means the page is on; only an explicit `false`
@@ -144,7 +144,7 @@ class ItemDetails {
   final List<MediaImage> gallery;
 
   /// Primary phone: `contactPhone`, or the collection's existing phone field
-  /// (clinics: `bookingPhone`, facilities: `phone`).
+  /// (facilities: `phone`).
   final String contactPhone;
 
   /// WhatsApp number (chat) and WhatsApp group / channel URL.

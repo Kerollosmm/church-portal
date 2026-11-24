@@ -305,7 +305,7 @@ void main() {
       expect(t.any((l) => l.toLowerCase().contains('clinic')), isFalse);
       expect(t.any((l) => l.toLowerCase().contains('meeting')), isFalse);
       expect(t.any((l) => l.toLowerCase().contains('liturgy')), isTrue);
-      final admin = AssistantSettings.fromMap(const {'topics': 'مواعيد العيادات\nالقداسات'});
+      final admin = AssistantSettings.fromMap(const {'topics': 'مواعيد الاجتماعات\nالقداسات'});
       expect(admin.topicsFor(on), ['القداسات']);
     });
 

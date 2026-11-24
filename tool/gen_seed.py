@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generates assets/seed/seed.json (bundled fallback + Firestore seed).
 Values marked "sample": true are placeholders awaiting the church's
-confirmation (mass/meeting times, clinics, some facilities and priests).
+confirmation (mass/meeting times, some facilities and priests).
 Every other value is sourced: see docs/CONTENT_SOURCES.md.
 Also writes tool/retired_seed_ids.json (documents to delete on --force)."""
 import json, os
@@ -12,7 +12,7 @@ from urllib.parse import quote
 
 # Verified content (sources: docs/CONTENT_SOURCES.md).
 # Everything still marked "sample": True is a placeholder awaiting the
-# church's confirmation (mass/meeting times, clinics, some facilities).
+# church's confirmation (mass/meeting times, some facilities).
 LAT, LNG = 31.260138, 30.01129
 COORDS = f"{LAT},{LNG}"
 WHATSAPP_CHANNEL = "https://whatsapp.com/channel/0029Vb6Kmbs2UPBMUcrlVB0g"

@@ -305,12 +305,6 @@ sports, exhibitions`, default `service`), `titleAr` (**req**), `titleEn`, `descA
 `davids-tones`, `hymns-school`, `maximous-youth`, `prep-boys`, `antibiotic-mime`, `karouz-school`, `servant-care`,
 `media-center`, `kalimtein`).
 
-### `clinics/{id}` — `Clinic` (Hideable, orderable)
-`specialty` (**req** key ≤40, e.g. `dental` — also the `?specialty=` URL value), `specialtyAr` (**req**),
-`specialtyEn`, `doctorName` (**req**), `degreeAr/En`, `days` (list ⊆ {1..7}, ≤7), `start`/`end` (HH:mm, end must be
-after start in admin), `bookingPhone`/`whatsapp` (≤20), `active` (bool, **missing = true**), meta. Seed: 11 generic
-placeholders («طبيب <التخصص> — يُعلن لاحقًا», no phones), all `sample: true`.
-
 ### `facilities/{id}` — `Facility` (Hideable, orderable) — shown on `/public-services`
 `type` (≤40; `service, nursery, employment, halls, other`), `nameAr` (**req**), `nameEn`, `descAr/En` (≤2000),
 `phone` (≤20), `hoursAr/En` (≤300), meta. Seed: `anba-abraam` (verified), `nursery`, `employment`, `halls`, `library`

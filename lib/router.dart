@@ -89,7 +89,7 @@ class LangSync {
 ///   Back/Forward): the language follows the URL.
 /// - no `lang` while English: from the browser history / platform
 ///   ([fromPlatform]) it means Arabic; from in-app navigation
-///   (`context.go('/clinics')`) English is kept and `lang=en` added.
+///   (`context.go('/church-education')`) English is kept and `lang=en` added.
 /// Arabic stays the canonical, parameter-free URL.
 LangSync resolveLangSync(Uri uri,
     {required bool english, bool englishEnabled = true, bool userToggled = false, bool fromPlatform = false}) {

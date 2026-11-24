@@ -54,6 +54,12 @@ before(async () => {
 
 after(async () => env && env.cleanup());
 
+const sampleClinic = {
+  specialty: 'dental', specialtyAr: 'الأسنان', specialtyEn: 'Dental',
+  doctorName: 'طبيب الأسنان — يُعلن لاحقًا', degreeAr: '', degreeEn: '',
+  days: [1, 3, 6], start: '16:00', end: '20:00', bookingPhone: '', whatsapp: '', active: true, sample: true,
+};
+
 beforeEach(async () => {
   await env.clearFirestore();
   await env.withSecurityRulesDisabled(async (ctx) => {
@@ -61,8 +67,8 @@ beforeEach(async () => {
     await setDoc(doc(f, 'admins', OWNER), { email: 'owner@x.test', role: 'owner' });
     await setDoc(doc(f, 'admins', EDITOR), { email: 'editor@x.test', role: 'editor' });
     await setDoc(doc(f, 'settings', 'church'), convert(seed.settings.church));
-    await setDoc(doc(f, 'clinics', 'c1'), convert(seed.clinics['dental-1']));
-    await setDoc(doc(f, 'clinics', 'legacy'), { ...convert(seed.clinics['dental-1']), legacyField: 'x' });
+    await setDoc(doc(f, 'clinics', 'c1'), convert(sampleClinic));
+    await setDoc(doc(f, 'clinics', 'legacy'), { ...convert(sampleClinic), legacyField: 'x' });
     await setDoc(doc(f, 'contact_messages', 'm1'), {
       name: 'Mina', phone: '01012345678', email: '', message: 'Hello there', lang: 'ar', status: 'new',
       createdAt: Timestamp.now(),
@@ -146,7 +152,7 @@ describe('admin content', () => {
     await assertFails(updateDoc(doc(stranger, 'clinics', 'c1'), { deletedAt: serverTimestamp() }));
 
     // 5. Worst-case whole-doc rules budget check: whole document update with deletedAt
-    const fullClinic = convert(seed.clinics['dental-1']);
+    const fullClinic = convert(sampleClinic);
     await assertSucceeds(setDoc(ref, { ...fullClinic, deletedAt: serverTimestamp() }));
     await assertSucceeds(setDoc(ref, { ...fullClinic, deletedAt: null }));
   });

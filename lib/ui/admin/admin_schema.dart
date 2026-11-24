@@ -319,7 +319,7 @@ const imageCollections = [
   'entries', 'pages', // ADR-027
 ];
 
-// ---- optional item detail page (meetings, activities, clinics, facilities,
+// ---- optional item detail page (meetings, activities, facilities,
 // priests, milestones, saints; see ItemDetails in lib/domain/models.dart and
 // validDetailCommon in firestore.rules). Every field is optional and starts
 // at the reader's default. The page itself is on by default (PR #14).

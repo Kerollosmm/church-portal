@@ -25,7 +25,7 @@ import 'package:material_ui/material_ui.dart';
 SeedData _seed(Map<String, dynamic> features) {
   final raw = jsonDecode(File('assets/seed/seed.json').readAsStringSync()) as Map<String, dynamic>;
   final f = Map<String, dynamic>.from(raw['settings']['features'] as Map);
-  f['sections'] = {...(f['sections'] as Map), 'clinics': true};
+  f['sections'] = {...(f['sections'] as Map), 'meetings': true};
   f.addAll(features);
   raw['settings']['features'] = f;
   return SeedData(raw);
@@ -171,7 +171,7 @@ List<String> _contrastFailures(WidgetTester tester, String where) {
 }
 
 const _routes = [
-  '/', '/about', '/mass-schedule', '/church-education', '/church-activities', '/clinics', '/public-services', //
+  '/', '/about', '/mass-schedule', '/church-education', '/church-activities', '/public-services', //
   '/contact', '/about/saints/moses-black',
 ];
 
