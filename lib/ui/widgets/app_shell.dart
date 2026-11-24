@@ -71,7 +71,6 @@ class NavItem {
 const navItems = [
   NavItem('home', '/', Icons.home_rounded),
   NavItem('massSchedule', '/mass-schedule', Icons.access_time_filled_rounded),
-  NavItem('clinics', '/clinics', Icons.local_hospital_rounded),
   NavItem('education', '/church-education', Icons.school_rounded),
   NavItem('activities', '/church-activities', Icons.groups_rounded),
   NavItem('publicServices', '/public-services', Icons.volunteer_activism_rounded),
@@ -81,7 +80,7 @@ const navItems = [
 const askNavItem = NavItem('ask', '/ask', Icons.auto_awesome_rounded);
 
 /// Where the phone Back arrow goes from [location]: an item detail page
-/// (`/clinics/<id>`, `/about/priests/<id>`…) returns to the page listing it
+/// (`/church-education/<id>`, `/about/priests/<id>`…) returns to the page listing it
 /// (milestones: About, or Home when the admin lists them on Home only,
 /// ADR-052); every other route goes Home.
 /// Whether the shell shows the full desktop link bar (no phone Back arrow).
@@ -92,7 +91,7 @@ bool shellIsWide(BuildContext context) {
 }
 
 /// Where the phone Back arrow goes from [location]: an item detail page
-/// (`/clinics/<id>`, `/about/priests/<id>`…) returns to the page listing it
+/// (`/church-education/<id>`, `/about/priests/<id>`…) returns to the page listing it
 /// (milestones: About, or Home when the admin lists them on Home only,
 /// ADR-052); every other route goes Home.
 String parentRouteOf(String location, [FeatureSettings features = FeatureSettings.defaults]) {
@@ -106,7 +105,6 @@ String parentRouteOf(String location, [FeatureSettings features = FeatureSetting
 String _parentLabelKey(String parentRoute) => switch (parentRoute) {
       '/church-education' => 'education',
       '/church-activities' => 'activities',
-      '/clinics' => 'clinics',
       '/public-services' => 'publicServices',
       '/about' => 'about',
       '/notifications' => 'notifications',
@@ -124,7 +122,7 @@ SystemUiOverlayStyle statusBarStyleOn(Color band) =>
 
 /// Paths grouped under «خدمات الكنيسة / Church services» (desktop menu and
 /// drawer group); the rest sit under «الكنيسة / The church».
-const serviceNavPaths = ['/mass-schedule', '/church-education', '/church-activities', '/public-services', '/clinics'];
+const serviceNavPaths = ['/mass-schedule', '/church-education', '/church-activities', '/public-services'];
 
 /// Common chrome for all public pages ("Golden hour"): a translucent cream
 /// app bar with the church name, the maroon seal tab hanging from its start
@@ -336,7 +334,7 @@ class _AppShellState extends ConsumerState<AppShell> {
         ref.watch(nowProvider.select((n) => todaySettings.liveBadgeOn(n.value ?? DateTime.now(), location)));
     final showTopBar = ready && !isLandscapeShort && (TopUtilityBar.shownOn(todaySettings.copticStrip, location) || liveBadge);
     final topBarH = showTopBar ? TopUtilityBar.heightFor(context) : 0.0;
-    // No Clinics shortcut in the bar (owner request, 4 Nov 2026): clinics stay
+    // Mass times highlight button.
     // reachable from the drawer / Services menu and Home when their section is on.
     final settings = ref.watch(settingsProvider).value;
     // Full church name (admin-editable in settings); bundled l10n name until settings load.
@@ -677,10 +675,9 @@ class _ServicesMenu extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final f = ref.watch(featuresProvider);
-    final ready = ref.watch(featuresReadyProvider);
     final items = [
       for (final i in navItems)
-        if (serviceNavPaths.contains(i.path) && f.routeEnabled(i.path) && (ready || i.path != '/clinics')) i,
+        if (serviceNavPaths.contains(i.path) && f.routeEnabled(i.path)) i,
       ...customNavItems(ref).categories,
     ];
     if (items.isEmpty) return const SizedBox.shrink();

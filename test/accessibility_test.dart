@@ -74,7 +74,6 @@ const _publicRoutes = [
   '/mass-schedule',
   '/church-education',
   '/church-activities',
-  '/clinics',
   '/public-services',
   '/contact',
   '/ask',
@@ -89,7 +88,7 @@ Map<String, dynamic> _raw({
 }) {
   final raw = jsonDecode(File('assets/seed/seed.json').readAsStringSync()) as Map<String, dynamic>;
   final features = Map<String, dynamic>.from(raw['settings']['features'] as Map);
-  features['sections'] = {...(features['sections'] as Map), 'clinics': true, ...sections};
+  features['sections'] = {...(features['sections'] as Map), ...sections};
   features['theme'] = theme;
   features.addAll(featuresOverride);
   raw['settings']['features'] = features;
@@ -107,13 +106,13 @@ SeedData _seed({
     final alerts = raw['alerts'] as Map<String, dynamic>;
     final base = Map<String, dynamic>.from(alerts['follow-announcements'] as Map);
     raw['alerts'] = {
-      'internal-clinics': {
+      'internal-meetings': {
         ...base,
-        'titleAr': 'تنبيه العيادات',
-        'titleEn': 'Clinics notice',
+        'titleAr': 'تنبيه الاجتماعات',
+        'titleEn': 'Meetings notice',
         'bodyAr': '',
         'bodyEn': '',
-        'link': '/clinics',
+        'link': '/church-education',
       },
     };
     (raw['priests'] as Map<String, dynamic>)['test-departed'] = {
@@ -585,9 +584,7 @@ void main() {
 
     testWidgets('compact app-bar buttons are at least 48x48 dp', (tester) async {
       await _pumpApp(tester, size: const Size(400, 800));
-      // Mass times is the only highlight button; the bar has no Clinics
-      // shortcut (owner request, 4 Nov 2026), even with clinics switched on.
-      expect(find.descendant(of: find.byType(AppBar), matching: find.byTooltip('Clinics')), findsNothing);
+      // Mass times and Menu are at least 48x48 dp.
       for (final label in ['Mass times', 'Menu']) {
         final button = find.ancestor(of: find.byTooltip(label), matching: find.byType(IconButton)).first;
         final size = tester.getSize(button);
@@ -614,21 +611,6 @@ void main() {
       expect(find.descendant(of: find.byType(Drawer), matching: find.text('Mass times')), findsOneWidget);
     });
 
-    testWidgets('clinic actions name their clinic; "available today" is one labelled switch', (tester) async {
-      final handle = tester.ensureSemantics();
-      final (router, _) = await _pumpApp(tester, size: const Size(1200, 3000));
-      router.go('/clinics');
-      await tester.pumpAndSettle();
-      // Seeded clinics have no booking number yet: "Call church office — <clinic>".
-      expect(find.bySemanticsLabel(RegExp('^Call church office — .+')), findsWidgets);
-      final sw = find.byKey(const Key('availableTodaySwitch'));
-      expect(tester.widget<SwitchListTile>(sw).value, isFalse);
-      await tester.tap(find.descendant(of: sw, matching: find.text('Available today')));
-      await tester.pumpAndSettle();
-      expect(tester.widget<SwitchListTile>(sw).value, isTrue);
-      expect(tester.getSize(sw).height, greaterThanOrEqualTo(48));
-      handle.dispose();
-    });
 
     testWidgets('phone rows name the line in their tooltips', (tester) async {
       await _pumpApp(tester, size: const Size(1200, 3000));
@@ -697,10 +679,10 @@ void main() {
         icon: Icons.call,
         label: 'Call',
         color: AppColors.burgundy,
-        semanticLabel: 'Call — Dental clinic',
+        semanticLabel: 'Call — Church office',
         onTap: () => taps++,
       )));
-      expect(find.bySemanticsLabel('Call — Dental clinic'), findsOneWidget);
+      expect(find.bySemanticsLabel('Call — Church office'), findsOneWidget);
       await tester.tap(find.text('Call'));
       expect(taps, 1);
       handle.dispose();
@@ -732,7 +714,7 @@ void main() {
       await _pumpApp(tester, seed: _seed(fixtures: true), size: const Size(1200, 3000));
       expect(learnMore(), findsOneWidget);
       await _pumpApp(tester,
-          seed: _seed(fixtures: true, sections: const {'clinics': false}), size: const Size(1200, 3000));
+          seed: _seed(fixtures: true, sections: const {'meetings': false}), size: const Size(1200, 3000));
       expect(learnMore(), findsNothing);
     });
 
@@ -817,13 +799,13 @@ void main() {
     test('resolveLangSync rules', () {
       Uri u(String s) => Uri.parse(s);
       // Toggle: the URL follows the language.
-      expect(resolveLangSync(u('/clinics'), english: true, userToggled: true).redirect, '/clinics?lang=en');
-      expect(resolveLangSync(u('/clinics?lang=en'), english: false, userToggled: true).redirect, '/clinics');
+      expect(resolveLangSync(u('/church-education'), english: true, userToggled: true).redirect, '/church-education?lang=en');
+      expect(resolveLangSync(u('/church-education?lang=en'), english: false, userToggled: true).redirect, '/church-education');
       // Explicit lang in the URL: the language follows it, URL kept.
-      final deep = resolveLangSync(u('/clinics?lang=en'), english: false);
+      final deep = resolveLangSync(u('/church-education?lang=en'), english: false);
       expect((deep.english, deep.redirect), (true, null));
-      final ar = resolveLangSync(u('/clinics?lang=ar'), english: true);
-      expect((ar.english, ar.redirect), (false, '/clinics'));
+      final ar = resolveLangSync(u('/church-education?lang=ar'), english: true);
+      expect((ar.english, ar.redirect), (false, '/church-education'));
       // No lang while English: in-app link keeps English, Back means Arabic.
       expect(resolveLangSync(u('/about'), english: true).redirect, '/about?lang=en');
       final back = resolveLangSync(u('/about'), english: true, fromPlatform: true);
@@ -839,9 +821,9 @@ void main() {
       expect(lang(), 'ar');
 
       // Shared / in-app link with ?lang=en switches to English (URL kept).
-      router.go('/clinics?lang=en');
+      router.go('/church-education?lang=en');
       await tester.pumpAndSettle();
-      expect((lang(), _location(router)), ('en', '/clinics?lang=en'));
+      expect((lang(), _location(router)), ('en', '/church-education?lang=en'));
 
       // In-app navigation keeps English.
       router.go('/about');
@@ -858,8 +840,8 @@ void main() {
       expect((lang(), _location(router)), ('en', '/about?lang=en'));
 
       // Browser Back to an Arabic (parameter-free) URL switches to Arabic.
-      await _platformPush(tester, '/clinics');
-      expect((lang(), _location(router)), ('ar', '/clinics'));
+      await _platformPush(tester, '/church-education');
+      expect((lang(), _location(router)), ('ar', '/church-education'));
     });
   });
 
@@ -1027,9 +1009,9 @@ void main() {
     });
 
     test('open on site keeps the dashboard language', () {
-      final def = collectionById('clinics')!;
-      expect(publicPathFor(def, english: false), '/clinics');
-      expect(publicPathFor(def, english: true), '/clinics?lang=en');
+      final def = collectionById('meetings')!;
+      expect(publicPathFor(def, english: false), '/church-education');
+      expect(publicPathFor(def, english: true), '/church-education?lang=en');
     });
 
     testWidgets('collection list at 320 px: move buttons on their own row, title keeps its width', (tester) async {

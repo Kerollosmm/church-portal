@@ -8,7 +8,7 @@
  *
  * Options:
  *   --project <id>   Firebase project id (default: asafra-church-portal or $GCLOUD_PROJECT)
- *   --only a,b       Only these collections (e.g. --only liturgies,clinics)
+ *   --only a,b       Only these collections (e.g. --only liturgies,meetings)
  *   --dry-run        Print what would be written
  *   --force          Overwrite existing documents (default: skip docs that already exist,
  *                    so edits made in /admin are never clobbered) and delete the

@@ -36,7 +36,7 @@ Engineered with **Flutter Web and Android**, it delivers an **Arabic-first (RTL)
 
 ### Guiding Principles
 - **Public Directory, Not an ERP/CSMS:** Intentionally excludes membership records, confidential pastoral notes, financial ledgers, or attendance tracking (ADR-001). This eliminates data privacy liabilities and allows the entire system to run perpetually on the free **Firebase Spark** tier with zero hosting costs.
-- **Immediate Visitor Answers:** Liturgy schedules, "Happening Now" status, live streaming badges, Coptic calendar feasts, charity clinics, priest directories, and emergency contact channels answer visitor questions in seconds.
+- **Immediate Visitor Answers:** Liturgy schedules, "Happening Now" status, live streaming badges, Coptic calendar feasts, priest directories, and emergency contact channels answer visitor questions in seconds.
 - **Empowered Non-Technical Admins:** Parish servants manage nearly 100% of the site's content, announcement banners, season presets, and theme adjustments via `/admin` without writing code or redeploying.
 - **Offline & First-Load Resilience:** If Firebase is unreachable or unconfigured, the application gracefully falls back to bundled seed data (`assets/seed/seed.json`) without crashing.
 
@@ -112,7 +112,6 @@ Captured from the live site (Arabic, 390 px phone viewport) and, for the dashboa
 | `/mass-schedule` | **Mass Schedule** | Tabbed liturgy schedule (Friday, Sunday, Wednesday, Saturday, Other days) with bilingual times (Latin & Arabic-Indic digits), celebrants, halls, vespers/praises, and Holy Season schedule overrides. | `schedule` |
 | `/church-education` | **Church Education** | Age-stage timelines from nursery angels to youth and seniors with meeting days, times, church halls, and links to WhatsApp/Facebook groups. | `meetings` |
 | `/church-activities` | **Activities & Choirs** | Directory of fellowship groups: St. Moses Scouts, St. Stephen Deacons School, David's Harp Hymns Institute, Bible study fellowships, and cultural exhibitions. | `activities` |
-| `/clinics` | **Charity Clinics** | Specialized charity medical clinics with specialty filtering, "Available Today" badges by Cairo weekday, direct phone call (`tel:`) buttons, and WhatsApp booking links. | `clinics` |
 | `/public-services` | **Public Services** | St. Mary Nursery, community employment services, St. Joseph Condolence & Event Halls, and the parish lending library. | `services` |
 | `/contact` | **Contact & Location** | Verified parish phone numbers, WhatsApp channel, social media links, embedded Google Map, transport directions, and secure contact form with hall bookings and anonymous boxes. | `contactInfo`, `socials`, or `contactForm` |
 | `/section/:slug` | **Custom Sections** | Admin-created dedicated sections (e.g. Youth Conventions, Summer Trips) with custom items and navigation links. | `customSections` |

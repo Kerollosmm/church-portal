@@ -20,8 +20,7 @@ The Church Portal is a lightweight, high-performance public directory and digita
   - Active season schedules (e.g., Holy Week Pascha, Nativity Fast, revivals).
   - Meeting schedules for all age groups (nursery to elderly).
   - Parish history, consecrated altars, and priest directory.
-  - Sourced charity clinic schedules and emergency booking links.
-  - One-tap navigation via Google Maps / GPS coordinates.
+    - One-tap navigation via Google Maps / GPS coordinates.
   - Secure contact form with anonymous suggestion/complaint boxes and hall booking.
   - Grounded AI Assistant ("Ask the Church") answering questions strictly from church data.
 - **Full Non-Developer Admin Control:** Church servants and priests manage nearly all content, announcement banners, season presets, themes, and section visibility via a hidden dashboard at `/admin` without writing code.

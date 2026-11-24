@@ -8,7 +8,7 @@ summary agents need before touching content.
 
 - **Never invent** times, names, phone numbers, doctors, halls or photos. PR #2 removed every invented value.
 - Anything not published by the church or single-sourced/old stays **`sample: true`**: the site shows the
-  «بيانات تجريبية» badge, the «مواعيد تقريبية — في انتظار تأكيد الكنيسة» notice on schedule/meetings/clinics pages,
+  «بيانات تجريبية» badge, the «مواعيد تقريبية — في انتظار تأكيد الكنيسة» notice on schedule/meetings pages,
   and the assistant says it is unconfirmed (`[UNCONFIRMED]`).
 - When the church confirms an item: untick **Unconfirmed** in `/admin` (and fix the values), **and** update
   `tool/gen_seed.py` (+ regenerate) and `docs/CONTENT_SOURCES.md`, so the offline seed and a fresh database agree.
@@ -36,7 +36,6 @@ summary agents need before touching content.
 |---|---|---|
 | Liturgies | **all 47** | Typical Alexandrian-parish placeholder times; places reduced to «الكنيسة / Church». All titles, season liturgies, and Pascha services aligned with authentic parish posters (see `docs/authentic-parish-vocabulary.md`); corrected St Domadius feast to departure (تذكار نياحة وتطييب الرفات) |
 | Meetings | **all 11** | Placeholder days/times, no halls; youth meeting links the real Maximous Youth page; stage names aligned with authentic Sunday School titles (اجتماع أسرة الملائكة، ابتدائي، إعدادي، ثانوي، خريجين، شباب، أسرة، رجال، سيدات، بركة كبار السن) |
-| Clinics | **11 placeholders in the seed; deleted live** | The seed still has 11 generic placeholders («طبيب <التخصص> — يُعلن لاحقًا», no phones) with section `clinics` **off**. **The owner deleted the 11 live placeholder documents on 3 Nov 2026 and switched the clinics section off on 4 Nov 2026** in /admin (one clinic the owner added on 4 Nov stays hidden while the section is off) (the admin screen «العيادات» is kept, so real clinics can be added later and the section switched back on). Never run the Seed workflow for `clinics` (even create-only, it would re-create the 11 placeholders) |
 | Facilities | nursery, employment, halls, library | No source; fake phones/hours removed |
 | Priests | Bigol, Saleeb (last confirmed 2022), Barnaba (single 2025 source), departed Maximus Fouad (single source) | |
 | Altars | none seeded | No source lists the altars (PRD lists main: Sts Maximus & Domadius; second: St Moses; annexes: St Mary, St Mina & St George — unverified) |
@@ -51,9 +50,7 @@ Deliberately **not seeded**: Fr Yassa Ibrahim and Fr Philemon Fawzy (named in pr
 1. Weekly liturgy, vespers and praise timetable (+ revival and Holy Week times and places/altars).
 2. Sunday-school and meeting days, times and halls, and official contact/channel per stage (no open group invites for
    children — privacy).
-3. Does the church run clinics or a dispensary? Specialties, doctors (with written consent to publish), days, booking
-   phone/WhatsApp.
-4. Nursery, employment office, condolence/occasion halls, library: confirm or remove; hours and phone.
+3. Nursery, employment office, condolence/occasion halls, library: confirm or remove; hours and phone.
 5. Current priest roster (confirm Bigol, Saleeb, Barnaba; ordination/assignment of Yassa Ibrahim and Philemon
    Fawzy), with photos and consent.
 6. Founding/consecration year and altar names (Hegumen Bemwa Ghaly's history talk on 25 Jun 2025 is the lead).

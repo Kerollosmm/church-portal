@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generates assets/seed/seed.json (bundled fallback + Firestore seed).
 Values marked "sample": true are placeholders awaiting the church's
-confirmation (mass/meeting times, clinics, some facilities and priests).
+confirmation (mass/meeting times, some facilities and priests).
 Every other value is sourced: see docs/CONTENT_SOURCES.md.
 Also writes tool/retired_seed_ids.json (documents to delete on --force)."""
 import json, os
@@ -12,7 +12,7 @@ from urllib.parse import quote
 
 # Verified content (sources: docs/CONTENT_SOURCES.md).
 # Everything still marked "sample": True is a placeholder awaiting the
-# church's confirmation (mass/meeting times, clinics, some facilities).
+# church's confirmation (mass/meeting times, some facilities).
 LAT, LNG = 31.260138, 30.01129
 COORDS = f"{LAT},{LNG}"
 WHATSAPP_CHANNEL = "https://whatsapp.com/channel/0029Vb6Kmbs2UPBMUcrlVB0g"
@@ -54,15 +54,13 @@ settings = {
     "assistantEnabled": True,
     "sample": False
   },
-  # Feature toggles + home layout (admin: "Sections & home page"). Every
-  # section starts switched on except clinics: it stays off until the church
-  # office confirms the clinics and their booking numbers.
+  # Feature toggles + home layout (admin: "Sections & home page").
   "features": {
-    "sections": {**{k: True for k in [
-      "schedule", "meetings", "clinics", "services", "history", "milestones", "saints", "priests",
+    "sections": {k: True for k in [
+      "schedule", "meetings", "services", "history", "milestones", "saints", "priests",
       "departedPriests", "activities", "alerts", "contactInfo", "socials", "contactForm", "assistant", "media",
       "dailyVerse", "customSections", "customPages",
-    ]}, "clinics": False},
+    ]},
     "homeOrder": ["banner", "alerts", "nextMass", "quickContacts", "milestones", "directory", "map"],
     "homeHidden": [],
     "heroTitleAr": "", "heroTitleEn": "", "heroSubtitleAr": "", "heroSubtitleEn": "",
@@ -237,25 +235,6 @@ activities = dict([
     link=YOUTUBE_PLAYLISTS),
 ])
 
-def C(id, sp, ar, en, days, s, e):
-    # No clinic, doctor or timetable is published: generic placeholders only.
-    return id, {"specialty": sp, "specialtyAr": ar, "specialtyEn": en, "doctorName": f"طبيب {ar} — يُعلن لاحقًا", "degreeAr": "",
-                "degreeEn": "", "days": days, "start": s, "end": e,
-                "bookingPhone": "", "whatsapp": "", "active": True, "sample": True}
-clinics = dict([
-  C("internal-1", "internal", "الباطنة", "Internal medicine", [1, 4], "17:00", "20:00"),
-  C("pediatrics-1", "pediatrics", "الأطفال", "Pediatrics", [5, 7], "11:00", "14:00"),
-  C("pediatrics-2", "pediatrics", "الأطفال", "Pediatrics", [2], "18:00", "21:00"),
-  C("dental-1", "dental", "الأسنان", "Dental", [1, 3, 6], "16:00", "20:00"),
-  C("ortho-1", "orthopedics", "العظام", "Orthopedics", [3], "18:00", "21:00"),
-  C("eye-1", "ophthalmology", "الرمد", "Ophthalmology", [6], "12:00", "15:00"),
-  C("gyn-1", "gynecology", "النساء والتوليد", "Gynecology", [2, 4], "17:00", "20:00"),
-  C("physio-1", "physiotherapy", "العلاج الطبيعي", "Physiotherapy", [1, 3, 5], "10:00", "14:00"),
-  C("ent-1", "ent", "الأنف والأذن والحنجرة", "ENT", [7], "17:00", "20:00"),
-  C("derma-1", "dermatology", "الجلدية", "Dermatology", [4], "18:00", "21:00"),
-  C("cardio-1", "cardiology", "القلب", "Cardiology", [6], "17:00", "20:00"),
-])
-
 facilities = {
   "anba-abraam": {"type": "service", "nameAr": "خدمة الأنبا أبرآم — مشروع تطوير الخدمة", "nameEn": "Anba Abraam service — development project",
      "descAr": "رعاية إخوة الرب والأسر المحتاجة. قدّمها القس يوناثان محفوظ لقداسة البابا تواضروس الثاني في زيارته يوم 25 يونيو 2025 كأبرز خدمات الكنيسة. للاستفسار اتصل بالكنيسة.",
@@ -328,18 +307,19 @@ retired = {
   "seasons": ["summer-2027"],
   "liturgies": ["sum-sun-1", "sum-sun-2", "sum-sun-eve", "sum-fri-1", "sum-fri-2", "sum-fri-3"],
   "activities": ["scouts", "deacons", "hymns", "bible", "summer", "sports", "exhibitions"],
+  "clinics": ["cardio-1", "dental-1", "derma-1", "ent-1", "eye-1", "gyn-1", "internal-1", "ortho-1", "pediatrics-1", "pediatrics-2", "physio-1"],
   "priests": ["p1", "p2", "p3"],
   "milestones": ["founding", "pastoral", "consecration"],
 }
 
 seed = {"settings": settings, "alerts": alerts, "seasons": seasons, "liturgies": liturgies, "meetings": meetings,
-        "activities": activities, "clinics": clinics, "facilities": facilities, "priests": priests, "milestones": milestones, "saints": saints}
+        "activities": activities, "facilities": facilities, "priests": priests, "milestones": milestones, "saints": saints}
 out = os.path.join(os.path.dirname(__file__), "..", "assets", "seed", "seed.json")
 with open(out, "w", encoding="utf-8") as f:
     json.dump(seed, f, ensure_ascii=False, indent=1)
 print("wrote", out, {k: len(v) for k, v in seed.items()})
 for col, ids in retired.items():
-    clash = set(ids) & set(seed[col])
+    clash = set(ids) & set(seed.get(col, {}))
     assert not clash, f"retired ids still in seed: {col} {clash}"
 # Every id any seed has ever written (grows only). A document id dropped from
 # the seed must be listed in `retired`, so `--force` cleans it up; the seed

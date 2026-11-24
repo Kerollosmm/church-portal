@@ -16,7 +16,6 @@ String buildAssistantInstruction({
   required ChurchSettings settings,
   required List<Liturgy> liturgies,
   required List<Season> seasons,
-  required List<Clinic> clinics,
   required List<Meeting> meetings,
   required List<Activity> activities,
   required List<Facility> facilities,
@@ -55,7 +54,7 @@ String buildAssistantInstruction({
     ..writeln('## Scope (always applies)')
     ..writeln('You ONLY answer questions about this church, its services, this website and the Coptic Orthodox faith. '
         'Allowed topics:');
-  // Only topics of switched-on sections (ADR-042): no clinics when off.
+  // Only topics of switched-on sections (ADR-042).
   for (final t in assistant.topicsFor(f.enabled)) {
     b.writeln('- $t');
   }
@@ -107,7 +106,7 @@ String buildAssistantInstruction({
     ..writeln('## Grounding (always applies)')
     // 1. Data answers: direct and confident, no disclaimers.
     ..writeln(
-      'Questions answered by the church data below (times, meetings, clinics, priests, saints, activities, '
+      'Questions answered by the church data below (times, meetings, priests, saints, activities, '
       'contacts and so on): answer directly and confidently from the data. Do NOT add disclaimers such as '
       '"unconfirmed", "may change", "please verify" or "call/ask the church" to these answers.',
     )
@@ -147,11 +146,11 @@ String buildAssistantInstruction({
     // ADR-051 (issue 4): the Coptic date and the feast of the liturgical day.
     ..writeln(churchCalendarLine(f, now, synaxarium: synaxarium, lat: settings.lat, lng: settings.lng))
     ..writeln(
-      'Do not give medical, legal or spiritual-direction advice beyond pointing to the right clinic, '
+      'Do not give medical, legal or spiritual-direction advice beyond pointing to the right '
       'meeting or priest. Do not ask for or collect personal data.',
     )
     ..writeln(
-      'Portal services without a section below (e.g. a clinic or activity type that is not listed) are not '
+      'Portal services without a section below (e.g. an activity type that is not listed) are not '
       'offered on this portal: say so briefly. This does not apply to faith questions: those always follow the '
       '$sourceSearchToken rule above.',
     )
@@ -320,23 +319,6 @@ String buildAssistantInstruction({
       }
     }
     _todayAndTomorrow(b, f, liturgies, seasons, cairoNow);
-  }
-
-  if (f.enabled(Sections.clinics)) {
-    b
-      ..writeln()
-      ..writeln('## Clinics (book by phone or WhatsApp)');
-    for (final c in clinics.where((c) => c.active)) {
-      final contacts = c.details.showContacts;
-      b.writeln(
-        '- ${c.sample ? '[UNCONFIRMED] ' : ''}${_bi(c.specialtyAr, c.specialtyEn)}: ${c.doctorName}'
-        '${_bi(c.degreeAr, c.degreeEn).isNotEmpty ? ', ${_bi(c.degreeAr, c.degreeEn)}' : ''}; '
-        '${c.days.map((d) => weekdayNamesEn[d]).join(', ')} ${formatRangeLatin(c.start, c.end)}'
-        '${contacts && c.bookingPhone.isNotEmpty ? '; booking ${c.bookingPhone}' : ''}'
-        '${contacts && c.whatsapp.isNotEmpty ? '; WhatsApp ${c.whatsapp}' : ''}'
-        '${_itemDetails(c.details, f, phone: false, whatsapp: false)}',
-      );
-    }
   }
 
   if (f.enabled(Sections.meetings)) {
@@ -683,7 +665,6 @@ const _pageTextBudget = 2500;
 /// since withdrawn (e.g. `detailsEnabled` switched off) are not sent again.
 String assistantDetailSignature({
   required FeatureSettings features,
-  List<Clinic> clinics = const [],
   List<Meeting> meetings = const [],
   List<Activity> activities = const [],
   List<Facility> facilities = const [],
@@ -692,7 +673,6 @@ String assistantDetailSignature({
   List<Milestone> milestones = const [],
 }) {
   final all = [
-    for (final x in clinics) x.details,
     for (final x in meetings) x.details,
     for (final x in activities) x.details,
     for (final x in facilities) x.details,
@@ -809,7 +789,7 @@ String _clip(String s, int max) => s.length <= max ? s : '${s.substring(0, max).
 
 /// Public sections whose absence the assistant is told about (ADR-042).
 const _offerableSections = [
-  Sections.schedule, Sections.meetings, Sections.clinics, Sections.services, Sections.activities, //
+  Sections.schedule, Sections.meetings, Sections.services, Sections.activities, //
   Sections.priests, Sections.saints, Sections.contactForm,
 ];
 

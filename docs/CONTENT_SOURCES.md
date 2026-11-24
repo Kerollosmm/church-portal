@@ -5,7 +5,7 @@ Research compiled 31 Oct 2026: `web_findings.md` (news/web) and the official Fac
 
 Status key
 - **verified**: from the church's own channels (Facebook page, YouTube channel) and/or two or more independent sources. Seeded with `sample: false`.
-- **needs church confirmation**: not published, single-source, or last confirmed in 2022. Seeded with `sample: true`; the app shows a "بيانات تجريبية / Sample data" badge, and the schedule, meetings and clinics pages show «مواعيد تقريبية — في انتظار تأكيد الكنيسة / Times pending church confirmation».
+- **needs church confirmation**: not published, single-source, or last confirmed in 2022. Seeded with `sample: true`; the app shows a "بيانات تجريبية / Sample data" badge, and the schedule and meetings pages show «مواعيد تقريبية — في انتظار تأكيد الكنيسة / Times pending church confirmation».
 
 Source abbreviations
 - **FB**: official Facebook page https://www.facebook.com/100070313048338 (About + public posts, read 31 Oct 2026)
@@ -73,10 +73,6 @@ Nativity 2027, Holy Week and Pascha 2027 (Palm Sunday 25 Apr, Easter 2 May 2027)
 **Not published** on FB, YT or the web. Kept as placeholder times with `sample: true` (badge + page notice). Hall and place names were removed because they were invented too. The youth meeting links the real Maximous Youth page (https://www.facebook.com/MaximousYouth).
 Status: **needs church confirmation**.
 
-## clinics (all 11)
-No clinic, dispensary or doctor appears in any public source. Doctor names replaced with generic «طبيب <التخصص> — يُعلن لاحقًا», with no booking phones; `sample: true`.
-Status: **needs church confirmation**, including whether the church runs clinics at all.
-
 ## facilities
 
 | id | Source | Status |
@@ -129,8 +125,7 @@ Not seeded until the church confirms them: القس يسى إبراهيم and ا
 ## Open items for the church office
 1. Weekly liturgy, vespers and praise timetable (+ revival and Holy Week times).
 2. Sunday school and meeting days, times and halls.
-3. Whether the church runs clinics or a dispensary; specialties, doctors, days and booking phone.
-4. Nursery, employment office, halls and library: confirm or remove.
+3. Nursery, employment office, halls and library: confirm or remove.
 5. Current priest roster (confirm Bigol, Saleeb and Barnaba; ordination and assignment of Yassa Ibrahim and Philemon Fawzy), with photos.
 6. Founding / consecration year and altar names (Hegumen Bemwa Ghaly's history talk on 25 Jun 2025 is the lead).
 7. Photos of the church building (the Facebook cover album a.217655827254851 has a bell-tower photo).

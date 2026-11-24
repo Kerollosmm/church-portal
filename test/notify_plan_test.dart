@@ -982,7 +982,7 @@ void main() {
 
     test('honors safe explicit link and rejects unsafe or malformed payloads', () {
       expect(notificationRouteFromPayload('/mass-schedule'), '/mass-schedule');
-      expect(notificationRouteFromPayload(jsonEncode({'type': 'announcements', 'link': '/clinics'})), '/clinics');
+      expect(notificationRouteFromPayload(jsonEncode({'type': 'announcements', 'link': '/church-education'})), '/church-education');
       expect(notificationRouteFromPayload(jsonEncode({'type': 'announcements', 'link': 'https://evil.test'})), '/');
       expect(notificationRouteFromPayload('https://evil.test'), '/');
       expect(notificationRouteFromPayload('not-valid-json'), '/');

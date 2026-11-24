@@ -20,7 +20,6 @@ class Sections {
   Sections._();
   static const schedule = 'schedule'; // liturgies, vespers, seasons, next-mass card
   static const meetings = 'meetings'; // Sunday school & meetings (/church-education)
-  static const clinics = 'clinics';
   static const services = 'services'; // public services: nursery, employment, halls, library, Anba Abraam...
   static const history = 'history'; // church history text + altars
   static const milestones = 'milestones'; // "Our story" highlight cards
@@ -39,7 +38,7 @@ class Sections {
   static const customPages = 'customPages'; // admin-built pages at /page/<slug> (ADR-027)
 
   static const all = [
-    schedule, meetings, clinics, services, history, milestones, saints, priests, departedPriests, //
+    schedule, meetings, services, history, milestones, saints, priests, departedPriests, //
     activities, alerts, contactInfo, socials, contactForm, assistant, media, dailyVerse, customSections, customPages,
   ];
 
@@ -47,7 +46,6 @@ class Sections {
   static const labels = <String, List<String>>{
     schedule: ['القداسات والصلوات والمواسم', 'Liturgies, vespers & seasons'],
     meetings: ['التربية الكنسية والاجتماعات', 'Sunday school & meetings'],
-    clinics: ['العيادات', 'Clinics'],
     services: ['الخدمات العامة (الحضانة، التوظيف، القاعات، المكتبة، الأنبا أبرآم…)', 'Public services (nursery, employment, halls, library, Anba Abraam…)'],
     history: ['تاريخ الكنيسة والمذابح', 'Church history & altars'],
     milestones: ['محطات تاريخية (قصتنا)', 'Milestones ("Our story")'],
@@ -108,13 +106,12 @@ class CustomizablePages {
   static const schedule = 'schedule';
   static const education = 'education';
   static const activities = 'activities';
-  static const clinics = 'clinics';
   static const services = 'services';
   static const contact = 'contact';
   static const ask = 'ask';
   static const notifications = 'notifications';
 
-  static const all = [about, schedule, education, activities, clinics, services, contact, ask, notifications];
+  static const all = [about, schedule, education, activities, services, contact, ask, notifications];
 
   /// [ar, en] labels used in the admin features screen.
   static const labels = <String, List<String>>{
@@ -122,7 +119,6 @@ class CustomizablePages {
     schedule: ['مواعيد القداسات', 'Mass schedule'],
     education: ['التربية الكنسية والاجتماعات', 'Sunday school & meetings'],
     activities: ['الأنشطة والكورالات', 'Activities & choirs'],
-    clinics: ['العيادات', 'Clinics'],
     services: ['الخدمات العامة', 'Public services'],
     contact: ['تواصل معنا', 'Contact us'],
     ask: ['اسأل الكنيسة', 'Ask the church'],
@@ -526,7 +522,6 @@ class FeatureSettings {
     if (p == null || !p.expiredAt(instant)) return this;
     final next = Map<String, bool>.of(sections);
     if (p.has(PresetOption.hideMeetings)) next[Sections.meetings] = p.prevBool(PresetPrev.meetings) ?? true;
-    if (p.has(PresetOption.hideClinics)) next[Sections.clinics] = p.prevBool(PresetPrev.clinics) ?? true;
     return FeatureSettings(
       sections: next,
       homeOrder: homeOrder,
@@ -594,7 +589,7 @@ class FeatureSettings {
   List<String> get visibleHomeBlocks => homeOrder.where(showHomeBlock).toList();
 
   /// Whether a public route (or one of its detail sub-routes, such as
-  /// `/clinics/<id>`) is available. Unknown routes are always allowed.
+  /// `/church-education/<id>`) is available. Unknown routes are always allowed.
   bool routeEnabled(String path) {
     if (path == '/notifications' || path.startsWith('/notifications/')) return pushSettings.enabled;
     final sections = sectionsForPath(path);
@@ -621,7 +616,6 @@ const routeSections = <String, List<String>>{
   '/mass-schedule': [Sections.schedule],
   '/church-education': [Sections.meetings],
   '/church-activities': [Sections.activities],
-  '/clinics': [Sections.clinics],
   '/public-services': [Sections.services],
   '/about': [Sections.history, Sections.saints, Sections.priests, Sections.departedPriests],
   '/contact': [Sections.contactInfo, Sections.socials, Sections.contactForm],
@@ -640,8 +634,8 @@ const aboutSubRouteSections = <String, List<String>>{
 };
 
 /// Sections behind [path] (any one enabled keeps it alive), or null for a
-/// route no section controls. Prefix-aware: `/clinics/<id>` is gated like
-/// `/clinics`, `/about/priests/<id>` by the (serving or departed) priests
+/// route no section controls. Prefix-aware: `/church-education/<id>` is gated like
+/// `/church-education`, `/about/priests/<id>` by the (serving or departed) priests
 /// sections, `/about/saints/<id>` by saints and `/about/milestones/<id>` by
 /// milestones; any other sub-path follows its top-level page.
 List<String>? sectionsForPath(String path) {

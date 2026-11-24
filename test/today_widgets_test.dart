@@ -477,7 +477,7 @@ void main() {
       expect(t.liveBadgeHideOnHome, isTrue);
       expect(t.liveBadgeOn(now, '/'), isFalse);
       expect(t.liveBadgeOn(now, '/mass-schedule'), isTrue);
-      expect(t.liveBadgeOn(now, '/clinics/x'), isTrue);
+      expect(t.liveBadgeOn(now, '/church-education/x'), isTrue);
       final both = FeatureSettings.fromMap(liveMap({'liveBadgeHideOnHome': false})).today;
       expect(both.liveBadgeOn(now, '/'), isTrue);
       // Not live: no badge anywhere.

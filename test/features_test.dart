@@ -29,12 +29,12 @@ void main() {
 
     test('tolerant parsing: junk values ignored, unknown blocks dropped, missing blocks appended', () {
       final f = FeatureSettings.fromMap({
-        'sections': {'clinics': false, 'schedule': 'nope', 'meetings': true},
+        'sections': {'meetings': false, 'schedule': 'nope', 'activities': true},
         'homeOrder': ['map', 'map', 'hero', 'directory'],
         'homeHidden': ['milestones', 'bogus'],
         'theme': 'neon',
       });
-      expect(f.enabled(Sections.clinics), isFalse);
+      expect(f.enabled(Sections.meetings), isFalse);
       expect(f.enabled(Sections.schedule), isTrue); // non-bool -> default on
       expect(f.homeOrder.take(2), ['map', 'directory']);
       expect(f.homeOrder.toSet(), HomeBlocks.defaultOrder.toSet());
@@ -45,7 +45,7 @@ void main() {
 
     test('round-trips through toMap', () {
       final f = FeatureSettings.fromMap({
-        'sections': {'clinics': false, 'assistant': false},
+        'sections': {'meetings': false, 'assistant': false},
         'homeOrder': ['directory', 'map'],
         'homeHidden': ['quickContacts'],
         'bannerEnabled': true,
@@ -75,10 +75,10 @@ void main() {
 
     test('disabled sections guard their routes', () {
       final f = FeatureSettings.fromMap({
-        'sections': {'clinics': false, 'schedule': false, 'assistant': false},
+        'sections': {'meetings': false, 'schedule': false, 'assistant': false},
       });
-      expect(f.routeEnabled('/clinics'), isFalse);
-      expect(f.routeEnabled('/clinics/'), isFalse);
+      expect(f.routeEnabled('/church-education'), isFalse);
+      expect(f.routeEnabled('/church-education/'), isFalse);
       // ADR-057: /notifications follows the push switch (off by default), trailing slash too.
       expect(f.routeEnabled('/notifications'), isFalse);
       expect(f.routeEnabled('/notifications/'), isFalse);
@@ -86,7 +86,7 @@ void main() {
       expect(f.routeEnabled('/ask'), isFalse);
       expect(f.routeEnabled('/'), isTrue);
       expect(f.routeEnabled('/admin'), isTrue);
-      expect(f.routeEnabled('/church-education'), isTrue);
+      expect(f.routeEnabled('/public-services'), isTrue);
     });
 
     test('pages built from several sections stay up while any one is on', () {
@@ -108,12 +108,12 @@ void main() {
     test('detail sub-routes are gated by their parent section (prefix-aware)', () {
       final off = FeatureSettings.fromMap({
         'sections': {
-          'clinics': false, 'meetings': false, 'activities': false, 'services': false, //
+          'meetings': false, 'activities': false, 'services': false, //
           'priests': false, 'saints': false, 'milestones': false,
         },
       });
       for (final p in [
-        '/clinics/dental-1', '/clinics/dental-1/', '/church-education/youth', '/church-activities/choir',
+        '/church-education/youth', '/church-education/youth/', '/church-activities/choir',
         '/public-services/nursery', '/about/saints/st-moses', '/about/milestones/visit-2025',
       ]) {
         expect(off.routeEnabled(p), isFalse, reason: p);
@@ -126,12 +126,11 @@ void main() {
       // /about itself still follows history/saints/priests/departed.
       expect(off.routeEnabled('/about'), isTrue);
       // A look-alike prefix is not a sub-route.
-      expect(off.routeEnabled('/clinicsx'), isTrue);
+      expect(off.routeEnabled('/church-educationx'), isTrue);
     });
 
     test('sectionsForPath maps exact and sub paths', () {
-      expect(sectionsForPath('/clinics'), [Sections.clinics]);
-      expect(sectionsForPath('/clinics/a'), [Sections.clinics]);
+      expect(sectionsForPath('/church-education'), [Sections.meetings]);
       expect(sectionsForPath('/church-education/a'), [Sections.meetings]);
       expect(sectionsForPath('/church-activities/a'), [Sections.activities]);
       expect(sectionsForPath('/public-services/a'), [Sections.services]);
@@ -144,7 +143,7 @@ void main() {
       expect(sectionsForPath('/ask'), [Sections.assistant]);
       expect(sectionsForPath('/'), isNull);
       expect(sectionsForPath('/admin'), isNull);
-      expect(sectionsForPath('/admin/clinics'), isNull);
+      expect(sectionsForPath('/admin/meetings'), isNull);
     });
 
     test('home blocks follow order, hidden set and their sections', () {
@@ -171,7 +170,6 @@ void main() {
         'schedule',
         'education',
         'activities',
-        'clinics',
         'services',
         'contact',
         'ask',
@@ -197,28 +195,28 @@ void main() {
 
     test('defaults: no custom headers; unknown keys and empty entries dropped', () {
       expect(FeatureSettings.defaults.pageHeaders, isEmpty);
-      expect(FeatureSettings.defaults.pageHeader('clinics'), PageCustom.empty);
+      expect(FeatureSettings.defaults.pageHeader('education'), PageCustom.empty);
       final f = FeatureSettings.fromMap({
         'pageHeaders': {
-          'clinics': {'titleAr': 'عياداتنا', 'introEn': 'Book by phone'},
+          'education': {'titleAr': 'اجتماعاتنا', 'introEn': 'Join us'},
           'about': {'titleAr': ' '},
           'bogus': {'titleAr': 'x'},
           'contact': 'not a map',
         },
       });
-      expect(f.pageHeaders.keys, ['clinics']);
-      expect(f.pageHeader('clinics').titleAr, 'عياداتنا');
-      expect(f.pageHeader('clinics').introEn, 'Book by phone');
+      expect(f.pageHeaders.keys, ['education']);
+      expect(f.pageHeader('education').titleAr, 'اجتماعاتنا');
+      expect(f.pageHeader('education').introEn, 'Join us');
       expect(f.pageHeader('about').isEmpty, isTrue);
       expect(f.toMap()['pageHeaders'], {
-        'clinics': {'titleAr': 'عياداتنا', 'titleEn': '', 'subtitleAr': '', 'subtitleEn': '', 'introAr': '', 'introEn': 'Book by phone'},
+        'education': {'titleAr': 'اجتماعاتنا', 'titleEn': '', 'subtitleAr': '', 'subtitleEn': '', 'introAr': '', 'introEn': 'Join us'},
       });
       expect(FeatureSettings.fromMap(f.toMap()).toMap(), f.toMap());
       expect(FeatureSettings.fromMap(const {'pageHeaders': 'x'}).pageHeaders, isEmpty);
       final g = f.copyWith(pageHeaders: {'ask': const PageCustom(titleEn: 'Ask us')});
       expect(g.pageHeader('ask').titleEn, 'Ask us');
-      expect(g.pageHeader('clinics').isEmpty, isTrue);
-      expect(f.copyWith(theme: 'navy').pageHeader('clinics').titleAr, 'عياداتنا');
+      expect(g.pageHeader('education').isEmpty, isTrue);
+      expect(f.copyWith(theme: 'navy').pageHeader('education').titleAr, 'اجتماعاتنا');
     });
   });
 
@@ -264,8 +262,6 @@ void main() {
     });
 
     test('visible flag defaults to true and is read from data', () {
-      expect(Clinic.fromMap('x', const {'specialty': 'dental'}).visible, isTrue);
-      expect(Clinic.fromMap('x', const {'visible': false}).visible, isFalse);
       expect(Facility.fromMap('x', const {'visible': 'no'}).visible, isTrue);
       expect(Activity.fromMap('x', const {'order': 7}).order, 7);
     });
@@ -274,18 +270,14 @@ void main() {
   group('seed', () {
     final seed = SeedData(jsonDecode(File('assets/seed/seed.json').readAsStringSync()) as Map<String, dynamic>);
 
-    test('ships settings/features with every section on except clinics (offline fallback respects defaults)', () {
+    test('ships settings/features with every section on (offline fallback respects defaults)', () {
       expect(seed.collection('settings').containsKey('features'), isTrue);
       final f = seed.features;
       for (final s in Sections.all) {
-        expect(f.enabled(s), s != Sections.clinics, reason: s);
+        expect(f.enabled(s), isTrue, reason: s);
         expect((seed.raw['settings']['features']['sections'] as Map).containsKey(s), isTrue, reason: s);
       }
       expect(f.homeOrder, HomeBlocks.defaultOrder);
-      // Clinics stay off until the church office confirms them; every clinic
-      // stays flagged as unconfirmed.
-      expect(f.enabled(Sections.clinics), isFalse);
-      expect(seed.clinics.every((c) => c.sample), isTrue);
     });
 
     test('seed bishop line is present', () {
@@ -300,7 +292,6 @@ void main() {
           settings: seed.settings,
           liturgies: seed.liturgies,
           seasons: seed.seasons,
-          clinics: seed.clinics,
           meetings: seed.meetings,
           activities: seed.activities,
           facilities: seed.facilities,
@@ -310,17 +301,15 @@ void main() {
 
     test('all on: every section present', () {
       final t = build(FeatureSettings.defaults);
-      for (final h in ['## Clinics', '## Weekly liturgy schedule', '## Sunday school', '## Activities', '## Public services']) {
+      for (final h in ['## Weekly liturgy schedule', '## Sunday school', '## Activities', '## Public services']) {
         expect(t, contains(h));
       }
     });
 
     test('switched-off sections are left out', () {
       final t = build(FeatureSettings.fromMap({
-        'sections': {'clinics': false, 'meetings': false, 'socials': false, 'services': false},
+        'sections': {'meetings': false, 'socials': false, 'services': false},
       }));
-      expect(t, isNot(contains('## Clinics')));
-      expect(t, isNot(contains('Pediatrics')));
       expect(t, isNot(contains('## Sunday school')));
       expect(t, isNot(contains('## Public services')));
       expect(t, isNot(contains('Facebook: ')));

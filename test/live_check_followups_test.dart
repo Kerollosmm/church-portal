@@ -57,15 +57,13 @@ void main() {
       await tester.pump();
     }
 
-    testWidgets('clinics (off on the live site) is not offered while the switches load', (tester) async {
+    testWidgets('quick links omit clinics and keep other links before and after switches load', (tester) async {
       await pump(tester, ready: false);
       expect(find.text('Clinics'), findsNothing);
-      expect(find.text('Contact us'), findsWidgets); // the other quick links stay
-    });
-
-    testWidgets('clinics shows once the switches say it is on', (tester) async {
+      expect(find.text('Contact us'), findsWidgets);
       await pump(tester, ready: true);
-      expect(find.text('Clinics'), findsOneWidget);
+      expect(find.text('Clinics'), findsNothing);
+      expect(find.text('Contact us'), findsWidgets);
     });
   });
 }

@@ -1,7 +1,7 @@
 # admin
 
 ## Overview
-The `admin` package implements the authenticated back-office management console located at the hidden `/admin` route. It provides administrative controls, content management, and configuration editors for all church operations (liturgies, activities, education, clinics, media, settings, and seasonal themes). Built on pure schema descriptors (`admin_schema.dart`) and pure validation rules (`admin_validators.dart`), it bridges user input with Cloud Firestore persistence, enforcing strict Firestore security rule expression limits, atomic updates, and bilingual Arabic/English localization.
+The `admin` package implements the authenticated back-office management console located at the hidden `/admin` route. It provides administrative controls, content management, and configuration editors for all church operations (liturgies, activities, education, media, settings, and seasonal themes). Built on pure schema descriptors (`admin_schema.dart`) and pure validation rules (`admin_validators.dart`), it bridges user input with Cloud Firestore persistence, enforcing strict Firestore security rule expression limits, atomic updates, and bilingual Arabic/English localization.
 
 ## Interface
 - `admin_page.dart`:

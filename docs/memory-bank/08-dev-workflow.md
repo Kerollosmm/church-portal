@@ -50,7 +50,7 @@ Auth: `GOOGLE_APPLICATION_CREDENTIALS=/path/key.json` or `gcloud auth applicatio
 |---|---|---|
 | *(none)* | `create()` each doc; **existing docs are skipped** (admin edits are safe). `settings` written last. | Safe |
 | `--dry-run` | Print what would happen (checks existence) | Safe |
-| `--only a,b` | Restrict to collections (`settings`, `clinics,meetings`…; `none` = no content, e.g. with `--admin`) | — |
+| `--only a,b` | Restrict to collections (`settings`, `meetings,activities`…; `none` = no content, e.g. with `--admin`) | — |
 | `--fill-missing` | For existing docs, add only absent **top-level** fields, in a transaction (never changes existing values) | Low — but adds seed values (e.g. a new section key) to live docs |
 | `--force` | **Overwrites whole documents** (batched `set`) **and deletes retired ids** (`retired_seed_ids.json`) unless edited in /admin (`updatedAt`/`updatedBy` present) | **HIGH — replaces everything edited in /admin for the seeded ids.** Never use on production without explicit approval and a backup/export |
 | `--force` + `--fill-missing` | Refused (exit 2) | — |
@@ -62,7 +62,7 @@ All dates are validated before the first write; `startsAt/endsAt/date/createdAt`
 
 > **Create-only is not harmless (verified in `tool/seed_firestore.js`, 4 Nov 2026):** without `--force` the seeder
 > skips documents that **exist**, so any seeded document an admin has **deleted** is **re-created** from
-> `assets/seed/seed.json` (e.g. the 11 placeholder clinics the owner deleted on 3 Nov 2026). Never run the Seed
+> `assets/seed/seed.json`. Never run the Seed
 > workflow (or `seed_firestore.js`) on production without explicit owner approval. Only `--only` (fewer
 > collections) and `--dry-run` (no writes) reduce the blast radius; `--fill-missing` does **not** — it still
 > creates every missing seeded document like the default run and, in addition, adds absent fields to existing

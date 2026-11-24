@@ -126,7 +126,7 @@ class CustomField {
   Map<String, dynamic> toMap() => {'titleAr': titleAr, 'titleEn': titleEn, 'valueAr': valueAr, 'valueEn': valueEn};
 }
 
-/// Optional item detail page shared by meetings, activities, clinics,
+/// Optional item detail page shared by meetings, activities,
 /// facilities, priests, milestones and saints (not liturgies, seasons or
 /// alerts). Every field is optional. Detail pages are opt-OUT (PR #14): a
 /// missing `detailsEnabled` means the page is on; only an explicit `false`
@@ -144,7 +144,7 @@ class ItemDetails {
   final List<MediaImage> gallery;
 
   /// Primary phone: `contactPhone`, or the collection's existing phone field
-  /// (clinics: `bookingPhone`, facilities: `phone`).
+  /// (facilities: `phone`).
   final String contactPhone;
 
   /// WhatsApp number (chat) and WhatsApp group / channel URL.
@@ -663,69 +663,6 @@ class Activity implements Hideable {
         imageStyle: _s(m['imageStyle']),
         sample: _b(m['sample']),
         details: ItemDetails.fromMap(m, urlKey: 'link'),
-      );
-}
-
-class Clinic implements Hideable {
-
-  /// Shown on the public site (false = hidden by an admin, not deleted).
-  @override
-  final bool visible;
-  @override
-  final int order;
-  final String id, specialty, specialtyAr, specialtyEn, doctorName, degreeAr, degreeEn;
-  final List<int> days;
-  final String start, end, bookingPhone, whatsapp;
-  final bool active;
-  final bool sample;
-  /// Optional picture (null = keep the icon / initials placeholder).
-  final MediaImage? image;
-
-  /// How [image] is displayed on the card (ImageStyles); '' = section default.
-  final String imageStyle;
-  /// Detail page settings (on unless an admin switches it off).
-  final ItemDetails details;
-  const Clinic({
-    this.visible = true,
-    this.order = 0,
-    required this.id,
-    required this.specialty,
-    required this.specialtyAr,
-    required this.specialtyEn,
-    required this.doctorName,
-    this.degreeAr = '',
-    this.degreeEn = '',
-    this.days = const [],
-    this.start = '',
-    this.end = '',
-    this.bookingPhone = '',
-    this.whatsapp = '',
-    this.active = true,
-    this.sample = false,
-    this.image,
-    this.imageStyle = '',
-    this.details = ItemDetails.none,
-  });
-  factory Clinic.fromMap(String id, Map<String, dynamic> m) => Clinic(
-        visible: m['visible'] is bool ? m['visible'] as bool : true,
-        order: _ni(m['order']) ?? 0,
-        id: id,
-        specialty: _s(m['specialty']),
-        specialtyAr: _s(m['specialtyAr']),
-        specialtyEn: _s(m['specialtyEn']),
-        doctorName: _s(m['doctorName']),
-        degreeAr: _s(m['degreeAr']),
-        degreeEn: _s(m['degreeEn']),
-        days: ((m['days'] as List?) ?? const []).map(_ni).whereType<int>().toList(),
-        start: _s(m['start']),
-        end: _s(m['end']),
-        bookingPhone: _s(m['bookingPhone']),
-        whatsapp: _s(m['whatsapp']),
-        active: m['active'] is bool ? m['active'] as bool : true,
-        sample: _b(m['sample']),
-        image: MediaImage.fromMap(m['image']),
-        imageStyle: _s(m['imageStyle']),
-        details: ItemDetails.fromMap(m, phoneKey: 'bookingPhone'),
       );
 }
 

@@ -145,7 +145,7 @@ void main() {
       }
       final res = [for (final r in rewrites) RegExp(r['regex'] as String)];
       bool rewritten(String path) => res.any((re) => re.hasMatch(path));
-      for (final route in ['/', '/mass-schedule', '/section/youth-meeting', '/page/donations', '/clinics/AbC123xyz', '/admin', '/ask']) {
+      for (final route in ['/', '/mass-schedule', '/section/youth-meeting', '/page/donations', '/church-education/AbC123xyz', '/admin', '/ask']) {
         expect(rewritten(route), isTrue, reason: route);
       }
       // Item / slug routes keep working when an id or slug contains a dot.

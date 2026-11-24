@@ -9,7 +9,6 @@
   <url><loc>https://maximos-domadios-church.web.app/mass-schedule</loc></url>
   <url><loc>https://maximos-domadios-church.web.app/church-education</loc></url>
   <url><loc>https://maximos-domadios-church.web.app/church-activities</loc></url>
-  <!-- /clinics is omitted while sections.clinics is disabled in assets/seed/seed.json. -->
   <url><loc>https://maximos-domadios-church.web.app/public-services</loc></url>
   <url><loc>https://maximos-domadios-church.web.app/contact</loc></url>
 </urlset>
