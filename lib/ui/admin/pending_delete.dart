@@ -19,6 +19,7 @@ class PendingDelete {
   PendingDelete({this.window = const Duration(seconds: 10)});
 
   final Map<String, _PendingCommit> _pending = {};
+  int _nextHoldSeq = 0;
 
   bool get hasPending => _pending.isNotEmpty;
   Set<String> get pendingIds => _pending.keys.toSet();
@@ -53,10 +54,14 @@ class PendingDelete {
       if (item == null) continue;
       if (item.activeHolds.isEmpty) {
         item.expiredWhileHeld = false;
+        item.extendingHold?.anchorTimer.cancel();
         item.extendingHold = null;
       }
       late final _PendingHold hold;
-      hold = _PendingHold(Timer(window, () => _onHoldAnchorFired(id, item, hold)));
+      hold = _PendingHold(
+        ++_nextHoldSeq,
+        Timer(window, () => _onHoldAnchorFired(id, item, hold)),
+      );
       item.activeHolds.add(hold);
       tokens[id] = hold;
     }
@@ -82,8 +87,9 @@ class PendingDelete {
   }
 
   /// Releases one hold on [id] matching [token]: ignores stale tokens from undone/replaced
-  /// entries, and when the last hold releases either adopts the winning hold's anchor timer
-  /// (commit immediately if its anchor already elapsed) or keeps/commits the original deadline.
+  /// entries, preserves the newest extending hold across out-of-order completions, and when
+  /// the last hold releases either adopts the winning hold's anchor timer (committing
+  /// immediately if its anchor already elapsed) or keeps/commits the original deadline.
   Future<void> releaseHold(String id, {required bool extend, Object? token}) async {
     final item = _pending[id];
     if (item == null) return;
@@ -98,16 +104,17 @@ class PendingDelete {
       return;
     }
     if (extend) {
-      item.extendingHold = released;
+      final prev = item.extendingHold;
+      if (prev == null || released.seq > prev.seq) {
+        prev?.anchorTimer.cancel();
+        item.extendingHold = released;
+      } else {
+        released.anchorTimer.cancel();
+      }
     } else {
       released.anchorTimer.cancel();
     }
-    if (item.activeHolds.isNotEmpty) {
-      if (!extend && identical(item.extendingHold, released)) {
-        item.extendingHold = null;
-      }
-      return;
-    }
+    if (item.activeHolds.isNotEmpty) return;
     final winner = item.extendingHold;
     final expired = item.expiredWhileHeld;
     item.expiredWhileHeld = false;
@@ -142,6 +149,7 @@ class PendingDelete {
       h.anchorTimer.cancel();
     }
     item.activeHolds.clear();
+    item.extendingHold?.anchorTimer.cancel();
     item.extendingHold = null;
     item.expiredWhileHeld = false;
     item.timer.cancel();
@@ -181,9 +189,10 @@ class PendingDelete {
 }
 
 class _PendingHold {
+  final int seq;
   final Timer anchorTimer;
   bool anchorExpired = false;
-  _PendingHold(this.anchorTimer);
+  _PendingHold(this.seq, this.anchorTimer);
 }
 
 class _PendingCommit {
@@ -204,13 +213,14 @@ class _PendingCommit {
       h.anchorTimer.cancel();
     }
     activeHolds.clear();
+    extendingHold?.anchorTimer.cancel();
     extendingHold = null;
   }
 
   Future<void> execute() async {
     if (_executed) return;
     _executed = true;
-    timer.cancel();
+    cancel();
     try {
       await commit();
     } catch (_) {}

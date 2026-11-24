@@ -2083,6 +2083,281 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
       expect(repo.deletedIds, contains('saints/s3'));
     });
+
+    test('overlapping holds keep newest extending anchor across out-of-order releases and undo cancels extendingHold timer', () {
+      fakeAsync((async) {
+        final pd = PendingDelete(window: const Duration(milliseconds: 120));
+        final committed = <String>[];
+        pd.schedule('a', () async => committed.add('a'));
+
+        final h1 = pd.holdAll(['a']); // anchor fires at t = 120ms
+        async.elapse(const Duration(milliseconds: 50));
+        final h2 = pd.holdAll(['a']); // anchor fires at t = 170ms
+
+        // Out-of-order: newer h2 finishes first, older h1 finishes second -> newer h2 (170ms) MUST win.
+        unawaited(pd.releaseHold('a', extend: true, token: h2['a']));
+        async.flushMicrotasks();
+        unawaited(pd.releaseHold('a', extend: true, token: h1['a']));
+        async.flushMicrotasks();
+
+        // Cross older h1 deadline (t = 130ms): must NOT commit yet!
+        async.elapse(const Duration(milliseconds: 80));
+        expect(committed, isEmpty);
+
+        // Cross newer h2 deadline (t = 175ms): commits cleanly.
+        async.elapse(const Duration(milliseconds: 45));
+        expect(committed, ['a']);
+
+        // Undo while extendingHold is already stored cancels its anchor timer cleanly (zero pending timers).
+        pd.schedule('b', () async => committed.add('b'));
+        final b1 = pd.holdAll(['b']);
+        final b2 = pd.holdAll(['b']);
+        unawaited(pd.releaseHold('b', extend: true, token: b1['b']));
+        async.flushMicrotasks();
+        expect(pd.undo('b'), isTrue);
+        expect(b2['b'], isNotNull);
+        async.elapse(const Duration(milliseconds: 200));
+        expect(committed, ['a']);
+      });
+    });
+
+    testWidgets('3 rapid deletes on liturgies -> undoAll restores all 3 atomically with 0 Firestore delete writes', (tester) async {
+      tester.view.physicalSize = const Size(1100, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _ControlledUpdateBackend(initialCollections: {
+        'liturgies': [
+          AdminDoc('l1', {'type': 'mass', 'nameAr': 'قداس أول', 'weekday': 7, 'start': '07:00', 'visible': true}),
+          AdminDoc('l2', {'type': 'mass', 'nameAr': 'قداس ثاني', 'weekday': 7, 'start': '09:00', 'visible': true}),
+          AdminDoc('l3', {'type': 'vespers', 'nameAr': 'عشية', 'weekday': 6, 'start': '18:00', 'visible': true}),
+        ],
+      });
+      addTearDown(repo.dispose);
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('liturgies')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Hold the 3rd delete write & prior renewal to simulate real Firestore network latency (~2s burst).
+      await tester.tap(find.byKey(const ValueKey('delete-l1')));
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(find.text('قداس أول'), findsNothing);
+      expect(find.text('تراجع'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('delete-l2')));
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(find.text('قداس ثاني'), findsNothing);
+      expect(find.text('تراجع عن الكل'), findsOneWidget);
+
+      final l3WriteHold = repo.hold('liturgies', 'l3');
+      final l1RenewHold = repo.hold('liturgies', 'l1');
+      await tester.tap(find.byKey(const ValueKey('delete-l3')));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('عشية'), findsNothing);
+      expect(find.textContaining('تم مسح 3 عناصر'), findsOneWidget);
+      expect(find.text('تراجع عن الكل'), findsOneWidget);
+
+      // Tap "تراجع عن الكل" while l3's initial write & l1's renewal are still in flight!
+      await tester.tap(find.text('تراجع عن الكل'));
+      await tester.pump();
+
+      // All 3 rows return immediately in UI, and bar NEVER falls back to single-item undo.
+      expect(find.text('قداس أول'), findsOneWidget);
+      expect(find.text('قداس ثاني'), findsOneWidget);
+      expect(find.text('عشية'), findsOneWidget);
+      expect(find.text('تراجع'), findsNothing);
+      expect(find.text('تراجع عن الكل'), findsNothing);
+
+      // Settle the in-flight writes -> restore writes clear deletedAt on all 3 and never re-open an Undo bar.
+      l3WriteHold.complete();
+      l1RenewHold.complete();
+      await tester.pumpAndSettle();
+
+      expect(find.text('تراجع'), findsNothing);
+      expect(find.text('تراجع عن الكل'), findsNothing);
+      for (final id in ['l1', 'l2', 'l3']) {
+        final doc = repo.collections['liturgies']!.firstWhere((d) => d.id == id);
+        expect(isSoftDeleted(doc.data), isFalse, reason: '$id should have deletedAt cleared');
+      }
+      expect(repo.deletedIds, isEmpty);
+
+      // Wait well past the 10s grace window -> still ZERO Firestore delete writes.
+      await tester.pump(const Duration(seconds: 15));
+      expect(repo.deletedIds, isEmpty);
+    });
+
+    testWidgets('2 deletes on liturgies -> undoAll 8s after first delete restores both with 0 Firestore delete writes', (tester) async {
+      tester.view.physicalSize = const Size(1100, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _TestAdminBackend(initialCollections: {
+        'liturgies': [
+          AdminDoc('l1', {'type': 'mass', 'nameAr': 'قداس أول', 'weekday': 7, 'start': '07:00', 'visible': true}),
+          AdminDoc('l2', {'type': 'mass', 'nameAr': 'قداس ثاني', 'weekday': 7, 'start': '09:00', 'visible': true}),
+        ],
+      });
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('liturgies')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Delete l1 at t = 0s, then delete l2 at t = 2s.
+      await tester.tap(find.byKey(const ValueKey('delete-l1')));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 2));
+      await tester.tap(find.byKey(const ValueKey('delete-l2')));
+      await tester.pump();
+      expect(find.text('تراجع عن الكل'), findsOneWidget);
+
+      // Advance to t = 8s from first delete (6s after second delete): both still pending, 0 delete writes.
+      await tester.pump(const Duration(seconds: 6));
+      expect(repo.deletedIds, isEmpty);
+      expect(find.text('تراجع عن الكل'), findsOneWidget);
+
+      // Tap "تراجع عن الكل" at t = 8s -> restores both cleanly with 0 delete writes.
+      await tester.tap(find.text('تراجع عن الكل'));
+      await tester.pumpAndSettle();
+      expect(find.text('قداس أول'), findsOneWidget);
+      expect(find.text('قداس ثاني'), findsOneWidget);
+      expect(isSoftDeleted(repo.collections['liturgies']!.firstWhere((d) => d.id == 'l1').data), isFalse);
+      expect(isSoftDeleted(repo.collections['liturgies']!.firstWhere((d) => d.id == 'l2').data), isFalse);
+      expect(repo.deletedIds, isEmpty);
+
+      await tester.pump(const Duration(seconds: 15));
+      expect(repo.deletedIds, isEmpty);
+    });
+
+    testWidgets('FAB stays >=48px above Undo SnackBar and ignores stray follow-up taps at vacated Undo spot (desktop & 342px)', (tester) async {
+      for (final size in const [Size(1100, 800), Size(342, 700)]) {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        final repo = _TestAdminBackend(initialCollections: {
+          'liturgies': [
+            for (var i = 1; i <= 8; i++)
+              AdminDoc('l$i', {
+                'type': 'mass',
+                'nameAr': 'قداس $i',
+                'weekday': 7,
+                'start': '07:00',
+                'visible': true,
+              }),
+          ],
+        });
+
+        await tester.pumpWidget(_app(
+          CollectionListScreen(repo: repo, def: collectionById('liturgies')!),
+          locale: const Locale('ar'),
+        ));
+        await tester.pumpAndSettle();
+
+        final fabFinder = find.byType(FloatingActionButton);
+        final restingFabRect = tester.getRect(fabFinder);
+
+        // Delete 2 items -> FAB must sit clearly above Undo SnackBar (>= 48 px gap).
+        await tester.tap(find.byKey(const ValueKey('delete-l1')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('delete-l2')));
+        await tester.pumpAndSettle();
+
+        final snackRect = tester.getRect(find.byType(SnackBar));
+        final actionRect = tester.getRect(find.byType(SnackBarAction));
+        final elevatedFabRect = tester.getRect(fabFinder);
+        expect(elevatedFabRect.overlaps(snackRect), isFalse, reason: 'width=${size.width}');
+        expect(elevatedFabRect.overlaps(actionRect), isFalse, reason: 'width=${size.width}');
+        expect(snackRect.top - elevatedFabRect.bottom, greaterThanOrEqualTo(48.0),
+            reason: 'FAB must keep >=48px gap above Undo SnackBar at width=${size.width}');
+
+        // Record exact Undo button tap spot, tap Undo, then tap that same spot twice right after close.
+        final undoSpot = actionRect.center;
+        await tester.tapAt(undoSpot);
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(find.byType(SnackBar), findsNothing);
+
+        // Follow-up taps at +100ms and +350ms MUST NOT hit the FAB or open an empty DocEditor!
+        await tester.tapAt(undoSpot);
+        await tester.pump(const Duration(milliseconds: 250));
+        await tester.tapAt(undoSpot);
+        await tester.pump();
+        expect(find.byType(DocEditor), findsNothing,
+            reason: 'Stray follow-up taps at vacated Undo spot must not open DocEditor (width=${size.width})');
+        expect(tester.getRect(fabFinder).overlaps(actionRect), isFalse);
+
+        // After the 650ms cooldown finishes, FAB returns cleanly to its resting position.
+        await tester.pump(const Duration(milliseconds: 450));
+        await tester.pumpAndSettle();
+        expect((tester.getRect(fabFinder).bottom - restingFabRect.bottom).abs(), lessThanOrEqualTo(1.0));
+
+        // Scroll to the bottom -> _listBottomPadding still keeps last card's Delete button clear of FAB.
+        final scrollable = tester.state<ScrollableState>(
+          find.descendant(of: find.byType(CustomScrollView), matching: find.byType(Scrollable)).first,
+        );
+        scrollable.position.jumpTo(scrollable.position.maxScrollExtent);
+        await tester.pumpAndSettle();
+        final lastDeleteRect = tester.getRect(find.byKey(const ValueKey('delete-l8')));
+        final bottomFabRect = tester.getRect(fabFinder);
+        expect(bottomFabRect.overlaps(lastDeleteRect), isFalse, reason: 'width=${size.width}');
+        expect(lastDeleteRect.bottom, lessThanOrEqualTo(bottomFabRect.top - 4), reason: 'width=${size.width}');
+      }
+    });
+
+    testWidgets('soft-delete writes deletedAt immediately with 0 repo.delete on 2s dispose/refresh; lazy purge runs only after 10s', (tester) async {
+      tester.view.physicalSize = const Size(900, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _TestAdminBackend(initialCollections: {
+        'liturgies': [
+          AdminDoc('l1', {'type': 'mass', 'nameAr': 'قداس الأحد', 'weekday': 7, 'start': '07:00', 'visible': true}),
+        ],
+      });
+      final def = collectionById('liturgies')!;
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: def),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // t = 0s: soft-delete writes deletedAt via update, zero repo.delete calls.
+      await tester.tap(find.byKey(const ValueKey('delete-l1')));
+      await tester.pump();
+      expect(repo.deletedIds, isEmpty);
+      expect(isSoftDeleted(repo.collections['liturgies']!.first.data), isTrue);
+
+      // t = 2s: simulate page refresh (unmount/dispose + remount).
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpWidget(_app(const SizedBox.shrink(), locale: const Locale('ar')));
+      await tester.pumpAndSettle();
+      // dispose() cancels local timers without flushing repo.delete.
+      expect(repo.deletedIds, isEmpty);
+
+      // Remount at t = 2s: item remains hidden (soft-deleted) and still NOT hard-deleted.
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: def),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text('قداس الأحد'), findsNothing);
+      expect(find.byType(SnackBar), findsNothing);
+      expect(repo.deletedIds, isEmpty);
+
+      // Only once >=10s have elapsed since deletedAt does lazy purge hard-delete the doc.
+      await purgeExpiredSoftDeletes(
+        repo,
+        def,
+        repo.collections['liturgies']!,
+        clock: () => DateTime.now().toUtc().add(const Duration(seconds: 12)),
+      );
+      expect(repo.deletedIds, ['liturgies/l1']);
+    });
   });
 
   group('UnsavedBar', () {
@@ -4458,6 +4733,59 @@ void main() {
       await tester.tap(find.text('أبونا فلان'));
       await tester.pumpAndSettle();
       expect(find.byType(DocEditor), findsOneWidget);
+    });
+
+    testWidgets(
+        'desktop visibility eye: 5 rapid taps during write toggle once, taps 0.6s apart toggle separately, and never open DocEditor',
+        (tester) async {
+      tester.view.physicalSize = const Size(1200, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _ControlledUpdateBackend(initialCollections: {
+        'liturgies': [
+          AdminDoc('l1', {'type': 'mass', 'nameAr': 'قداس الأحد', 'weekday': 7, 'start': '07:00', 'visible': true}),
+        ],
+      });
+      addTearDown(repo.dispose);
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('liturgies')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      final btn = find.byKey(const ValueKey('visibility-l1'));
+      final rect = tester.getRect(btn);
+
+      // 5 rapid taps while write is in flight -> exactly 1 write, 0 DocEditor opens.
+      final firstWrite = repo.hold('liturgies', 'l1');
+      for (var i = 0; i < 5; i++) {
+        await tester.tapAt(i.isEven ? rect.center : rect.topLeft + const Offset(2, 2));
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+      expect(repo.updates.where((u) => u.collection == 'liturgies' && u.id == 'l1'), hasLength(1));
+      expect(find.byType(DocEditor), findsNothing);
+
+      // Finish first write, wait 600ms, then tap again (separate intentional toggle) -> 2nd write, still 0 DocEditor.
+      firstWrite.complete();
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 600));
+
+      final secondWrite = repo.hold('liturgies', 'l1');
+      await tester.tap(btn);
+      await tester.pump();
+      // Tap rim and trailing edge directly beneath eye while second write settles -> still never opens DocEditor.
+      await tester.tapAt(rect.bottomRight - const Offset(1, 1));
+      await tester.tapAt(rect.bottomCenter + const Offset(0, 4));
+      secondWrite.complete();
+      await tester.pumpAndSettle();
+
+      final visUpdates = repo.updates.where((u) => u.collection == 'liturgies' && u.id == 'l1').toList();
+      expect(visUpdates, hasLength(2));
+      expect(visUpdates[0].data['visible'], isFalse);
+      expect(visUpdates[1].data['visible'], isTrue);
+      expect(find.byType(DocEditor), findsNothing);
     });
 
     testWidgets('row visibility in-flight completion after dispose or repo swap does not throw', (tester) async {
