@@ -100,8 +100,8 @@ Notable details:
   `mapsUrl`/`heroImageUrl` keep length-only checks.
 - `validPriest`: `rank` ∈ hegumen/priest, `status` ∈ serving/departed, dates ≤ 10 chars.
 - **Image display styles (PR #15, ADR-023):** `common()` accepts `imageStyle` only as absent/`null`/`avatar`/`card`/
-  `banner` when it changes; it is on the allow-list of the 9 image collections (and `ownFieldsUnchanged`), never on
-  `liturgies`. `validFeatures` accepts `imageStyles` as a map whose keys are the 9 collections and values the 3 styles.
+  `banner` when it changes; it is on the allow-list of the 8 active image collections (`+ entries/pages` and `ownFieldsUnchanged`), never on
+  `liturgies`. `validFeatures` accepts `imageStyles` as a map whose keys are the 8 active collections + legacy `'clinics'` (Decision `D1`) and values the 3 styles.
   Emulator tests: "ADR-023" group in `tool/rules_test/rules.test.mjs`.
 - **Verse of the day (PR #16, ADR-024):** `validFeatures` allows `dailyVerse`; `validDailyVerse` (only when it changes):
   map with keys ⊆ mode/textAr/refAr, `mode` ∈ daily/fixed, strings with text ≤500 and ref ≤60
@@ -151,7 +151,7 @@ Notable details:
 - **Owner-only settings & admin management (P2-18R, P2-27b):** Editors and owners share content, inbox, media, and standard settings (`settings/church`, `settings/notifications` schedules, and standard `settings/features` switches/today/live/headers) rights; **`admins/*` management, `settings/contact`, `settings/assistant`, and changing `settings/features.{venues, audiences, seasonVerses, englishEnabled}` require `isOwner()`** (gated on `changed` keys in `validFeatures` so editor saves of untouched `settings/features` fields never evaluate `isOwner()`; `englishEnabled` also sits in `installPushKeys()` outside `legacyFeatureKeys()` to preserve the expression budget). Public reads of `settings/contact`, `settings/assistant`, and `settings/features` remain unchanged.
 - Tests: `tool/rules_test/rules.test.mjs` (Node test runner + `@firebase/rules-unit-testing` in the Firestore
   emulator, project `demo-church-portal`): public read/no write, non-admin denied, contact create + throttle,
-  every seed doc valid, clinic create/hide/reorder/delete, unknown keys/bad types/bad times rejected, stamps,
+  every seed doc valid, `/clinics/{id}` reads/writes denied (PR 5A, ADR-082), active content create/hide/reorder/delete (`facilities`/`liturgies`/`meetings`), unknown keys/bad types/bad times rejected, stamps,
   legacy fields, church coordinates, feature toggles shapes, inbox, owner/editor admin management, **optional
   images** (valid url/inline/null images, malformed maps, image on a collection without it, `media/` public read,
   admin-only writes, type/size/stamp checks, the 950,000-char cap), and PR 1's **SEC-01–SEC-04** (standalone
@@ -159,7 +159,7 @@ Notable details:
   `Season.replacesRegular`, `coordinatesApproximate`, safe links incl. upper-case schemes, replaying an existing message, a 5 s resend),
   and PR #10's upper-case `HTTPS://` `bannerLink`, untouched legacy key on a `settings/features` merge, and stamped
   `setAdmin` writes; PR #11's detail pages (worst-case create + 8-photo gallery + 15 rows + list-with-text saves on all
-  7 collections, optional/cleared values, cover image on meetings/clinics/facilities, gallery/extraFields shapes,
+  7 collections, optional/cleared values, cover image on meetings/facilities, gallery/extraFields shapes,
   `javascript:` links, bools/lengths, no duplicate inputs, no detail keys on liturgies/seasons/alerts, 80-key cap,
   stored lists re-checked only when changed) and `pageHeaders`/`footer`. PR #12 adds "admin editor save paths": the
   real write sequence of `DocEditor` (max-size create, then the 8-photo gallery, then 15 rows, on all 7
@@ -377,8 +377,7 @@ console.
      maps URL, phones; socials: WhatsApp, Facebook, YouTube, WhatsApp channel, Instagram); weekly liturgy schedule
      (undated only), special one-off services (every non-seasonal dated liturgy — even with a weekday set — while
      `isDatedLiturgyCurrent`), Holy seasons (active seasons only, `[REPLACES regular schedule]` / `[ADDITIVE …]`,
-     `[ACTIVE NOW]`) (schedule); current announcements (alerts: `visibleAlerts`); clinics (active only, incl.
-     WhatsApp); meetings (incl. notes); activities; public services (facilities); About the church (history: bishop
+     `[ACTIVE NOW]`) (schedule); current announcements (alerts: `visibleAlerts`); meetings (incl. notes); activities; public services (facilities); About the church (history: bishop
      + history summary, each language clipped to 700); serving priests and departed priests with repose date;
      patron saints; **Our story** (milestones, description clipped to 300). Item detail pages (`detailsEnabled`
      not `false`): detail text (300 per language), custom fields (titles 100 / values 300), contacts when
@@ -410,7 +409,7 @@ console.
   lists, and — while their section is on — milestones, contact settings, categories + entries, custom pages; the
   section flags are re-read after each round so a section switched on meanwhile is awaited too (CodeRabbit).
 - **PR #20 (grounding fix):** the page **`ref.watch`es every grounding provider in `build`** (`_watchGrounding`:
-  features, liturgies, seasons, clinics, meetings, activities, facilities, alerts, priests, saints; milestones /
+  features, liturgies, seasons, meetings, activities, facilities, alerts, priests, saints; milestones /
   contact settings / categories + entries / custom pages while their section is on). **Riverpod 3 pauses a provider
   with no listener** (its stream subscription is paused in `onCancel`), so the PR #19 page — which only `ref.read`
   them — never got liturgies & co. on a direct visit to `/ask`: `_awaitContent` hit its 10 s timeout and the first

@@ -222,12 +222,13 @@ Future<void> purgeExpiredSoftDeletes(
   Iterable<AdminDoc> docs, {
   DateTime Function()? clock,
   bool Function(String id)? isLocalPending,
+  bool Function(AdminDoc doc)? shouldSkip,
   Set<String>? purging,
   bool removeMedia = true,
 }) async {
   final now = (clock?.call() ?? DateTime.now()).toUtc();
   for (final d in List<AdminDoc>.from(docs)) {
-    if (isLocalPending?.call(d.id) == true) continue;
+    if (shouldSkip?.call(d) ?? (isLocalPending?.call(d.id) == true)) continue;
     if (!isExpiredSoftDelete(d.data, now)) continue;
     if (purging != null && !purging.add(d.id)) continue;
     try {
@@ -250,19 +251,17 @@ class SoftDeleteUndo {
   final PendingDelete _pending;
   final bool Function() isMounted;
   final void Function() onChanged;
-  final VoidCallback? onBarShown;
-  final VoidCallback? onBarHidden;
-  final String singleUndoKey;
-  final bool closeBarOnDispose;
+  final ValueChanged<bool>? onBarChanged;
   final bool removeMedia;
 
   final Map<String, ({AdminBackend repo, String collection, String title})> _entries = {};
+  final Map<String, DateTime> _pendingDeletedAt = {};
+  final Map<String, DateTime> _undoneCutoffs = {};
   final Map<String, Future<bool>> _inFlightWrites = {};
   final Map<String, int> _gen = {};
   final Set<String> _restoringIds = {};
   final Set<String> _purging = {};
   ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? _controller;
-  bool _barUsesMulti = false;
   final ValueNotifier<({int count, String title})?> _barState = ValueNotifier(null);
   Timer? _barTimer;
   final List<SnackBar> _deferredSnacks = [];
@@ -270,10 +269,7 @@ class SoftDeleteUndo {
   SoftDeleteUndo({
     required this.isMounted,
     required this.onChanged,
-    this.onBarShown,
-    this.onBarHidden,
-    this.singleUndoKey = 'deletedItemUndo',
-    this.closeBarOnDispose = false,
+    this.onBarChanged,
     this.removeMedia = true,
     Duration window = const Duration(seconds: 10),
   }) : _pending = PendingDelete(window: window);
@@ -286,8 +282,17 @@ class SoftDeleteUndo {
   bool isVisible(AdminDoc d) =>
       (!isSoftDeleted(d.data) || _restoringIds.contains(d.id)) && !_pending.isPending(d.id);
 
-  bool isProtectedFromPurge(String id) =>
-      _pending.isPending(id) || _restoringIds.contains(id) || _inFlightWrites.containsKey(id);
+  bool isProtectedFromPurge(String id, [Map<String, dynamic>? data]) {
+    if (_pending.isPending(id) || _restoringIds.contains(id) || _inFlightWrites.containsKey(id)) {
+      return true;
+    }
+    final cutoff = _undoneCutoffs[id];
+    final ts = data?['deletedAt'];
+    if (cutoff != null && ts is DateTime && !ts.toUtc().isAfter(cutoff)) {
+      return true;
+    }
+    return false;
+  }
 
   void clearTransitionState() {
     _restoringIds.clear();
@@ -300,14 +305,14 @@ class SoftDeleteUndo {
     List<AdminDoc> docs,
   ) {
     final now = DateTime.now().toUtc();
-    if (docs.any((d) => isExpiredSoftDelete(d.data, now) && !isProtectedFromPurge(d.id))) {
+    if (docs.any((d) => isExpiredSoftDelete(d.data, now) && !isProtectedFromPurge(d.id, d.data))) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (isMounted()) {
           purgeExpiredSoftDeletes(
             repo,
             def,
             docs,
-            isLocalPending: isProtectedFromPurge,
+            shouldSkip: (d) => isProtectedFromPurge(d.id, d.data),
             purging: _purging,
             removeMedia: removeMedia,
           );
@@ -363,6 +368,8 @@ class SoftDeleteUndo {
     final gen = (_gen[id] ?? 0) + 1;
     _gen[id] = gen;
     _restoringIds.remove(id);
+    _undoneCutoffs.remove(id);
+    _pendingDeletedAt[id] = deleteNow;
 
     final priorPending = [
       for (final entry in _entries.entries.toList())
@@ -374,6 +381,7 @@ class SoftDeleteUndo {
     _entries[id] = (repo: repo, collection: collection, title: title);
     _pending.schedule(id, () async {
       _entries.remove(id);
+      _pendingDeletedAt.remove(id);
       try {
         await repo.delete(collection, id);
         if (removeMedia) {
@@ -423,7 +431,6 @@ class SoftDeleteUndo {
       undoLabel: undoLabel,
       undoAllLabel: undoAllLabel,
       resetTimer: true,
-      clearQueue: true,
     );
 
     unawaited(_enqueueWrite(id, (priorSelfWrite) async {
@@ -440,6 +447,7 @@ class SoftDeleteUndo {
         if (isMounted() && _gen[id] == gen) {
           _pending.undo(id);
           _entries.remove(id);
+          _pendingDeletedAt.remove(id);
           onChanged();
           _syncAfterExpiry(
             messenger,
@@ -475,6 +483,7 @@ class SoftDeleteUndo {
     for (final p in priorPending) {
       final token = priorTokens[p.id];
       final priorGen = _gen[p.id];
+      _pendingDeletedAt[p.id] = deleteNow;
       unawaited(_enqueueWrite(p.id, (prevChain) async {
         var priorWritten = true;
         if (prevChain != null) {
@@ -513,7 +522,6 @@ class SoftDeleteUndo {
     _barTimer?.cancel();
     _barTimer = null;
     _controller = null;
-    _barUsesMulti = false;
     _barState.value = null;
   }
 
@@ -528,7 +536,7 @@ class SoftDeleteUndo {
       final hadActiveBar = _controller != null;
       _clearActiveBarState();
       if (hadActiveBar) {
-        onBarHidden?.call();
+        onBarChanged?.call(false);
         if (messenger != null && messenger.mounted) {
           messenger.removeCurrentSnackBar();
         }
@@ -550,7 +558,6 @@ class SoftDeleteUndo {
       undoLabel: undoLabel,
       undoAllLabel: undoAllLabel,
       resetTimer: false,
-      clearQueue: false,
     );
   }
 
@@ -574,14 +581,13 @@ class SoftDeleteUndo {
           undoLabel: undoLabel,
           undoAllLabel: undoAllLabel,
           resetTimer: true,
-          clearQueue: false,
         );
         return;
       }
       final hadActiveBar = _controller != null;
       _clearActiveBarState();
       if (hadActiveBar) {
-        onBarHidden?.call();
+        onBarChanged?.call(false);
         if (messenger.mounted) messenger.removeCurrentSnackBar();
         onChanged();
       }
@@ -597,7 +603,7 @@ class SoftDeleteUndo {
   }) async {
     final hadActiveBar = _controller != null;
     _clearActiveBarState();
-    if (hadActiveBar) onBarHidden?.call();
+    if (hadActiveBar) onBarChanged?.call(false);
     if (messenger.mounted) messenger.removeCurrentSnackBar();
 
     final ids = _pending.pendingIds.toList();
@@ -607,6 +613,8 @@ class SoftDeleteUndo {
         final undoGen = (_gen[pid] ?? 0) + 1;
         _gen[pid] = undoGen;
         final entry = _entries.remove(pid);
+        final deletedAt = _pendingDeletedAt.remove(pid);
+        if (deletedAt != null) _undoneCutoffs[pid] = deletedAt;
         _restoringIds.add(pid);
         undone.add((
           id: pid,
@@ -670,16 +678,16 @@ class SoftDeleteUndo {
     required String undoLabel,
     required String undoAllLabel,
     required bool resetTimer,
-    bool clearQueue = false,
   }) {
     if (!isMounted() || messenger == null || !messenger.mounted) return;
     final pendingCount = _pending.pendingIds.length;
     if (pendingCount == 0) return;
     final wantMulti = pendingCount > 1;
+    final prevMulti = (_barState.value?.count ?? 0) > 1;
     _barState.value = (count: pendingCount, title: title);
-    onBarShown?.call();
+    onBarChanged?.call(true);
 
-    if (_controller != null && _barUsesMulti == wantMulti) {
+    if (_controller != null && prevMulti == wantMulti) {
       if (resetTimer) {
         _scheduleBarTimer(
           messenger,
@@ -696,8 +704,6 @@ class SoftDeleteUndo {
       _barTimer = null;
     }
     _controller = null;
-    _barUsesMulti = wantMulti;
-    if (clearQueue) messenger.clearSnackBars();
     messenger.removeCurrentSnackBar();
     final undoController = messenger.showSnackBar(
       SnackBar(
@@ -710,7 +716,7 @@ class SoftDeleteUndo {
             final lastTitle = state?.title ?? title;
             final text = count > 1
                 ? ctx.tr('deletedItemMultiUndo', {'n': '$count', 'last': lastTitle})
-                : ctx.tr(singleUndoKey, {'n': lastTitle});
+                : ctx.tr('deletedItemUndo', {'n': lastTitle});
             return Text(text);
           },
         ),
@@ -730,7 +736,7 @@ class SoftDeleteUndo {
     undoController.closed.then((_) {
       if (identical(_controller, undoController)) {
         _clearActiveBarState();
-        onBarHidden?.call();
+        onBarChanged?.call(false);
         onChanged();
         flushDeferredSnacks(messenger);
       }
@@ -750,8 +756,7 @@ class SoftDeleteUndo {
     _barTimer = null;
     final ctrl = _controller;
     _controller = null;
-    _barUsesMulti = false;
-    if (closeBarOnDispose && ctrl != null) {
+    if (ctrl != null) {
       // Defer close() out of State.dispose()'s locked finalizeTree phase, and keep
       // _barState alive until the ~250 ms exit transition finishes so late or sibling
       // Scaffold rebuilds never observe a disposed ValueNotifier.
@@ -767,6 +772,8 @@ class SoftDeleteUndo {
     _deferredSnacks.clear();
     _pending.dispose();
     _entries.clear();
+    _pendingDeletedAt.clear();
+    _undoneCutoffs.clear();
     _inFlightWrites.clear();
     _gen.clear();
     _restoringIds.clear();

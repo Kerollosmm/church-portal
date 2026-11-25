@@ -7,9 +7,8 @@ rules_version = '2';
 //
 // To use it after upgrading to Blaze: add
 //   "storage": { "rules": "storage.rules" }
-// to firebase.json, deploy with `firebase deploy --only storage`, implement
-// StorageMediaRepository (lib/data/media_repository.dart) and build with
-// --dart-define=MEDIA_BACKEND=storage.
+// to firebase.json, deploy with `firebase deploy --only storage`, and
+// implement a Storage-backed MediaRepository in lib/data/media_repository.dart (ADR-082).
 service firebase.storage {
   match /b/{bucket}/o {
     // Admins are the Firestore admins/{uid} docs (cross-service rules).

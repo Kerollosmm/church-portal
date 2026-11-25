@@ -267,8 +267,7 @@ const Map<String, List<String>> adminStrings = {
   // Phase 4 PR1: a cover image with a bad link blocks the save (never dropped
   // silently); the message names both fixes so the admin can choose.
   'invalidCoverImage': ['لينك الصورة مش صالح — صلّح اللينك أو امسح الصورة.', 'Invalid image link — fix the link or remove the image.'],
-  // Phase 4 PR1: neutral wording for list deletes (page = feminine, section /
-  // item = masculine); `deletedUndo` in l10n.dart stays for the inbox.
+  // Neutral delete wording shared by collection lists and inbox (`SoftDeleteUndo`).
   'deletedItemUndo': ['تم مسح «{n}»', 'Deleted "{n}"'],
   'deletedItemMultiUndo': ['تم مسح {n} عناصر (آخرهم «{last}»)', 'Deleted {n} items (latest: "{last}")'],
   // Phase 4 PR2: built-in section badge in categories screen
@@ -381,7 +380,6 @@ const Map<String, List<String>> adminStrings = {
   'nowHidden': ['أصبح العنصر مخفيًا', 'Item is now hidden'],
   'orderSaved': ['تم حفظ الترتيب', 'Order saved'],
   'deleted': ['تم الحذف', 'Deleted'],
-  'deletedUndo': ['اتمسح «{n}»', 'Deleted "{n}"'],
   'undo': ['تراجع', 'Undo'],
   'undoAll': ['تراجع عن الكل', 'Undo all'],
   'discardChanges': ['لديك تعديلات غير محفوظة. هل تريد تجاهلها؟', 'You have unsaved changes. Discard them?'],

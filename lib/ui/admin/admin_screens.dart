@@ -685,8 +685,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
     onChanged: () {
       if (mounted) setState(() {});
     },
-    singleUndoKey: 'deletedUndo',
-    closeBarOnDispose: true,
     removeMedia: false,
   );
   static const _messagesDef = CollectionDef('contact_messages', '', '', [], []);

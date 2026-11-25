@@ -107,8 +107,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     onChanged: () {
       if (mounted) setState(() {});
     },
-    onBarShown: _cancelFabCooldown,
-    onBarHidden: _startFabCooldown,
+    onBarChanged: (active) => active ? _cancelFabCooldown() : _startFabCooldown(),
   );
   final Set<String> _togglingVisibility = {};
   final Map<String, bool> _optimisticVisible = {};
