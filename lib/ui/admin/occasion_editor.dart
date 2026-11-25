@@ -5,6 +5,7 @@ import '../../core/theme.dart';
 import '../../domain/cairo_time.dart';
 import '../../domain/features.dart';
 import '../../domain/occasion_theme.dart';
+import '../../domain/reminders.dart' show isoDate;
 import 'admin_strings.dart';
 import 'state_switch.dart';
 
@@ -96,7 +97,7 @@ class _OccasionThemeEditorState extends State<OccasionThemeEditor> {
       lastDate: DateTime.utc(_today.year + 5, 12, 31),
       initialDate: init.isBefore(first) ? first : init,
     );
-    return d == null ? null : formatDate(DateTime.utc(d.year, d.month, d.day));
+    return d == null ? null : isoDate(DateTime.utc(d.year, d.month, d.day));
   }
 
   void _setRange(int i, ThemeRange r) => _setO((o) {
@@ -237,8 +238,8 @@ class _OccasionThemeEditorState extends State<OccasionThemeEditor> {
                       ...o.schedule,
                       ThemeRange(
                         theme: f.theme,
-                        start: formatDate(today),
-                        end: formatDate(today.add(const Duration(days: 6))),
+                        start: isoDate(today),
+                        end: isoDate(today.add(const Duration(days: 6))),
                       ),
                     ])),
             icon: const Icon(Icons.add),

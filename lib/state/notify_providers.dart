@@ -238,8 +238,8 @@ List<Map<String, dynamic>?> _dayEventsForSnapshot(List<DayEvent> events) {
   for (final e in events) {
     final map = {
       'id': e.id,
-      'date': e.date != null ? dayKey(e.date!) : null,
-      'endDate': e.endDate != null ? dayKey(e.endDate!) : null,
+      'date': e.date != null ? isoDate(e.date!) : null,
+      'endDate': e.endDate != null ? isoDate(e.endDate!) : null,
       'start': e.start,
       'end': e.end,
       'titleAr': e.titleAr,

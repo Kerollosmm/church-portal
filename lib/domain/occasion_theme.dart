@@ -7,6 +7,8 @@
 
 import 'dart:math' as math;
 
+import 'reminders.dart' show isoDate;
+
 // ---------------------------------------------------------------------------
 // WCAG 2.x colour maths on ARGB ints.
 // ---------------------------------------------------------------------------
@@ -826,9 +828,6 @@ DateTime orthodoxEaster(int year) {
 /// A date-only value (UTC midnight) for y/m/d arithmetic without DST.
 DateTime dateOnly(int y, int m, int d) => DateTime.utc(y, m, d);
 
-String formatDate(DateTime d) =>
-    '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-
 final _dateRe = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$');
 
 /// `YYYY-MM-DD` as a date-only value, or null when malformed / impossible.
@@ -1088,13 +1087,13 @@ class OccasionConfig {
     return [
       ThemeRange(
         theme: ThemePresets.holyWeek,
-        start: formatDate(e.subtract(const Duration(days: 7))),
-        end: formatDate(e.subtract(const Duration(days: 1))),
+        start: isoDate(e.subtract(const Duration(days: 7))),
+        end: isoDate(e.subtract(const Duration(days: 1))),
       ),
       ThemeRange(
         theme: ThemePresets.resurrection,
-        start: formatDate(e),
-        end: formatDate(e.add(Duration(days: resurrectionDays - 1))),
+        start: isoDate(e),
+        end: isoDate(e.add(Duration(days: resurrectionDays - 1))),
       ),
     ];
   }

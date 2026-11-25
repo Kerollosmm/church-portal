@@ -192,7 +192,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
   bool _pushEnabled = false;
   final TextEditingController _vapidCtrl = TextEditingController();
   final Set<NotifyType> _offeredTypes = Set.of(NotifyType.values);
-  final Set<int> _reminderLeads = {0, 15, 60, 1440};
+  final Set<int> _reminderLeads = Set.of(PushSettings.defaultReminderLeads);
   int _reminderDefaultLead = 60;
   final Set<String> _reminderSources = {'lit', 'mtg', 'day'};
   final Map<NotifyType, Map<String, TextEditingController>> _typeCtrls = {};

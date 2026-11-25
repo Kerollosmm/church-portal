@@ -13,6 +13,7 @@ import 'coptic_feasts.dart';
 import 'media.dart';
 import 'features.dart' show Hideable;
 import 'models.dart' show Liturgy, Season, parseDate, parseHm;
+import 'reminders.dart' show isoDate;
 import 'schedule.dart';
 
 int _combiningClass(int codeUnit) {
@@ -91,10 +92,6 @@ String nfcNormalizeArabic(String input) {
 
 String _str(Object? v) => v is String ? v : (v == null ? '' : v.toString());
 bool _bool(Object? v, bool def) => v is bool ? v : def;
-
-/// `YYYY-MM-DD` of a date-only value.
-String dayKey(DateTime d) =>
-    '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
 /// Where the Coptic date strip shows.
 class CopticStripModes {
@@ -355,7 +352,7 @@ class DayEvent implements Hideable {
     }
     if (m == null) return null;
 
-    final dateStr = (m['date'] is DateTime ? dayKey(m['date'] as DateTime) : _str(m['date'])).trim();
+    final dateStr = (m['date'] is DateTime ? isoDate(m['date'] as DateTime) : _str(m['date'])).trim();
     final startStr = _str(m['start']).trim();
     final titleAr = _str(m['titleAr']).trim();
 
@@ -500,7 +497,7 @@ class SynaxariumData {
     return SynaxariumData(days: days, fetchedAt: parseDate(m['fetchedAt']));
   }
 
-  SynaxariumDay? dayOf(DateTime date) => days[dayKey(date)];
+  SynaxariumDay? dayOf(DateTime date) => days[isoDate(date)];
 }
 
 enum TopEventKind { church, service, feast, commemoration }
