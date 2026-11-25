@@ -295,35 +295,34 @@ For each `CollectionDef`:
   **kept** — Firestore may still commit the queued write pointing at them; any other error deletes them (BUG-13).
   Note: `AdminRepository.save`/`saveDoc` set no timeout of their own today (the only 15 s timeout is the role/access read
   in `adminAccess`), so this path applies to a timeout raised by a caller/backend wrapper.
-- **Add** (FAB) / tap to **edit** → full-screen `DocEditor`; **delete** in `collection_list.dart` uses a 10-second
-  reversible soft-delete buffer (`PendingDelete`, `pending_delete.dart`). Non-category items register synchronously into
-  `_pendingDelete` / `_pendingEntries` and immediately write Firestore
+- **Add** (FAB) / tap to **edit** → full-screen `DocEditor`; **delete** in `collection_list.dart` uses the shared 10-second
+  reversible soft-delete coordinator (`SoftDeleteUndo` + `PendingDelete`, `pending_delete.dart`). Non-category items register synchronously into
+  `SoftDeleteUndo` and immediately write Firestore
   `deletedAt: DateTime.now().toUtc()` (allowed by `meta()` and `optTimestamp(d, 'deletedAt')` in `firestore.rules`,
-  serialized per doc via `_inFlightDeleteWrites` with monotonic `_deleteGen` guards so rapid consecutive deletes never
+  serialized per doc via `_inFlightWrites` with monotonic `_gen` guards so rapid consecutive deletes never
   race or fall back to a single-item bar),
-  hide immediately from the visible list (`_pendingDelete.isPending` / `isSoftDeleted`), and show a 10-second `SnackBar`
-  right away (`persist: true` driven by `_undoSnackBarTimer`, updating multi-delete text in place via `_undoBarState`
-  across 2 → 3+ deletes without `ScaffoldMessenger` queue churn, while clearing prior queues on user deletes and
-  preserving queued external bars on automatic expiry refreshes) on `CollectionListScreen`'s inner `ScaffoldMessenger`.
+  hide immediately from the visible list (`SoftDeleteUndo.isVisible` / `isSoftDeleted`), and show a 10-second `SnackBar`
+  right away (`persist: true` driven by `_barTimer`, updating multi-delete text in place via `_barState`
+  across 2 → 3+ deletes without `ScaffoldMessenger` queue churn, while leaving any external queued SnackBars untouched)
+  on `CollectionListScreen`'s inner `ScaffoldMessenger`.
   While the Undo bar is active, `_UndoClearFabLocation` elevates the `+` FAB with a **48 px** vertical gap above the
   SnackBar and holds that elevated clearance across SnackBar swaps and for a **650 ms** post-close cooldown
-  (`_fabCooldownTimer`, paired with a transparent `undo-vacated-tap-shield` over the vacated SnackBar strip) so follow-up taps aimed at the vacated Undo button never hit the FAB or underlying rows to open `DocEditor`
-  (verified across desktop, 342 px, and 320 px / 200 %). The Undo bar uses «تم مسح «{n}»» (`deletedItemUndo`,
-  neutral wording — the page is feminine, the section/item masculine; the inbox keeps `deletedUndo` «اتمسح «{n}»») and
-  action «تراجع» (`undo`) or «تراجع عن الكل» (`undoAll`), and renews `deletedAt` + extends local timers via
+  (`_fabCooldownTimer` driven via `onBarChanged(bool)`, paired with a transparent `undo-vacated-tap-shield` over the vacated SnackBar strip) so follow-up taps aimed at the vacated Undo button never hit the FAB or underlying rows to open `DocEditor`
+  (verified across desktop, 342 px, and 320 px / 200 %). Both lists and inbox use neutral «تم مسح «{n}»» (`deletedItemUndo`) and
+  action «تراجع» (`undo`) or «تراجع عن الكل» (`undoAll`), and renew `deletedAt` + extend local timers via
   `PendingDelete.holdAll` / `releaseHold` (monotonic `_PendingHold.seq`, newest extending hold wins, cancelled anchor timers cleaned up) for earlier pending items whose renewal succeeds (preserving
   remaining original deadlines on failed renewals and updating the active Undo bar if an un-renewed item expires early).
   The soft-deleted document immediately vanishes from
   public collection views (`_docs` and `_col` in `FirestoreRepository`) and sitemap exports (`sitemapContentFromExport`).
-  Tapping «تراجع» / «تراجع عن الكل» (`_undoAllPending`) atomically cancels all pending timers, restores all rows in the UI immediately via optimistic `_restoringIds`, and clears `deletedAt: null` concurrently across the batch after each item's serialized write chain settles (`_checkLazyPurge` skips pending, `_restoringIds`, and `_inFlightDeleteWrites` docs via `_isProtectedFromPurge` so an expired snapshot during restore can never hard-delete an item being undone). If the 10 seconds elapse without undo, the deletion
-  commits to hard delete `widget.repo.delete(def.name, d.id)` and cleans up orphaned media (`removeOrphanedDocMedia`).
+  Tapping «تراجع» / «تراجع عن الكل» (`_undoAll`) atomically cancels all pending timers, restores all rows in the UI immediately via optimistic `_restoringIds`, and clears `deletedAt: null` concurrently across the batch after each item's serialized write chain settles (`checkLazyPurge` skips pending, `_restoringIds`, and `_inFlightWrites` docs via `isProtectedFromPurge` so an expired snapshot during restore can never hard-delete an item being undone). If the 10 seconds elapse without undo, the deletion
+  commits to hard delete `repo.delete(collection, id)` and (when `removeMedia: true`) cleans up orphaned media (`removeOrphanedDocMedia`).
   Pending-deletion items stay in `_lastDocs` until commit so their slugs remain reserved in `takenSlugs`, and scheduling
-  deletion captures `repo`, `def`, `media` and document data in closure. **Page refresh / navigation away (`dispose()`):**
-  local timers are cancelled **without** calling `flush()` or sending `repo.delete()`; `beforeunload` is strictly NOT used
+  deletion captures `repo`, `collection`, `media` and document data in closure. **Page refresh / navigation away (`dispose()`):**
+  local timers are cancelled **without** forwarding hard deletes (`repo.delete()`); `beforeunload` is strictly NOT used
   in `PendingDelete` (exclusive to `UnsavedGuard`). Because `deletedAt` was already written at delete time and in-memory
   Undo state resets on reload, refreshing the browser ~2 s after deleting intentionally keeps the item hidden from admin
   and public lists (while the Firestore doc still remains untouched until `deletedAt + 10s`), and subsequent admin opens
-  deterministically hard-delete it once expired via lazy purge (`purgeExpiredSoftDeletes`). Custom
+  deterministically hard-delete it once expired via `SoftDeleteUndo.checkLazyPurge` (`purgeExpiredSoftDeletes`). Custom
   categories (`categories`) remain confirmed via dialog (`_deleteCategory`) because deleting a category cascades to hide
   member items and clear category links. A new item saved in several writes keeps the id the first write created (the editor's
   `onSave` remembers it).
@@ -443,7 +442,7 @@ Newest first (`createdAt`). PR #18 (ADR-028): **box chips** (`box-<id>`) — All
 are general inquiries (c1). Status chips **«محتاجة رد» / Needs reply** (default, `status == new`) / **«تمت متابعتها» / Handled** / **«الكل» / All**. Each card: name (or
 «مُرسِل مجهول»), time, type / occasion / 📅 date chips, message, phone call (`msgCall-<id>`), WhatsApp (`msgWhatsApp-<id>`, shown only when `usableWhatsappLink(phone)` returns a valid `wa.me` mobile link — never for missing, malformed, or landline numbers), email (`mailto:`), internal notes.
 Bookings get a **status dropdown** new → contacted → confirmed / declined (`bookingStatus-<id>`); other open messages
-get one-tap **«تمّت» / Done** (`msgToggleStatus-<id>`, immediately removing the message from the default «محتاجة رد» filter). For handled non-booking messages, **«إعادة كجديدة» / Mark new** (`msgMarkNew-<id>`) sits inside an overflow dialog (`IconButton` `ValueKey('msgMore-<id>')` → `SimpleDialogOption` `ValueKey('msgMarkNew-<id>')`, label wrapped in `Flexible`) away from «تمّت» and the red Delete icon (`delete`). **Notes** (`notes-<id>`, `_NotesDialog`, ≤ 2000 → `adminNotes`), copy, and **delete** with 10-second soft-delete undo (`deletedAt` timestamp written via `PendingDelete`, SnackBar «اتمسح «{n}» · تراجع», and automatic lazy purge on screen open after 10s grace period).
+get one-tap **«تمّت» / Done** (`msgToggleStatus-<id>`, immediately removing the message from the default «محتاجة رد» filter). For handled non-booking messages, **«إعادة كجديدة» / Mark new** (`msgMarkNew-<id>`) sits inside an overflow dialog (`IconButton` `ValueKey('msgMore-<id>')` → `SimpleDialogOption` `ValueKey('msgMarkNew-<id>')`, label wrapped in `Flexible`) away from «تمّت» and the red Delete icon (`delete`). **Notes** (`notes-<id>`, `_NotesDialog`, ≤ 2000 → `adminNotes`), copy, and **delete** with `confirmNamedAction` confirmation and 10-second batched soft-delete undo (`SoftDeleteUndo` in `pending_delete.dart` with `removeMedia: false`, SnackBar «تم مسح «{n}» · تراجع» (`deletedItemUndo`) for single item or «تم مسح {n} عناصر (آخرهم «{last}») · تراجع عن الكل» (`deletedItemMultiUndo` / `undoAll`) for consecutive deletes, preserving queued non-undo SnackBars on the enclosing messenger, and automatic lazy purge via `checkLazyPurge` on screen open).
 The overview's "new messages" counts `status == new`.
 
 ### Contact form types (`ContactCategoriesScreen`, `contact_admin.dart`) → `settings/contact` (PR #18, PR 3J / P3-31)
@@ -521,16 +520,15 @@ Guards uncommitted edits across all administrative exit vectors:
 - **Web tab close, reload & browser back (PR #83):** on web platforms (`unsaved_guard_web.dart`), `addDirtyToken()` registers a browser `beforeunload` event handler (preventing accidental tab close/refresh) AND pushes a history sentinel (`_pushSentinel()`) with a capture-phase `popstate` event listener. When Browser Back is clicked while a form is dirty, `popstate` stops immediate propagation and triggers `confirmDiscardChanges`. Choosing «متابعة التعديل» repushes the sentinel; confirming discard safely pops the route. When the form is cleaned, the sentinel is cleanly popped via `history.back()`.
 - **Announcement draft:** closing or cancelling an open announcement editor (`_closeDraft`) checks dirty draft state and asks confirmation.
 
-### 10-second undo deletion (`PendingDelete`, `pending_delete.dart`)
-Reversible soft-delete buffer for collection items in `collection_list.dart`:
-- When an item (liturgy, meeting, activity, priest, saint, milestone, custom entry, custom page, etc.) is deleted, it immediately writes `deletedAt: Timestamp` to Firestore.
-- It is hidden from the admin list immediately (`_pendingDelete.isPending` / `isSoftDeleted`) and filtered out of all public collections (`FirestoreRepository._docs` and `_col`) and sitemaps.
-- A 10-second `SnackBar` appears: «تم مسح «{n}»» (`deletedItemUndo`) with action «تراجع» (`undo`).
-- The SnackBar is non-persistent (`persist: false`) and managed by `_undoSnackBarController` and a dedicated 10-second timer (`_undoSnackBarTimer`, cleaned up on new delete, undo tap, and `dispose`), ensuring both the SnackBar and the «تراجع» action dismiss completely after 10 seconds.
-- Tapping «تراجع» cancels the timer, restores the row, and sets `deletedAt: null` in Firestore.
-- When the 10 seconds expire, the deletion commits to hard delete `widget.repo.delete` and deletes unreferenced media (`removeOrphanedDocMedia`).
-- **Deterministic lazy purge on exit:** disposing `CollectionListScreen` cancels local timers without fire-and-forget delete calls; the soft-deleted doc is safely purged on subsequent admin open via `purgeExpiredSoftDeletes`. Browser `beforeunload` is strictly NOT used in `PendingDelete`.
-- **Category exception:** custom categories (`categories`) do not use `PendingDelete`; they require an explicit confirmation dialog due to cascading changes (hiding items in that category).
+### 10-second undo deletion (`PendingDelete` & `SoftDeleteUndo`, `pending_delete.dart`)
+Shared reversible soft-delete buffer for collection items (`collection_list.dart`) and the inbox (`MessagesScreen` in `admin_screens.dart`):
+- When an item (liturgy, meeting, activity, priest, saint, milestone, custom entry, custom page, etc.) or confirmed contact message is deleted, it is registered immediately in `PendingDelete`, writes `deletedAt: Timestamp` to Firestore (renewed across consecutive deletes in the same batch with serialized per-ID write guards and `holdAll` / `releaseHold` alignment), and is hidden immediately from the admin list (`SoftDeleteUndo.isVisible`) and filtered out of all public collections (`FirestoreRepository._docs` and `_col`) and sitemaps.
+- A 10-second `SnackBar` appears: «تم مسح «{n}»» (`deletedItemUndo`) with action «تراجع» (`undo`), upgrading in-place to «تم مسح {n} عناصر (آخرهم «{last}»)» (`deletedItemMultiUndo`) with «تراجع عن الكل» (`undoAll`) when multiple deletions overlap (preserving any queued non-undo SnackBars).
+- The SnackBar (`persist: true`, managed by `_controller` and `_barTimer` in `SoftDeleteUndo`) stays open through rapid deletes across the normal 10-second grace window (or until any in-flight `PendingDelete` write hold finishes), after which deferred non-undo error SnackBars flush once the Undo bar closes. FAB elevation (`_UndoClearFabLocation`), 48 px clearance, and 650 ms post-close cooldown (`_fabCooldownTimer`, `undo-vacated-tap-shield`) remain local to `CollectionListScreen`.
+- Tapping «تراجع» / «تراجع عن الكل» cancels the batch atomically, restores all rows in UI immediately, records undone `deletedAt` cutoffs (`_undoneCutoffs`) so stale pre-undo lazy-purge snapshots never delete restored docs, and clears `deletedAt: null` in Firestore cleanly (`_restoringIds` + `_inFlightWrites`).
+- When the 10 seconds expire, the deletion commits to hard delete `repo.delete` and (when `removeMedia: true`, i.e., `CollectionListScreen`) deletes unreferenced media (`removeOrphanedDocMedia`); `MessagesScreen` passes `removeMedia: false`.
+- **Deterministic lazy purge on exit:** disposing `CollectionListScreen` or `MessagesScreen` cancels local timers without fire-and-forget delete calls and closes any active Undo bar via a microtask while keeping `_barState` alive until exit finishes; expired soft-deleted docs are safely purged on subsequent admin open via `SoftDeleteUndo.checkLazyPurge` (`purgeExpiredSoftDeletes`). Browser `beforeunload` is strictly NOT used in `PendingDelete`.
+- **Category exception:** custom categories (`categories`) do not use `SoftDeleteUndo`; they require an explicit confirmation dialog due to cascading changes (hiding items in that category).
 
 ### Sticky unsaved changes bar (`UnsavedBar`, `unsaved_bar.dart`)
 Bottom bar anchored to the bottom of the viewport whenever an editor is dirty:

@@ -6596,6 +6596,454 @@ void main() {
         expect(repo.deletedIds, contains('contact_messages/msg-2'));
       });
 
+      testWidgets('MessagesScreen rapid 2-message soft-delete shows batched Undo all and restores both with 0 hard deletes',
+          (tester) async {
+        for (final locale in const [Locale('ar'), Locale('en')]) {
+          final isAr = locale.languageCode == 'ar';
+          final m1 = AdminDoc('msg-b1', {
+            'name': 'Sender One',
+            'message': 'First inbox message',
+            'createdAt': DateTime.utc(2026, 11, 15, 13),
+            'status': 'new',
+          });
+          final m2 = AdminDoc('msg-b2', {
+            'name': 'Sender Two',
+            'message': 'Second inbox message',
+            'createdAt': DateTime.utc(2026, 11, 15, 12),
+            'status': 'new',
+          });
+          final repo = _TestAdminBackend(initialCollections: {
+            'contact_messages': [m1, m2],
+          });
+
+          await tester.pumpWidget(_app(MessagesScreen(repo: repo), locale: locale));
+          await tester.pumpAndSettle();
+
+          // Confirm & soft-delete first message
+          await tester.tap(find.byTooltip(isAr ? 'حذف' : 'Delete').first);
+          await tester.pumpAndSettle();
+          await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 500));
+
+          expect(find.text('Sender One'), findsNothing);
+          expect(find.text(isAr ? 'تم مسح «Sender One»' : 'Deleted "Sender One"'), findsOneWidget);
+          expect(find.text(isAr ? 'تراجع' : 'Undo'), findsOneWidget);
+
+          // Confirm & soft-delete second message rapidly within 10s window
+          await tester.tap(find.byTooltip(isAr ? 'حذف' : 'Delete').first);
+          await tester.pumpAndSettle();
+          await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 500));
+
+          expect(find.text('Sender Two'), findsNothing);
+          expect(
+            find.text(isAr ? 'تم مسح 2 عناصر (آخرهم «Sender Two»)' : 'Deleted 2 items (latest: "Sender Two")'),
+            findsOneWidget,
+          );
+          expect(find.text(isAr ? 'تراجع عن الكل' : 'Undo all'), findsOneWidget);
+          for (final id in ['msg-b1', 'msg-b2']) {
+            final doc = repo.collections['contact_messages']!.firstWhere((d) => d.id == id);
+            expect(isSoftDeleted(doc.data), isTrue, reason: '$id should have deletedAt tombstone before Undo all');
+          }
+          expect(repo.deletedIds, isEmpty);
+
+          // Tap batched Undo all -> restores both messages with deletedAt: null and 0 hard deletes
+          await tester.tap(find.text(isAr ? 'تراجع عن الكل' : 'Undo all'));
+          await tester.pumpAndSettle();
+
+          expect(find.text('Sender One'), findsOneWidget);
+          expect(find.text('Sender Two'), findsOneWidget);
+          for (final id in ['msg-b1', 'msg-b2']) {
+            final doc = repo.collections['contact_messages']!.firstWhere((d) => d.id == id);
+            expect(isSoftDeleted(doc.data), isFalse, reason: '$id deletedAt should be cleared');
+          }
+          expect(repo.deletedIds, isEmpty);
+
+          // Wait past 10s grace window -> still 0 hard deletes
+          await tester.pump(const Duration(seconds: 12));
+          await tester.pumpAndSettle();
+          expect(repo.deletedIds, isEmpty);
+        }
+      });
+
+      testWidgets('MessagesScreen.dispose() keeps _barState alive through exit animation, preserves unrelated SnackBars, and skips media deletion (removeMedia: false)',
+          (tester) async {
+        final mediaRepo = _TestMediaRepo();
+        final repo = _MediaTestAdminBackend(mediaRepo, initialCollections: {
+          'contact_messages': [
+            AdminDoc('msg-anim', {
+              'name': 'Anim Sender',
+              'message': 'Dispose exit animation safety',
+              'createdAt': DateTime.utc(2026, 11, 15, 14),
+              'status': 'new',
+              'image': {'source': 'inline', 'mediaId': 'm1'},
+            }),
+            AdminDoc('msg-expired', {
+              'name': 'Expired Sender',
+              'message': 'Already expired soft delete',
+              'createdAt': DateTime.utc(2026, 11, 15, 13),
+              'deletedAt': DateTime.utc(2026, 11, 15, 13),
+              'status': 'new',
+              'image': {'source': 'inline', 'mediaId': 'm2'},
+            }),
+          ],
+        });
+        final messengerKey = GlobalKey<ScaffoldMessengerState>();
+        Widget screen = MessagesScreen(repo: repo);
+
+        await tester.pumpWidget(StatefulBuilder(
+          builder: (context, setHost) => MaterialApp(
+            locale: const Locale('ar'),
+            supportedLocales: const [Locale('ar'), Locale('en')],
+            localizationsDelegates: GlobalMaterialLocalizations.delegates,
+            scaffoldMessengerKey: messengerKey,
+            home: screen,
+          ),
+        ));
+        await tester.pumpAndSettle();
+
+        // Lazy purge ran on msg-expired without deleting media (removeMedia: false)
+        expect(repo.deletedIds, contains('contact_messages/msg-expired'));
+        expect(mediaRepo.deleted, isEmpty);
+
+        // Soft-delete msg-anim, let Undo SnackBar present, then unmount MessagesScreen
+        await tester.tap(find.byTooltip('حذف').first);
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+        await tester.pump();
+        expect(find.text('تراجع'), findsOneWidget);
+
+        // Unmount to a plain Container (no Scaffold), pump mid-exit (100ms), then mount a new Scaffold
+        screen = const SizedBox.shrink();
+        await tester.pumpWidget(MaterialApp(
+          locale: const Locale('ar'),
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          scaffoldMessengerKey: messengerKey,
+          home: screen,
+        ));
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(tester.takeException(), isNull);
+
+        await tester.pumpWidget(MaterialApp(
+          locale: const Locale('ar'),
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          scaffoldMessengerKey: messengerKey,
+          home: const Scaffold(body: Text('Next Scaffold')),
+        ));
+        messengerKey.currentState!.showSnackBar(const SnackBar(content: Text('Unrelated Note')));
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+        expect(find.text('تراجع'), findsNothing);
+        expect(find.text('Unrelated Note'), findsOneWidget);
+
+        // Verify commit path with removeMedia: false directly via fresh MessagesScreen
+        final repoCommit = _MediaTestAdminBackend(mediaRepo, initialCollections: {
+          'contact_messages': [
+            AdminDoc('msg-media', {
+              'name': 'Commit Sender',
+              'message': 'Check removeMedia false on commit',
+              'createdAt': DateTime.utc(2026, 11, 15, 15),
+              'status': 'new',
+              'image': {'source': 'inline', 'mediaId': 'm3'},
+            }),
+          ],
+        });
+        await tester.pumpWidget(_app(MessagesScreen(repo: repoCommit), locale: const Locale('ar')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('حذف').first);
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+        await tester.pump(const Duration(seconds: 11));
+        await tester.pumpAndSettle();
+        expect(repoCommit.deletedIds, contains('contact_messages/msg-media'));
+        expect(mediaRepo.deleted, isEmpty);
+      });
+
+      testWidgets('MessagesScreen preserves queued non-undo SnackBars and stale lazy purge never deletes a restored message',
+          (tester) async {
+        final messengerKey = GlobalKey<ScaffoldMessengerState>();
+        final undo = SoftDeleteUndo(
+          isMounted: () => true,
+          onChanged: () {},
+          removeMedia: false,
+        );
+        addTearDown(undo.dispose);
+
+        final repo = _ControlledUpdateBackend(initialCollections: {
+          'contact_messages': [
+            AdminDoc('msg-a', {
+              'name': 'Expired A',
+              'message': 'Old tombstone',
+              'createdAt': DateTime.utc(2026, 11, 15, 10),
+              'deletedAt': DateTime.now().toUtc().subtract(const Duration(seconds: 30)),
+              'status': 'new',
+            }),
+            AdminDoc('msg-b', {
+              'name': 'Restored B',
+              'message': 'Deleted then undone while purge runs',
+              'createdAt': DateTime.utc(2026, 11, 15, 11),
+              'status': 'new',
+            }),
+          ],
+        });
+        addTearDown(repo.dispose);
+
+        await tester.pumpWidget(MaterialApp(
+          locale: const Locale('ar'),
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          scaffoldMessengerKey: messengerKey,
+          home: const Scaffold(body: SizedBox.shrink()),
+        ));
+        await tester.pumpAndSettle();
+
+        // Delete msg-b cleanly first, while an external error bar is active & another queued.
+        messengerKey.currentState!.showSnackBar(
+          const SnackBar(content: Text('Active Info'), duration: Duration(seconds: 1)),
+        );
+        messengerKey.currentState!.showSnackBar(
+          const SnackBar(content: Text('Queued Save Error'), duration: Duration(seconds: 1)),
+        );
+        await tester.pump();
+
+        final docB = repo.collections['contact_messages']!.last;
+        await undo.delete(
+          repo: repo,
+          collection: 'contact_messages',
+          doc: docB,
+          title: 'Restored B',
+          messenger: messengerKey.currentState,
+          failedMsg: 'Failed: {e}',
+          undoLabel: 'تراجع',
+          undoAllLabel: 'تراجع عن الكل',
+        );
+        // Queued Save Error survived removeCurrentSnackBar() and shows before Undo enters.
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(find.text('Queued Save Error'), findsOneWidget);
+
+        for (var i = 0; i < 8 && find.text('تراجع').evaluate().isEmpty; i++) {
+          await tester.pump(const Duration(milliseconds: 300));
+        }
+        await tester.pumpAndSettle();
+        expect(find.text('تراجع'), findsOneWidget);
+
+        // Snapshot has expired msg-a AND stale expired tombstone for msg-b (as if B's
+        // original 10s deadline elapsed while A's purge was awaiting).
+        final staleSnapshot = [
+          AdminDoc('msg-a', Map<String, dynamic>.from(repo.collections['contact_messages']!.first.data)),
+          AdminDoc('msg-b', {
+            ...Map<String, dynamic>.from(docB.data),
+            'deletedAt': DateTime.now().toUtc().subtract(const Duration(seconds: 15)),
+          }),
+        ];
+        final holdDeleteA = repo.holdDelete('contact_messages', 'msg-a');
+        const msgDef = CollectionDef('contact_messages', '', '', [], []);
+        undo.checkLazyPurge(repo, msgDef, staleSnapshot);
+        await tester.pump(); // starts purging msg-a
+
+        // Tap Undo on msg-b while msg-a delete is in flight -> msg-b is restored locally + backend.
+        await tester.tap(find.text('تراجع'));
+        await tester.pumpAndSettle();
+        expect(isSoftDeleted(repo.collections['contact_messages']!.last.data), isFalse);
+
+        // Complete msg-a purge -> stale loop reaches msg-b and MUST skip it!
+        holdDeleteA.complete();
+        await tester.pumpAndSettle();
+        expect(repo.deletedIds, ['contact_messages/msg-a']);
+        expect(repo.deletedIds, isNot(contains('contact_messages/msg-b')));
+      });
+
+      testWidgets('SoftDeleteUndo keeps undone cutoff if re-delete write fails so stale purge still skips doc',
+          (tester) async {
+        final messengerKey = GlobalKey<ScaffoldMessengerState>();
+        final undo = SoftDeleteUndo(
+          isMounted: () => true,
+          onChanged: () {},
+          removeMedia: false,
+        );
+        addTearDown(undo.dispose);
+
+        final repo = _ControlledUpdateBackend(initialCollections: {
+          'contact_messages': [
+            AdminDoc('msg-a', {
+              'name': 'Expired A',
+              'message': 'Old tombstone',
+              'createdAt': DateTime.utc(2026, 11, 15, 10),
+              'deletedAt': DateTime.now().toUtc().subtract(const Duration(seconds: 30)),
+              'status': 'new',
+            }),
+            AdminDoc('msg-b', {
+              'name': 'Restored B',
+              'message': 'Undo then failed re-delete while purge in flight',
+              'createdAt': DateTime.utc(2026, 11, 15, 11),
+              'status': 'new',
+            }),
+          ],
+        });
+        addTearDown(repo.dispose);
+
+        await tester.pumpWidget(MaterialApp(
+          locale: const Locale('ar'),
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          scaffoldMessengerKey: messengerKey,
+          home: const Scaffold(body: SizedBox.shrink()),
+        ));
+        await tester.pumpAndSettle();
+
+        final docB = repo.collections['contact_messages']!.last;
+        await undo.delete(
+          repo: repo,
+          collection: 'contact_messages',
+          doc: docB,
+          title: 'Restored B',
+          messenger: messengerKey.currentState,
+          failedMsg: 'Failed: {e}',
+          undoLabel: 'تراجع',
+          undoAllLabel: 'تراجع عن الكل',
+        );
+        await tester.pumpAndSettle();
+
+        final staleSnapshot = [
+          AdminDoc('msg-a', Map<String, dynamic>.from(repo.collections['contact_messages']!.first.data)),
+          AdminDoc('msg-b', {
+            ...Map<String, dynamic>.from(docB.data),
+            'deletedAt': DateTime.now().toUtc().subtract(const Duration(seconds: 15)),
+          }),
+        ];
+        final holdDeleteA = repo.holdDelete('contact_messages', 'msg-a');
+        const msgDef = CollectionDef('contact_messages', '', '', [], []);
+        undo.checkLazyPurge(repo, msgDef, staleSnapshot);
+        await tester.pump();
+
+        // Undo sets _undoneCutoffs['msg-b']
+        await tester.tap(find.text('تراجع'));
+        await tester.pumpAndSettle();
+        expect(isSoftDeleted(repo.collections['contact_messages']!.last.data), isFalse);
+
+        // Second delete attempt fails on Firestore write -> cutoff must remain intact!
+        final failReDelete = repo.hold('contact_messages', 'msg-b');
+        await undo.delete(
+          repo: repo,
+          collection: 'contact_messages',
+          doc: repo.collections['contact_messages']!.last,
+          title: 'Restored B',
+          messenger: messengerKey.currentState,
+          failedMsg: 'Failed: {e}',
+          undoLabel: 'تراجع',
+          undoAllLabel: 'تراجع عن الكل',
+        );
+        failReDelete.completeError(FirebaseException(plugin: 'cloud_firestore', code: 'unavailable', message: 'Offline'));
+        await tester.pumpAndSettle();
+
+        // Stale purge resumes after msg-a -> msg-b is STILL protected by preserved cutoff!
+        holdDeleteA.complete();
+        await tester.pumpAndSettle();
+        expect(repo.deletedIds, ['contact_messages/msg-a']);
+        expect(repo.deletedIds, isNot(contains('contact_messages/msg-b')));
+      });
+
+      testWidgets('SoftDeleteUndo holds deletes and keeps full 10s Undo window behind a long unrelated SnackBar',
+          (tester) async {
+        final messengerKey = GlobalKey<ScaffoldMessengerState>();
+        final undo = SoftDeleteUndo(
+          isMounted: () => true,
+          onChanged: () {},
+          removeMedia: false,
+        );
+        addTearDown(undo.dispose);
+
+        final m1 = AdminDoc('msg-q1', {
+          'name': 'Queued One',
+          'message': 'First',
+          'createdAt': DateTime.utc(2026, 11, 15, 10),
+          'status': 'new',
+        });
+        final m2 = AdminDoc('msg-q2', {
+          'name': 'Queued Two',
+          'message': 'Second',
+          'createdAt': DateTime.utc(2026, 11, 15, 11),
+          'status': 'new',
+        });
+        final repo = _TestAdminBackend(initialCollections: {
+          'contact_messages': [m1, m2],
+        });
+
+        await tester.pumpWidget(MaterialApp(
+          locale: const Locale('ar'),
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          scaffoldMessengerKey: messengerKey,
+          home: const Scaffold(body: SizedBox.shrink()),
+        ));
+        await tester.pumpAndSettle();
+
+        // Show an active transient bar plus a queued 15-second SnackBar (> 10s delete window).
+        messengerKey.currentState!.showSnackBar(
+          const SnackBar(content: Text('Active Transient'), duration: Duration(seconds: 1)),
+        );
+        messengerKey.currentState!.showSnackBar(
+          const SnackBar(content: Text('Long Unrelated Notice'), duration: Duration(seconds: 15)),
+        );
+        await tester.pump();
+
+        // Delete m1 at t=0 (dismisses transient, promotes Long Unrelated Notice), then m2 at t=2s while queued behind it.
+        await undo.delete(
+          repo: repo,
+          collection: 'contact_messages',
+          doc: m1,
+          title: 'Queued One',
+          messenger: messengerKey.currentState,
+          failedMsg: 'Failed: {e}',
+          undoLabel: 'تراجع',
+          undoAllLabel: 'تراجع عن الكل',
+        );
+        await tester.pumpAndSettle();
+        await tester.pump(const Duration(seconds: 2));
+        expect(find.text('Long Unrelated Notice'), findsOneWidget);
+
+        await undo.delete(
+          repo: repo,
+          collection: 'contact_messages',
+          doc: m2,
+          title: 'Queued Two',
+          messenger: messengerKey.currentState,
+          failedMsg: 'Failed: {e}',
+          undoLabel: 'تراجع',
+          undoAllLabel: 'تراجع عن الكل',
+        );
+        await tester.pump();
+        expect(find.text('Long Unrelated Notice'), findsOneWidget);
+
+        // Advance past 12s (still inside the 15s unrelated bar): neither doc commits before Undo shows!
+        await tester.pump(const Duration(seconds: 12));
+        expect(repo.deletedIds, isEmpty);
+        expect(find.text('Long Unrelated Notice'), findsOneWidget);
+
+        // Advance past 15s unrelated bar exit -> batched Undo all mounts directly (stale single Undo never appears)
+        await tester.pump(const Duration(seconds: 2));
+        await tester.pumpAndSettle();
+        expect(find.text('تراجع عن الكل'), findsOneWidget);
+        expect(find.text('تراجع'), findsNothing);
+        expect(repo.deletedIds, isEmpty);
+
+        // Undo stays available for the full 10s window while visible (check at +8s), then restores both cleanly!
+        await tester.pump(const Duration(seconds: 8));
+        expect(find.text('تراجع عن الكل'), findsOneWidget);
+        expect(repo.deletedIds, isEmpty);
+
+        await tester.tap(find.text('تراجع عن الكل'));
+        await tester.pumpAndSettle();
+        expect(repo.deletedIds, isEmpty);
+        expect(isSoftDeleted(repo.collections['contact_messages']!.first.data), isFalse);
+        expect(isSoftDeleted(repo.collections['contact_messages']!.last.data), isFalse);
+      });
+
       testWidgets('FeaturesScreen never shows updatedElsewhere banner on failed save with rollback', (tester) async {
         final initialDoc = AdminDoc('features', {
           'updatedAt': DateTime.utc(2026, 11, 1, 10),
@@ -7110,6 +7558,14 @@ void main() {
   });
 }
 
+class _MediaTestAdminBackend extends _TestAdminBackend {
+  final _TestMediaRepo _media;
+  _MediaTestAdminBackend(this._media, {super.initialCollections});
+
+  @override
+  MediaRepository? get media => _media;
+}
+
 class _TestAdminBackend extends AdminBackend {
   final Map<String, List<AdminDoc>> collections = {};
   final Map<String, Map<String, dynamic>> docs = {};
@@ -7240,6 +7696,8 @@ class _ReactiveAdminBackend extends _TestAdminBackend {
 }
 
 class _TestMediaRepo implements MediaRepository {
+  final List<String> deleted = [];
+
   @override
   String get source => 'firestore';
 
@@ -7251,7 +7709,9 @@ class _TestMediaRepo implements MediaRepository {
       MediaImage(source: MediaSource.inline, mediaId: 'm1');
 
   @override
-  Future<void> delete(String mediaId) async {}
+  Future<void> delete(String mediaId) async {
+    deleted.add(mediaId);
+  }
 }
 
 class _SlowSaveBackend extends _TestAdminBackend {
