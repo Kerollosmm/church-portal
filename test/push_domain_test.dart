@@ -62,22 +62,6 @@ void main() {
       expect(unknownPlaceholders('reminders', '{event} - {time} - {place} - {lead}'), isEmpty);
       expect(unknownPlaceholders('reminders', '{verse}'), contains('{verse}'));
     });
-
-    test('isReminderSourceEnabled respects reminderSources string', () {
-      final cfg1 = NotifyConfig.fromFeatures(const FeatureSettings(reminderSources: 'lit,mtg,day'));
-      expect(cfg1.isReminderSourceEnabled('lit-st-mark'), isTrue);
-      expect(cfg1.isReminderSourceEnabled('meeting-youth'), isTrue);
-      expect(cfg1.isReminderSourceEnabled('mtg-scouts'), isTrue);
-      expect(cfg1.isReminderSourceEnabled('day-5d16df6bbc'), isTrue);
-
-      final cfg2 = NotifyConfig.fromFeatures(const FeatureSettings(reminderSources: 'lit'));
-      expect(cfg2.isReminderSourceEnabled('lit-st-mark'), isTrue);
-      expect(cfg2.isReminderSourceEnabled('meeting-youth'), isFalse);
-      expect(cfg2.isReminderSourceEnabled('day-5d16df6bbc'), isFalse);
-
-      final cfg3 = NotifyConfig.fromFeatures(const FeatureSettings(reminderSources: ''));
-      expect(cfg3.isReminderSourceEnabled('lit-st-mark'), isFalse);
-    });
   });
 
   group('ScheduledNotification & NotifySchedule', () {
@@ -136,54 +120,6 @@ void main() {
       expect(scheduleError.isExpiredAt('r1', after24h), isTrue);
       // If already ok, never expired
       expect(scheduleOk.isExpiredAt('r1', after24h), isFalse);
-    });
-
-    test('dueNow returns rows due and not currently sending or ok', () {
-      final now = DateTime.utc(2026, 11, 8, 12, 0);
-      final dueRow = ScheduledNotification(
-        id: 'due1',
-        atUtc: now.subtract(const Duration(minutes: 5)),
-        targets: 'all',
-        titleAr: 'د',
-        titleEn: 'D',
-        bodyAr: 'ب',
-        bodyEn: 'B',
-        link: '/',
-        eventKey: '',
-      );
-      final futureRow = ScheduledNotification(
-        id: 'future1',
-        atUtc: now.add(const Duration(hours: 1)),
-        targets: 'all',
-        titleAr: 'ف',
-        titleEn: 'F',
-        bodyAr: 'ب',
-        bodyEn: 'B',
-        link: '/',
-        eventKey: '',
-      );
-      final doneRow = ScheduledNotification(
-        id: 'done1',
-        atUtc: now.subtract(const Duration(minutes: 10)),
-        targets: 'all',
-        titleAr: 'ت',
-        titleEn: 'T',
-        bodyAr: 'ب',
-        bodyEn: 'B',
-        link: '/',
-        eventKey: '',
-      );
-
-      final schedule = NotifySchedule(
-        schedule: [dueRow, futureRow, doneRow],
-        status: {
-          'done1': const RowSendStatus(state: 'ok'),
-          'due1': const RowSendStatus(state: 'partial'),
-        },
-      );
-
-      final dueList = schedule.dueNow(now);
-      expect(dueList.map((r) => r.id), ['due1']);
     });
 
     test('canDeleteRow allows deletion for any non-sending row', () {

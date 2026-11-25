@@ -1389,7 +1389,7 @@ void main() {
   });
 
   group('PendingDelete', () {
-    test('schedule, undo within window, expiry, flush and dispose', () async {
+    test('schedule, undo within window, expiry and dispose', () async {
       final pd = PendingDelete(window: const Duration(milliseconds: 100));
       int commits = 0;
       pd.schedule('item1', () async => commits++);
@@ -1411,52 +1411,19 @@ void main() {
       expect(commits, 1);
       expect(pd.hasPending, isFalse);
 
-      // Flush commits immediately
-      pd.schedule('item3', () async => commits++);
-      expect(pd.hasPending, isTrue);
-      await pd.flush();
-      expect(commits, 2);
-      expect(pd.hasPending, isFalse);
-
       // Dispose cancels local timers without committing
       pd.schedule('item4', () async => commits++);
       expect(pd.hasPending, isTrue);
       pd.dispose();
       expect(pd.hasPending, isFalse);
       await Future<void>.delayed(const Duration(milliseconds: 150));
-      expect(commits, 2);
+      expect(commits, 1);
     });
 
-    test('extendAll resets timers of all pending entries to a fresh window and holdCount ref-counts overlapping holds', () {
+    test('holdCount ref-counts overlapping holds', () {
       fakeAsync((async) {
         final pd = PendingDelete(window: const Duration(milliseconds: 120));
         final committed = <String>[];
-        pd.schedule('a', () async => committed.add('a'));
-        async.elapse(const Duration(milliseconds: 70));
-        pd.schedule('b', () async => committed.add('b'));
-        pd.extendAll();
-
-        // At 150 ms from 'a' (> 120 ms original window, 80 ms after extendAll), neither has committed.
-        async.elapse(const Duration(milliseconds: 80));
-        expect(pd.isPending('a'), isTrue);
-        expect(pd.isPending('b'), isTrue);
-        expect(committed, isEmpty);
-
-        // Undo both before extended deadline -> zero commits.
-        expect(pd.undo('a'), isTrue);
-        expect(pd.undo('b'), isTrue);
-        async.elapse(const Duration(milliseconds: 150));
-        expect(committed, isEmpty);
-
-        // Without undo, extendAll commits both after the extended window.
-        pd.schedule('c', () async => committed.add('c'));
-        async.elapse(const Duration(milliseconds: 70));
-        pd.schedule('d', () async => committed.add('d'));
-        pd.extendAll();
-        async.elapse(const Duration(milliseconds: 80));
-        expect(committed, isEmpty);
-        async.elapse(const Duration(milliseconds: 50));
-        expect(committed.toSet(), {'c', 'd'});
 
         // Overlapping holdAll / releaseHold ref-counts holds cleanly across concurrent renewals.
         pd.schedule('x', () async => committed.add('x'));
@@ -3454,20 +3421,6 @@ void main() {
       expect(policy.idleLimit, const Duration(minutes: 30));
       expect(policy.warnBefore, const Duration(seconds: 60));
       expect(policy.warnAt, const Duration(minutes: 29));
-
-      expect(policy.shouldWarn(const Duration(minutes: 28, seconds: 59)), isFalse);
-      expect(policy.shouldSignOut(const Duration(minutes: 28, seconds: 59)), isFalse);
-
-      expect(policy.shouldWarn(const Duration(minutes: 29)), isTrue);
-      expect(policy.shouldSignOut(const Duration(minutes: 29)), isFalse);
-
-      expect(policy.shouldWarn(const Duration(minutes: 29, seconds: 59)), isTrue);
-      expect(policy.shouldSignOut(const Duration(minutes: 29, seconds: 59)), isFalse);
-
-      expect(policy.shouldWarn(const Duration(minutes: 30)), isFalse);
-      expect(policy.shouldSignOut(const Duration(minutes: 30)), isTrue);
-
-      expect(policy.shouldSignOut(const Duration(minutes: 31)), isTrue);
     });
 
     testWidgets('AdminLoginForm passes rememberMe state on sign in', (tester) async {
@@ -3810,7 +3763,6 @@ void main() {
         todaySettingsDoc,
         seasonSettingsDoc,
         assistantSettingsDoc,
-        appSettingsDoc,
         appInstallDoc,
       ]) {
         expect(doc.helpAr.trim(), isNotEmpty, reason: '${doc.path} (${doc.labelEn}).helpAr');

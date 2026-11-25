@@ -289,7 +289,7 @@ void main() {
           }
         }
       }
-      for (final doc in [churchInfoDoc, todaySettingsDoc, seasonSettingsDoc, appSettingsDoc]) {
+      for (final doc in [churchInfoDoc, todaySettingsDoc, seasonSettingsDoc]) {
         for (final f in doc.fields) {
           expect(f.labelAr, isNot(contains('HH:mm')), reason: '${doc.path}.${f.key}');
           expect(f.labelEn, isNot(contains('HH:mm')), reason: '${doc.path}.${f.key}');

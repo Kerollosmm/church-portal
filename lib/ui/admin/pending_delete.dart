@@ -134,28 +134,6 @@ class PendingDelete {
     }
   }
 
-  /// Resets the grace-window timer on every currently pending deletion (or [ids])
-  /// so a combined batch undo SnackBar stays truthful for the full [window].
-  void extendAll([Iterable<String>? ids]) {
-    final targets = ids?.toSet();
-    for (final entry in _pending.entries.toList()) {
-      if (targets != null && !targets.contains(entry.key)) continue;
-      _resetTimer(entry.key, entry.value);
-    }
-  }
-
-  void _resetTimer(String id, _PendingCommit item) {
-    for (final h in item.activeHolds) {
-      h.anchorTimer.cancel();
-    }
-    item.activeHolds.clear();
-    item.extendingHold?.anchorTimer.cancel();
-    item.extendingHold = null;
-    item.expiredWhileHeld = false;
-    item.timer.cancel();
-    item.timer = Timer(window, () => _onTimerFired(id, item));
-  }
-
   Future<void> _commitItem(String id) async {
     final item = _pending.remove(id);
     if (item != null) {
@@ -170,14 +148,6 @@ class PendingDelete {
       return true;
     }
     return false;
-  }
-
-  Future<void> flush() async {
-    final items = List<_PendingCommit>.from(_pending.values);
-    _pending.clear();
-    for (final item in items) {
-      await item.execute();
-    }
   }
 
   void dispose() {

@@ -107,27 +107,6 @@ class AdminRepository implements AdminBackend {
   @override
   String get actor => auth.currentUser?.email ?? auth.currentUser?.uid ?? '';
 
-  /// The admin's role ('owner' | 'editor'), or null when admins/{uid} does
-  /// not exist. Network/permission errors propagate so the UI can offer a
-  /// retry instead of a misleading "not admin" screen.
-  Future<String?> adminRole(String uid) async {
-    final d = await db
-        .doc('admins/$uid')
-        .get(const GetOptions(source: Source.server))
-        .timeout(const Duration(seconds: 15));
-    if (!d.exists) return null;
-    final role = d.data()?['role'];
-    return role == AdminRoles.owner ? AdminRoles.owner : AdminRoles.editor;
-  }
-
-  /// Live role of [uid] (null = not an admin). Cache-only "missing" snapshots
-  /// are skipped so a cold cache never flashes "not admin".
-  Stream<String?> roleChanges(String uid) => db
-      .doc('admins/$uid')
-      .snapshots()
-      .where((d) => d.exists || !d.metadata.isFromCache)
-      .map((d) => !d.exists ? null : (d.data()?['role'] == AdminRoles.owner ? AdminRoles.owner : AdminRoles.editor));
-
   @override
   Stream<List<AdminDoc>> watch(String collection) => db.collection(collection).snapshots().map(
         (s) => s.docs.map((d) => AdminDoc(d.id, normalizeDoc(d.data()))).toList(),

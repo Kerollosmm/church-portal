@@ -21,10 +21,6 @@ class SessionPolicy {
   });
 
   Duration get warnAt => idleLimit > warnBefore ? idleLimit - warnBefore : Duration.zero;
-
-  bool shouldWarn(Duration idle) => idle >= warnAt && idle < idleLimit;
-
-  bool shouldSignOut(Duration idle) => idle >= idleLimit;
 }
 
 /// Tracks pointer and keyboard activity around the dashboard when [enabled] is
