@@ -19,4 +19,4 @@ Canonical triage roles (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-
 
 ### Domain docs
 
-Single-context (`GLOSSARY.md` + `docs/adr/`). See `docs/agents/domain.md`.
+Single-context (`docs/memory-bank/12-glossary.md` + `docs/memory-bank/10-decisions-and-history.md`). See `docs/agents/domain.md`.

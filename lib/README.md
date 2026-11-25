@@ -5,19 +5,19 @@ The `lib` directory serves as the root blueprint and composition entry point of 
 
 ## Local Interface & Direct File Contracts
 - **Root Entry Point (`main.dart`)**:
-  - [`main()`](file:///c:/Users/Kerollos/church-portal/lib/main.dart#L27): Application entry point wrapped in `ErrorReporting.run` for crash protection. Initializes URL path routing, bundled font licenses, Cairo timezone database, seed data, Firebase credentials, and native Android background WorkManager replenishment tasks before launching `ProviderScope`.
+  - [`main()`](main.dart#L27): Application entry point wrapped in `ErrorReporting.run` for crash protection. Initializes URL path routing, bundled font licenses, Cairo timezone database, seed data, Firebase credentials, and native Android background WorkManager replenishment tasks before launching `ProviderScope`.
 
 - **Root Widget (`app.dart`)**:
-  - [`ChurchPortalApp`](file:///c:/Users/Kerollos/church-portal/lib/app.dart#L15): Top-level `ConsumerWidget` that binds Riverpod state to `MaterialApp.router`. Synchronizes active locale with document language attributes, manages dynamic liturgical occasion theme switching, informs the web splash screen when content has painted via post-frame callbacks, and mounts the notification planner on native targets.
+  - [`ChurchPortalApp`](app.dart#L15): Top-level `ConsumerWidget` that binds Riverpod state to `MaterialApp.router`. Synchronizes active locale with document language attributes, manages dynamic liturgical occasion theme switching, informs the web splash screen when content has painted via post-frame callbacks, and mounts the notification planner on native targets.
 
 - **Routing & Navigation (`router.dart`)**:
-  - [`buildAppRouter(...)`](file:///c:/Users/Kerollos/church-portal/lib/router.dart#L132) / [`routerProvider`](file:///c:/Users/Kerollos/church-portal/lib/router.dart#L127): Central declarative router (`GoRouter`).
-  - [`resolveLangSync(...)`](file:///c:/Users/Kerollos/church-portal/lib/router.dart#L80) / [`LangSync`](file:///c:/Users/Kerollos/church-portal/lib/router.dart#L63): Handles bidirectional query synchronization between the `?lang=` parameter and `localeProvider`.
-  - [`isWebProvider`](file:///c:/Users/Kerollos/church-portal/lib/router.dart#L125): Detects web runtime vs native environments.
-  - Enforces route feature gating ([`FeatureGate`](file:///c:/Users/Kerollos/church-portal/lib/router.dart#L42)), deferred code-splitting for `/admin`, `/ask`, `/notifications`, and `/readings/:date`, and tree-shakes administrative routes from native release APKs.
+  - [`buildAppRouter(...)`](router.dart#L132) / [`routerProvider`](router.dart#L127): Central declarative router (`GoRouter`).
+  - [`resolveLangSync(...)`](router.dart#L80) / [`LangSync`](router.dart#L63): Handles bidirectional query synchronization between the `?lang=` parameter and `localeProvider`.
+  - [`isWebProvider`](router.dart#L125): Detects web runtime vs native environments.
+  - Enforces route feature gating ([`FeatureGate`](router.dart#L42)), deferred code-splitting for `/admin`, `/ask`, `/notifications`, and `/readings/:date`, and tree-shakes administrative routes from native release APKs.
 
 - **Firebase Platform Options (`firebase_options.dart`)**:
-  - [`DefaultFirebaseOptions`](file:///c:/Users/Kerollos/church-portal/lib/firebase_options.dart#L13): Platform configuration selector providing `FirebaseOptions` for web and Android targets, while returning `null` on unconfigured platforms to trigger graceful offline seed fallback.
+  - [`DefaultFirebaseOptions`](firebase_options.dart#L13): Platform configuration selector providing `FirebaseOptions` for web and Android targets, while returning `null` on unconfigured platforms to trigger graceful offline seed fallback.
 
 ## Subdirectories & Boundaries
 - [`config`](./config/README.md): Compile-time build configurations, telemetry credentials, and `--dart-define` bindings.
@@ -28,11 +28,11 @@ The `lib` directory serves as the root blueprint and composition entry point of 
 - [`ui`](./ui/README.md): Presentation widgets, responsive shells, deferred chunk loaders, and administrative screens.
 
 ## Invariants
-- [`main.dart:main`](file:///c:/Users/Kerollos/church-portal/lib/main.dart#L27): Startup execution must remain inside `ErrorReporting.run` to guarantee Sentry captures unhandled initialization crashes.
-- [`main.dart:_start`](file:///c:/Users/Kerollos/church-portal/lib/main.dart#L45-L54): Firebase unavailability must never crash startup; the app must seamlessly fall back to `SeedRepository` if Firebase configuration is missing or network connectivity fails.
-- [`app.dart:_signalContentPainted`](file:///c:/Users/Kerollos/church-portal/lib/app.dart#L49-L56): `ContentReady.signal()` must only fire across two consecutive post-frame callbacks after `contentReadyProvider` turns true, ensuring the real home content is visually rendered before fading the loading screen.
-- [`router.dart:buildAppRouter`](file:///c:/Users/Kerollos/church-portal/lib/router.dart#L247): The administrative dashboard (`/admin`) must be strictly excluded from production Android APKs via compile-time dead-code elimination (`kIsWeb || !const bool.fromEnvironment('dart.vm.product')`).
-- [`router.dart:_page`](file:///c:/Users/Kerollos/church-portal/lib/router.dart#L42): Every public screen route must be encapsulated within a `FeatureGate` to prevent access to disabled church sections.
+- [`main.dart:main`](main.dart#L27): Startup execution must remain inside `ErrorReporting.run` to guarantee Sentry captures unhandled initialization crashes.
+- [`main.dart:_start`](main.dart#L45-L54): Firebase unavailability must never crash startup; the app must seamlessly fall back to `SeedRepository` if Firebase configuration is missing or network connectivity fails.
+- [`app.dart:_signalContentPainted`](app.dart#L49-L56): `ContentReady.signal()` must only fire across two consecutive post-frame callbacks after `contentReadyProvider` turns true, ensuring the real home content is visually rendered before fading the loading screen.
+- [`router.dart:buildAppRouter`](router.dart#L247): The administrative dashboard (`/admin`) must be strictly excluded from production Android APKs via compile-time dead-code elimination (`kIsWeb || !const bool.fromEnvironment('dart.vm.product')`).
+- [`router.dart:_page`](router.dart#L42): Every public screen route must be encapsulated within a `FeatureGate` to prevent access to disabled church sections.
 
 ## Side Effects
 - **Network I/O**: Live Firestore streams, App Check verification handshakes, Sentry error telemetry transmission, and external URL intent handling.
