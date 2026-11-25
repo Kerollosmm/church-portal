@@ -27,8 +27,8 @@ The `lib/core` package delivers foundational platform abstractions, cross-platfo
   - [`PlatformInstallEnv`](install_env.dart#L38): Concrete default implementation linking to web JS interop or native IO storage.
 
 - **Localization & String Translation (`l10n.dart`)**:
-  - [`registerStrings(Map<String, List<String>> table)`](l10n.dart#L796): Dynamically registers localization tables for deferred chunk loading.
-  - [`L10nX`](l10n.dart#L800): `BuildContext` extension providing:
+  - [`registerStrings(Map<String, List<String>> table)`](l10n.dart#L370): Dynamically registers localization tables for deferred chunk loading.
+  - [`L10nX`](l10n.dart#L374): `BuildContext` extension providing:
     - `isAr`: Locale check for Arabic (`'ar'`).
     - `tr(String key, [Map<String, String> args])`: Parameterized translation lookup with placeholder replacement.
     - `inDays(int n)`: Arabic grammar-aware day count formatting.

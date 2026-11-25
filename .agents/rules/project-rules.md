@@ -14,7 +14,7 @@ For EVERY feature, bugfix, refactor, rule modification, or docs change in this p
    - Checkable acceptance criteria bullets (320/400/1400 px responsive, RTL Arabic & LTR English, feature toggles on/off).
    - Risks & edge cases.
 3. **Branching**: Always work on a feature branch (`feat/`, `fix/`, `docs/`, `chore/`). Never push or commit directly on `main`. Never force-push.
-4. **Local Gate**: Must pass `flutter analyze`, `flutter test`, `cd tool/rules_test && npm test`, `python3 tool/gen_seed.py`, and `node tool/check_web_bundle.mjs build/web` before pushing (or optional `$KIT/scripts/verify.sh` when `hark-workflow` is installed).
+4. **Local Gate**: Must pass `flutter analyze`, `flutter test`, `(cd tool/rules_test && npm test)`, `python3 tool/gen_seed.py`, and `flutter build web --release --source-maps && node tool/check_web_bundle.mjs build/web` before pushing (or optional `$KIT/scripts/verify.sh` when `hark-workflow` is installed).
 5. **Synchronous Documentation**: Update `docs/memory-bank/` (`10-decisions-and-history.md` for ADRs; optional `$KIT/scripts/new_adr.sh` helper when `hark-workflow` is installed) and human documentation (`documentation/`) in the exact same PR as the code change.
 6. **PR Review & Deployment Verification**: Open PR as draft, trigger review bots (`@coderabbitai review`, `@sentry review`), resolve all findings, ensure CI green on head SHA, squash-merge, and verify production deployment via GitHub Actions + live HTTP 200 / bundle checks (or optional `$KIT/scripts/verify_deploy.sh` when `hark-workflow` is installed).
 

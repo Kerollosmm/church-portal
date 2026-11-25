@@ -20,10 +20,10 @@ There are no child subdirectories in `lib/domain`; all domain components are co-
 - [`coptic_calendar.dart:CopticDate`](coptic_calendar.dart#L15-L87): Coptic calendar representation supporting leap year calculations, month lengths, Anno Martyrum year tracking, and bidirectional Gregorian translation (`toGregorian()`, `fromGregorian()`).
 - [`coptic_calendar.dart:DayStartModes`](coptic_calendar.dart#L93-L98): Controls whether liturgical days flip at midnight or at local sunset (vespers start).
 - [`coptic_calendar.dart:LiturgicalDay`](coptic_calendar.dart#L104-L143): Cohesive pairing of civil Gregorian date and Coptic date context.
-- [`coptic_calendar.dart:holyWeekDayName`](coptic_calendar.dart#L182-L200), [`dayStartMinutes`](coptic_calendar.dart#L206-L215), [`dayStartOn`](coptic_calendar.dart#L217-L225): Liturgical boundary helpers.
+- [`coptic_calendar.dart:holyWeekDayName`](coptic_calendar.dart#L163-L167), [`dayStartMinutes`](coptic_calendar.dart#L171-L175), [`dayStartOn`](coptic_calendar.dart#L181-L184): Liturgical boundary helpers.
 - [`coptic_feasts.dart:FeastRank`](coptic_feasts.dart#L8-L15) & [`coptic_feasts.dart:CopticFeast`](coptic_feasts.dart#L18-L47): Liturgical feast ranking model (`majorLord`, `minorLord`, `apostolic`, `virgin`, `saints`).
 - [`coptic_feasts.dart:copticFeastsOn`](coptic_feasts.dart#L56-L125): Computes active fixed and movable feasts for any Gregorian date via Coptic and Easter computus.
-- [`sun.dart:sunsetUtc`](sun.dart#L26-L63) & [`sun.dart:sunsetLocalMinutes`](sun.dart#L65-L72): Deterministic NOAA solar equations for church coordinates (`churchLat` = 31.2565, `churchLng` = 30.0125).
+- [`sun.dart:sunsetUtc`](sun.dart#L26-L63) & [`sun.dart:sunsetLocalMinutes`](sun.dart#L42-L48): Deterministic NOAA solar equations for church coordinates (`churchLat` = 31.2565, `churchLng` = 30.0125).
 - [`time_format.dart:formatTimeLatin`](time_format.dart#L12-L29), [`formatTimeArabic`](time_format.dart#L31-L47), [`formatRangeLatin`](time_format.dart#L49-L50), [`formatRangeArabic`](time_format.dart#L52-L53), [`weekdayName`](time_format.dart#L55-L66), [`formatDate`](time_format.dart#L68-L80), [`formatDayMonth`](time_format.dart#L82-L83), [`formatLooseDate`](time_format.dart#L85-L101): Pure string and date formatting utilities.
 
 ### 2. Church Schedule, Liturgies & Seasons

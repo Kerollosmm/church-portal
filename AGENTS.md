@@ -71,7 +71,7 @@ This repository strictly follows the **Hark Workflow (`hark-workflow`)** enginee
 1. **Intake & Acceptance Plan**: Restate goal; verify against `AGENTS.md`, `.agents/rules/project-rules.md`, and memory bank; initialize `.work/<branch>/status.md` with checkable acceptance criteria before touching code.
 2. **Branch**: Isolated branch (`feat/`, `fix/`, `docs/`, `chore/`) or `git worktree`. Never commit or push directly to `main`. Never force-push.
 3. **Test-First Implementation**: Pure business logic in `lib/domain/` with unit tests; UI responsive across 320/400/1400 px; RTL/LTR and switch states covered.
-4. **Local Gate**: Must pass `flutter analyze`, `flutter test`, `cd tool/rules_test && npm test`, `python3 tool/gen_seed.py`, and `node tool/check_web_bundle.mjs build/web` locally before push (or optional `$KIT/scripts/verify.sh` / `$KIT/scripts/verify.sh --quick` when `hark-workflow` is installed).
+4. **Local Gate**: Must pass `flutter analyze`, `flutter test`, `(cd tool/rules_test && npm test)`, `python3 tool/gen_seed.py`, and `flutter build web --release --source-maps && node tool/check_web_bundle.mjs build/web` locally before push (or optional `$KIT/scripts/verify.sh` / `$KIT/scripts/verify.sh --quick` when `hark-workflow` is installed).
 5. **Docs in Same PR**: Update `docs/memory-bank/` (`10-decisions-and-history.md` for ADRs; optional `$KIT/scripts/new_adr.sh` helper when `hark-workflow` is installed) and `documentation/` (Arabic).
 6. **PR Review & Merge**: Open draft PR, run review bot triage, verify CI on head SHA, squash-merge.
 7. **Deploy Verification & Smoke**: Verify deploy workflow run on merge SHA, live HTTP 200, and JS bundle checks (or optional `$KIT/scripts/verify_deploy.sh` when `hark-workflow` is installed).
