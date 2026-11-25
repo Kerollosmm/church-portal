@@ -54,6 +54,10 @@ before(async () => {
 
 after(async () => env && env.cleanup());
 
+const sampleFacility = {
+  type: 'nursery', nameAr: 'الحضانة', nameEn: 'Nursery',
+  descAr: '', descEn: '', phone: '', hoursAr: '', hoursEn: '', sample: true,
+};
 const sampleClinic = {
   specialty: 'dental', specialtyAr: 'الأسنان', specialtyEn: 'Dental',
   doctorName: 'طبيب الأسنان — يُعلن لاحقًا', degreeAr: '', degreeEn: '',
@@ -67,8 +71,8 @@ beforeEach(async () => {
     await setDoc(doc(f, 'admins', OWNER), { email: 'owner@x.test', role: 'owner' });
     await setDoc(doc(f, 'admins', EDITOR), { email: 'editor@x.test', role: 'editor' });
     await setDoc(doc(f, 'settings', 'church'), convert(seed.settings.church));
-    await setDoc(doc(f, 'clinics', 'c1'), convert(sampleClinic));
-    await setDoc(doc(f, 'clinics', 'legacy'), { ...convert(sampleClinic), legacyField: 'x' });
+    await setDoc(doc(f, 'facilities', 'f1'), convert(sampleFacility));
+    await setDoc(doc(f, 'facilities', 'legacy'), { ...convert(sampleFacility), legacyField: 'x' });
     await setDoc(doc(f, 'contact_messages', 'm1'), {
       name: 'Mina', phone: '01012345678', email: '', message: 'Hello there', lang: 'ar', status: 'new',
       createdAt: Timestamp.now(),
@@ -81,14 +85,14 @@ describe('public', () => {
     const pub = db(null);
     await assertSucceeds(getDoc(doc(pub, 'settings', 'church')));
     await assertSucceeds(getDoc(doc(pub, 'settings', 'features')));
-    await assertSucceeds(getDocs(collection(pub, 'clinics')));
+    await assertSucceeds(getDocs(collection(pub, 'facilities')));
     await assertFails(setDoc(doc(pub, 'settings', 'features'), { theme: 'navy' }));
-    await assertFails(updateDoc(doc(pub, 'clinics', 'c1'), { visible: false }));
-    await assertFails(deleteDoc(doc(pub, 'clinics', 'c1')));
+    await assertFails(updateDoc(doc(pub, 'facilities', 'f1'), { visible: false }));
+    await assertFails(deleteDoc(doc(pub, 'facilities', 'f1')));
   });
 
   test('signed-in non-admin cannot write content', async () => {
-    await assertFails(updateDoc(doc(db(STRANGER), 'clinics', 'c1'), { visible: false }));
+    await assertFails(updateDoc(doc(db(STRANGER), 'facilities', 'f1'), { visible: false }));
     await assertFails(setDoc(doc(db(STRANGER), 'settings', 'features'), { theme: 'navy' }));
   });
 
@@ -118,12 +122,26 @@ describe('admin content', () => {
     }
   });
 
-  test('create, hide, reorder and delete a clinic', async () => {
+  test('clinics collection is denied for public and admins', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'clinics', 'c1'), convert(sampleClinic));
+    });
+    const pub = db(null);
     const ed = db(EDITOR);
-    const ref = doc(ed, 'clinics', 'new1');
+    await assertFails(getDocs(collection(pub, 'clinics')));
+    await assertFails(getDoc(doc(pub, 'clinics', 'c1')));
+    await assertFails(getDocs(collection(ed, 'clinics')));
+    await assertFails(getDoc(doc(ed, 'clinics', 'c1')));
+    await assertFails(setDoc(doc(ed, 'clinics', 'new1'), convert(sampleClinic)));
+    await assertFails(updateDoc(doc(ed, 'clinics', 'c1'), { visible: false }));
+    await assertFails(deleteDoc(doc(ed, 'clinics', 'c1')));
+  });
+
+  test('create, hide, reorder and delete a facility', async () => {
+    const ed = db(EDITOR);
+    const ref = doc(ed, 'facilities', 'new1');
     await assertSucceeds(setDoc(ref, {
-      specialty: 'dental', specialtyAr: 'الأسنان', specialtyEn: 'Dental', doctorName: 'د. مينا', days: [1, 3],
-      start: '16:00', end: '20:00', bookingPhone: '01012345678', whatsapp: '', active: true, sample: false,
+      type: 'nursery', nameAr: 'الحضانة', nameEn: 'Nursery', phone: '01012345678', sample: false,
       visible: true, order: 10, updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test`,
     }));
     await assertSucceeds(updateDoc(ref, { visible: false, updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` }));
@@ -135,7 +153,7 @@ describe('admin content', () => {
     const ed = db(EDITOR);
     const pub = db(null);
     const stranger = db(STRANGER);
-    const ref = doc(ed, 'clinics', 'c1');
+    const ref = doc(ed, 'facilities', 'f1');
 
     // 1. Soft-delete by setting deletedAt to a valid Timestamp succeeds
     await assertSucceeds(updateDoc(ref, { deletedAt: serverTimestamp() }));
@@ -148,13 +166,13 @@ describe('admin content', () => {
     await assertFails(updateDoc(ref, { deletedAt: 12345678 }));
 
     // 4. Non-admin / visitor cannot write or clear deletedAt
-    await assertFails(updateDoc(doc(pub, 'clinics', 'c1'), { deletedAt: serverTimestamp() }));
-    await assertFails(updateDoc(doc(stranger, 'clinics', 'c1'), { deletedAt: serverTimestamp() }));
+    await assertFails(updateDoc(doc(pub, 'facilities', 'f1'), { deletedAt: serverTimestamp() }));
+    await assertFails(updateDoc(doc(stranger, 'facilities', 'f1'), { deletedAt: serverTimestamp() }));
 
     // 5. Worst-case whole-doc rules budget check: whole document update with deletedAt
-    const fullClinic = convert(sampleClinic);
-    await assertSucceeds(setDoc(ref, { ...fullClinic, deletedAt: serverTimestamp() }));
-    await assertSucceeds(setDoc(ref, { ...fullClinic, deletedAt: null }));
+    const fullFacility = convert(sampleFacility);
+    await assertSucceeds(setDoc(ref, { ...fullFacility, deletedAt: serverTimestamp() }));
+    await assertSucceeds(setDoc(ref, { ...fullFacility, deletedAt: null }));
   });
 
   test('owner can soft-delete, restore, and hard-delete a priest', async () => {
@@ -170,29 +188,29 @@ describe('admin content', () => {
 
   test('rejects unknown keys, bad types and bad times', async () => {
     const ed = db(EDITOR);
-    await assertFails(updateDoc(doc(ed, 'clinics', 'c1'), { hacked: true }));
-    await assertFails(updateDoc(doc(ed, 'clinics', 'c1'), { visible: 'no' }));
-    await assertFails(updateDoc(doc(ed, 'clinics', 'c1'), { order: '1' }));
-    await assertFails(updateDoc(doc(ed, 'clinics', 'c1'), { start: '25:00' }));
-    await assertFails(updateDoc(doc(ed, 'clinics', 'c1'), { doctorName: '' }));
+    await assertFails(updateDoc(doc(ed, 'facilities', 'f1'), { hacked: true }));
+    await assertFails(updateDoc(doc(ed, 'facilities', 'f1'), { visible: 'no' }));
+    await assertFails(updateDoc(doc(ed, 'facilities', 'f1'), { order: '1' }));
+    await assertFails(setDoc(doc(ed, 'liturgies', 'l-bad'), { nameAr: 'قداس', start: '25:00' }));
+    await assertFails(updateDoc(doc(ed, 'facilities', 'f1'), { nameAr: '' }));
     await assertFails(setDoc(doc(ed, 'priests', 'p'), { name: 'x', status: 'retired' }));
     await assertFails(setDoc(doc(ed, 'unknowncol', 'x'), { a: 1 }));
-    await assertFails(updateDoc(doc(ed, 'clinics', 'c1'), { days: ['Monday'] }));
-    await assertFails(updateDoc(doc(ed, 'clinics', 'c1'), { days: [99] }));
-    await assertSucceeds(updateDoc(doc(ed, 'clinics', 'c1'), { days: [1, 7] }));
+    await assertFails(setDoc(doc(ed, 'meetings', 'm-bad-wd'), { stage: 'youth', nameAr: 'اجتماع', weekday: 'Monday' }));
+    await assertFails(setDoc(doc(ed, 'meetings', 'm-bad-wd2'), { stage: 'youth', nameAr: 'اجتماع', weekday: 99 }));
+    await assertSucceeds(setDoc(doc(ed, 'meetings', 'm-ok-wd'), { stage: 'youth', nameAr: 'اجتماع', weekday: 1 }));
   });
 
   test('edit stamps must be now and by the signed-in admin', async () => {
     const ed = db(EDITOR);
-    await assertFails(updateDoc(doc(ed, 'clinics', 'c1'), { visible: false, updatedBy: 'owner@x.test' }));
-    await assertFails(updateDoc(doc(ed, 'clinics', 'c1'), { visible: false, updatedAt: Timestamp.fromDate(new Date('2020-01-01')) }));
-    await assertSucceeds(updateDoc(doc(ed, 'clinics', 'c1'), { visible: false, updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` }));
+    await assertFails(updateDoc(doc(ed, 'facilities', 'f1'), { visible: false, updatedBy: 'owner@x.test' }));
+    await assertFails(updateDoc(doc(ed, 'facilities', 'f1'), { visible: false, updatedAt: Timestamp.fromDate(new Date('2020-01-01')) }));
+    await assertSucceeds(updateDoc(doc(ed, 'facilities', 'f1'), { visible: false, updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` }));
     // A later edit that leaves the stamp untouched is fine too.
-    await assertSucceeds(updateDoc(doc(ed, 'clinics', 'c1'), { order: 5 }));
+    await assertSucceeds(updateDoc(doc(ed, 'facilities', 'f1'), { order: 5 }));
   });
 
   test('legacy fields do not block an edit', async () => {
-    await assertSucceeds(updateDoc(doc(db(EDITOR), 'clinics', 'legacy'), { visible: false }));
+    await assertSucceeds(updateDoc(doc(db(EDITOR), 'facilities', 'legacy'), { visible: false }));
   });
 
   test('church info: valid edit passes, bad coordinates fail', async () => {
@@ -290,9 +308,9 @@ describe('optional images', () => {
     for (const image of bad) {
       await assertFails(updateDoc(doc(ed, 'priests', 'p1'), { image }));
     }
-    // Liturgies never take an image (clinics, meetings and facilities do since PR #11).
+    // Liturgies never take an image (meetings and facilities do since PR #11).
     await assertFails(setDoc(doc(ed, 'liturgies', 'l1'), { nameAr: 'x', start: '07:00', image: { source: 'inline', mediaId: 'm1' } }));
-    await assertSucceeds(updateDoc(doc(ed, 'clinics', 'c1'), { image: { source: 'inline', mediaId: 'm1' } }));
+    await assertSucceeds(updateDoc(doc(ed, 'facilities', 'f1'), { image: { source: 'inline', mediaId: 'm1' } }));
   });
 
   test('media: public read, admin-only validated writes', async () => {
@@ -388,11 +406,11 @@ describe('P1-12: admin active / expiresAt access control', () => {
     await setAdmin(EDITOR, { email: 'editor@x.test', role: 'editor', active: false });
     const ed = db(EDITOR);
     await assertSucceeds(getDoc(doc(ed, 'admins', EDITOR)));
-    await assertFails(updateDoc(doc(ed, 'clinics', 'c1'), { visible: false }));
-    await assertFails(setDoc(doc(ed, 'clinics', 'new1'), {
-      specialty: 'dental', specialtyAr: 'الأسنان', doctorName: 'د. مينا',
+    await assertFails(updateDoc(doc(ed, 'facilities', 'f1'), { visible: false }));
+    await assertFails(setDoc(doc(ed, 'facilities', 'new1'), {
+      type: 'nursery', nameAr: 'الحضانة',
     }));
-    await assertFails(deleteDoc(doc(ed, 'clinics', 'c1')));
+    await assertFails(deleteDoc(doc(ed, 'facilities', 'f1')));
     await assertFails(getDoc(doc(ed, 'contact_messages', 'm1')));
     await assertFails(getDocs(collection(ed, 'contact_messages')));
     await assertFails(updateDoc(doc(ed, 'contact_messages', 'm1'), { status: 'handled' }));
@@ -402,7 +420,7 @@ describe('P1-12: admin active / expiresAt access control', () => {
     await setAdmin(EDITOR, { email: 'editor@x.test', role: 'editor', active: true, expiresAt: pastTs() });
     const ed = db(EDITOR);
     await assertSucceeds(getDoc(doc(ed, 'admins', EDITOR)));
-    await assertFails(updateDoc(doc(ed, 'clinics', 'c1'), { visible: false }));
+    await assertFails(updateDoc(doc(ed, 'facilities', 'f1'), { visible: false }));
     await assertFails(getDoc(doc(ed, 'contact_messages', 'm1')));
     await assertFails(getDocs(collection(ed, 'contact_messages')));
   });
@@ -410,12 +428,12 @@ describe('P1-12: admin active / expiresAt access control', () => {
   test('active editor with future expiresAt or expiresAt: null can write content and read contact_messages', async () => {
     await setAdmin(EDITOR, { email: 'editor@x.test', role: 'editor', active: true, expiresAt: futureTs() });
     const ed = db(EDITOR);
-    await assertSucceeds(updateDoc(doc(ed, 'clinics', 'c1'), { visible: false }));
+    await assertSucceeds(updateDoc(doc(ed, 'facilities', 'f1'), { visible: false }));
     await assertSucceeds(getDoc(doc(ed, 'contact_messages', 'm1')));
     await assertSucceeds(getDocs(collection(ed, 'contact_messages')));
 
     await setAdmin(EDITOR, { email: 'editor@x.test', role: 'editor', active: true, expiresAt: null });
-    await assertSucceeds(updateDoc(doc(ed, 'clinics', 'c1'), { visible: true }));
+    await assertSucceeds(updateDoc(doc(ed, 'facilities', 'f1'), { visible: true }));
     await assertSucceeds(getDocs(collection(ed, 'contact_messages')));
   });
 
@@ -423,12 +441,12 @@ describe('P1-12: admin active / expiresAt access control', () => {
     await setAdmin(EDITOR, { email: 'editor@x.test', role: 'editor', active: false, expiresAt: pastTs() });
     const ed = db(EDITOR);
     const own = db(OWNER);
-    await assertFails(updateDoc(doc(ed, 'clinics', 'c1'), { visible: false }));
+    await assertFails(updateDoc(doc(ed, 'facilities', 'f1'), { visible: false }));
 
     await assertSucceeds(updateDoc(doc(own, 'admins', EDITOR), {
       active: true, expiresAt: null, updatedAt: serverTimestamp(), updatedBy: `${OWNER}@x.test`,
     }));
-    await assertSucceeds(updateDoc(doc(ed, 'clinics', 'c1'), { visible: false }));
+    await assertSucceeds(updateDoc(doc(ed, 'facilities', 'f1'), { visible: false }));
     await assertSucceeds(getDocs(collection(ed, 'contact_messages')));
   });
 
@@ -817,13 +835,12 @@ describe('SEC-04: season flag, coordinates flag and safe links', () => {
 });
 
 // ---------------------------------------------------------------------------
-// PR #11: optional item detail pages (7 collections) + page headers & footer.
+// PR #11: optional item detail pages (6 collections) + page headers & footer.
 describe('PR #11: item detail pages', () => {
   const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` });
   const base = {
     meetings: { stage: 'youth', nameAr: 'اجتماع', facebookUrl: 'https://facebook.com/m', whatsappUrl: 'https://chat.whatsapp.com/m' },
     activities: { titleAr: 'كورال', contactPhone: '01012345678', link: 'https://fb.example.org/choir' },
-    clinics: { specialty: 'dental', specialtyAr: 'الأسنان', doctorName: 'د. مينا', bookingPhone: '0123', whatsapp: '010' },
     facilities: { nameAr: 'الحضانة', phone: '0123' },
     priests: { name: 'أبونا', status: 'serving' },
     milestones: { titleAr: 'زيارة' },
@@ -844,7 +861,7 @@ describe('PR #11: item detail pages', () => {
   };
   // Collection-specific keys: the phone / link fields a collection lacks.
   const extra = (col) => ({
-    ...(['clinics', 'facilities'].includes(col) ? {} : { contactPhone: '01012345678' }),
+    ...(col === 'facilities' ? {} : { contactPhone: '01012345678' }),
     ...(col === 'activities' ? {} : { externalUrl: 'https://forms.example.org/register' }),
     image: { source: 'url', url: 'https://img.example.org/cover.jpg', alt: 'cover' },
   });
@@ -852,7 +869,7 @@ describe('PR #11: item detail pages', () => {
   // Firestore evaluates at most 1,000 expressions per request. These are the
   // heaviest writes the admin form makes: a create carrying every field, then
   // the full gallery and the full extraFields list (each in its own update).
-  test('worst case (max lengths, 8 photos, 15 fields) passes on all 7 collections', async () => {
+  test('worst case (max lengths, 8 photos, 15 fields) passes on all 6 collections', async () => {
     const ed = db(EDITOR);
     const { gallery, extraFields, ...scalars } = common;
     for (const col of COLS) {
@@ -884,12 +901,11 @@ describe('PR #11: item detail pages', () => {
         detailsAr: '', detailsEn: '', gallery: null, extraFields: null, image: null, whatsappUrl: '', youtubeUrl: '',
         instagramUrl: '', facebookUrl: '', externalLabelAr: '', externalLabelEn: '', contactNoteAr: '', contactNoteEn: '',
         whatsapp: '', ...(col === 'activities' ? {} : { externalUrl: '' }),
-        ...(['clinics', 'facilities'].includes(col) ? {} : { contactPhone: '' }),
+        ...(col === 'facilities' ? {} : { contactPhone: '' }),
       }));
       await assertSucceeds(updateDoc(doc(ed, col, 'plain'), { gallery: [], extraFields: [] }));
       // Shared keys a collection already had keep accepting null (legacy docs).
       if (col === 'meetings') await assertSucceeds(updateDoc(doc(ed, col, 'plain'), { facebookUrl: null, whatsappUrl: null }));
-      if (col === 'clinics') await assertSucceeds(updateDoc(doc(ed, col, 'plain'), { whatsapp: null }));
       if (col === 'activities') await assertSucceeds(updateDoc(doc(ed, col, 'plain'), { contactPhone: null }));
     }
   });
@@ -906,9 +922,9 @@ describe('PR #11: item detail pages', () => {
     await assertSucceeds(updateDoc(doc(ed, 'saints', 'old'), { gallery: [img(1)] }));
   });
 
-  test('cover image: clinics, meetings and facilities now accept image + gallery', async () => {
+  test('cover image: meetings and facilities now accept image + gallery', async () => {
     const ed = db(EDITOR);
-    for (const col of ['clinics', 'meetings', 'facilities']) {
+    for (const col of ['meetings', 'facilities']) {
       await assertSucceeds(setDoc(doc(ed, col, 'i'), {
         ...base[col], image: { source: 'inline', mediaId: 'cover1' }, gallery: [{ source: 'url', url: 'https://x.org/a.jpg' }],
       }));
@@ -997,7 +1013,6 @@ describe('PR #11: item detail pages', () => {
         { weekday: 'null' }, { contactPhone: 123 }, { contactPhone: true }, { whatsappUrl: 'null' }, { facebookUrl: 'null' },
         { externalUrl: 'null' }, { whatsapp: 123 }],
       activities: [{ contactPhone: 123 }, { titleEn: 5 }, { descAr: 1 }, { link: 2 }, { category: false }],
-      clinics: [{ bookingPhone: 123 }, { whatsapp: 123 }, { specialtyEn: 5 }, { degreeAr: 1 }],
       facilities: [{ phone: 123 }, { nameEn: 5 }, { hoursAr: 9 }, { type: 1 }],
       priests: [{ nameEn: 5 }, { bioAr: 1 }, { ordinationDate: 1990 }, { rank: 'null' }, { status: 'null' }, { status: 5 },
         { rank: '' }, { externalUrl: 'null' }],
@@ -1018,16 +1033,14 @@ describe('PR #11: item detail pages', () => {
     await assertSucceeds(updateDoc(doc(ed, 'meetings', 't'), { weekday: null, hallAr: null }));
     await assertSucceeds(updateDoc(doc(ed, 'activities', 't'), { contactPhone: '0123', titleEn: null }));
     await assertSucceeds(updateDoc(doc(ed, 'facilities', 't'), { phone: '0123', hoursAr: '' }));
-    await assertSucceeds(updateDoc(doc(ed, 'clinics', 't'), { bookingPhone: null, whatsapp: '' }));
     await assertSucceeds(updateDoc(doc(ed, 'priests', 't'), { rank: 'hegumen', status: null, ordinationDate: '1990-01-01' }));
     await assertSucceeds(updateDoc(doc(ed, 'milestones', 't'), { year: 2000, icon: null }));
     await assertSucceeds(updateDoc(doc(ed, 'milestones', 't'), { year: null }));
     await assertSucceeds(updateDoc(doc(ed, 'saints', 't'), { image: { source: 'inline', mediaId: 'm1', w: 800, h: null } }));
   });
 
-  test('no duplicate inputs: clinics/facilities have no contactPhone, activities no externalUrl', async () => {
+  test('no duplicate inputs: facilities have no contactPhone, activities no externalUrl', async () => {
     const ed = db(EDITOR);
-    await assertFails(setDoc(doc(ed, 'clinics', 'x'), { ...base.clinics, contactPhone: '0123' }));
     await assertFails(setDoc(doc(ed, 'facilities', 'x'), { ...base.facilities, contactPhone: '0123' }));
     await assertFails(setDoc(doc(ed, 'activities', 'x'), { ...base.activities, externalUrl: 'https://x.org' }));
     await assertFails(setDoc(doc(ed, 'activities', 'x'), { ...base.activities, link: 'javascript:alert(1)' }));
@@ -1077,7 +1090,6 @@ describe('PR #12: admin editor save paths', () => {
   const own = {
     meetings: { stage: 'youth', nameAr: 'اجتماع', nameEn: 'Youth', weekday: 5, start: '19:00', end: '21:00', hallAr: 'ق', hallEn: 'h', notes: 'n' },
     activities: { category: 'choir', titleAr: 'كورال', titleEn: 'Choir', descAr: 'و'.repeat(2000), descEn: 'd', scheduleAr: 's', scheduleEn: 's', ageRange: '8-12' },
-    clinics: { specialty: 'dental', specialtyAr: 'الأسنان', specialtyEn: 'Dental', doctorName: 'د. مينا', degreeAr: 'أ', degreeEn: 'b', days: [1, 3, 5], start: '16:00', end: '20:00', active: true },
     facilities: { type: 'nursery', nameAr: 'الحضانة', nameEn: 'Nursery', descAr: 'و'.repeat(2000), descEn: 'd', hoursAr: 'h', hoursEn: 'h' },
     priests: { name: 'أبونا', nameEn: 'Fr', rank: 'priest', ordinationDate: '2001-03', hegumenDate: '', status: 'serving', departedDate: '', bioAr: 'ن'.repeat(5000), bioEn: 'b' },
     milestones: { titleAr: 'زيارة', titleEn: 'Visit', descAr: 'و'.repeat(2000), descEn: 'd', year: 1990, icon: 'pope' },
@@ -1088,7 +1100,7 @@ describe('PR #12: admin editor save paths', () => {
     detailsEnabled: true, detailsAr: 'ت'.repeat(10000), detailsEn: 'd'.repeat(10000),
     image: { source: 'inline', mediaId: 'cover1', alt: 'a'.repeat(300), w: 800, h: 600 }, showDetailImages: true,
     showContacts: true, showSocials: true,
-    [col === 'clinics' ? 'bookingPhone' : col === 'facilities' ? 'phone' : 'contactPhone']: '01012345678',
+    [col === 'facilities' ? 'phone' : 'contactPhone']: '01012345678',
     whatsapp: '01012345678', whatsappUrl: 'https://chat.whatsapp.com/x', facebookUrl: 'https://facebook.com/x',
     youtubeUrl: 'https://youtube.com/@x', instagramUrl: 'https://instagram.com/x',
     [col === 'activities' ? 'link' : 'externalUrl']: 'https://forms.example.org/register',
@@ -1098,7 +1110,7 @@ describe('PR #12: admin editor save paths', () => {
   const gallery = Array.from({ length: 8 }, (_, i) => ({ source: 'inline', mediaId: `g${i}`, alt: 'a'.repeat(300), w: 800, h: 600 }));
   const extraFields = Array.from({ length: 15 }, () => ({ titleAr: 'ع'.repeat(150), titleEn: 't'.repeat(150), valueAr: 'ق'.repeat(2000), valueEn: 'v'.repeat(2000) }));
 
-  test('new item at maximum size: create, then the gallery, then the extra fields (all 7 collections)', async () => {
+  test('new item at maximum size: create, then the gallery, then the extra fields (all 6 collections)', async () => {
     const ed = db(EDITOR);
     for (const col of Object.keys(own)) {
       try {
