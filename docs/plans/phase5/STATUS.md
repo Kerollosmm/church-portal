@@ -19,10 +19,10 @@
 
 | Metric | Baseline (`main` @ `deb8328`) | After 5A | After 5B | After 5C | After 5D |
 |---|---|---|---|---|---|
-| `flutter analyze` issues | 0 | 0 | | | |
-| Total Dart tests passing | *(record in 5A)* | All Linux CI green (1,612 local; Windows `dart.bat` check passes on Linux CI) | | | |
-| Rules emulator suites passing | *(record in 5A)* | 42 suites / 186 tests | | | |
-| `main.dart.js` gzip `-9` (`<= 1,399,000 B`) | `1,330,341 B` | `1,349,211 B` (`+49,789 B` headroom, Linux CI `9bc860e`; `0` deferred leaks) | | | |
+| `flutter analyze` issues | 0 | 0 | 0 | 0 | |
+| Total Dart tests passing | *(record in 5A)* | All Linux CI green (1,612 local; Windows `dart.bat` check passes on Linux CI) | All Linux CI green (`1,620`; `1,619` local on Windows) | Local `1,619/1,620` (Windows `dart.bat` check); pending Linux CI | |
+| Rules emulator suites passing | *(record in 5A)* | 42 suites / 186 tests | 42 suites / 186 tests | *(unchanged — no rules change)* | |
+| `main.dart.js` gzip `-9` (`<= 1,399,000 B`) | `1,330,341 B` | `1,349,211 B` (`+49,789 B` headroom, Linux CI `9bc860e`; `0` deferred leaks) | `1,348,956 B` (`+50,044 B` headroom, Linux CI `7e02cf5` / `#102`; `0` deferred leaks) | *(record Linux CI after push)* | |
 
 ---
 
@@ -42,12 +42,12 @@
 ### PR 5B — `refactor/p5b-simplify-undo` ([Guide](PR-5B-simplify-undo.md))
 - [x] **P5B-1:** Extract `SoftDeleteUndo` and deduplicate `CollectionListScreen` undo state (all 19 `PendingDelete` / 14 `testWidgets` race tests green)
 - [x] **P5B-2:** Wire `MessagesScreen` to `SoftDeleteUndo` + `checkLazyPurge` (`confirmNamedAction`, `removeMedia: false`, batch `"Undo all"` + race tests added)
-- [ ] **Gate 5B:** `flutter analyze` · `flutter test` · `rules_test` · `check_web_bundle.mjs` · Docs synced · Review loop · CI · Preview check (PR [#102](https://github.com/Kerollosmm/church-portal/pull/102)) · Merge (`SHA: ____`) · Live deploy
+- [x] **Gate 5B:** `flutter analyze` · `flutter test` · `rules_test` · `check_web_bundle.mjs` · Docs synced · Review loop · CI · Preview check (PR [#102](https://github.com/Kerollosmm/church-portal/pull/102)) · Merge (`SHA: bf12824`) · Live deploy (`45648798284`)
 
 ### PR 5C — `refactor/p5c-domain-dedup` ([Guide](PR-5C-domain-dedup.md))
-- [ ] **P5C-1:** Unify the 3 byte-identical `YYYY-MM-DD` formatters (`isoDate`, `dayKey`, `occasion_theme.formatDate`), keeping `CairoTime` `_ymd` separate
-- [ ] **P5C-2:** Extract 2 helpers in `planNotifications` (`_shiftOutOfQuietHours`, `_buildReminderNotification`)
-- [ ] **P5C-3:** Centralize duplicated push defaults in `lib/domain/push.dart`
+- [x] **P5C-1:** Unify the 3 byte-identical `YYYY-MM-DD` formatters (`isoDate`, `dayKey`, `occasion_theme.formatDate`), keeping `CairoTime` `_ymd` separate
+- [x] **P5C-2:** Extract 2 helpers in `planNotifications` (`_shiftOutOfQuietHours`, `_buildReminderNotification`)
+- [x] **P5C-3:** Centralize duplicated push defaults in `lib/domain/push.dart`
 - [ ] **Gate 5C:** `flutter analyze` · `flutter test` · `check_web_bundle.mjs` · Review loop · CI · Merge (`SHA: ____`) · Live deploy
 
 ### PR 5D — `refactor/p5d-admin-dedup` ([Guide](PR-5D-admin-dedup.md))
