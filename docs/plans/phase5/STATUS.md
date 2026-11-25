@@ -56,4 +56,4 @@
 - [x] **Gate 5D:** `flutter analyze` · `flutter test` · `check_web_bundle.mjs` · Review loop · CI · Preview check (PR [#104](https://github.com/Kerollosmm/church-portal/pull/104)) · Merge (`SHA: 7670674`) · Live deploy (`45692469461`)
 
 ### PR 5E — Optional Splits ([Guide](PR-5E-optional-splits.md)) — **Default: SKIP**
-- [x] Evaluated after 5A–5D: **skipped** (`Default: SKIP` confirmed with owner — `admin_screens.dart` 1,315 lines, `doc_editor.dart` 3,097 lines, CI `firestore-rules` 1m13s–1m30s, `analyze-test-build` 6m13s–6m30s, `main.dart.js` gzip `1,349,223 B` / `+49,777 B` headroom)
+- [x] Evaluated after 5A–5D: **skipped** (`Default: SKIP` confirmed with owner at `7670674` — `admin_screens.dart` 1,379 lines, `doc_editor.dart` 3,247 lines, CI `firestore-rules` 1m13s–1m30s, `analyze-test-build` 6m13s–6m30s, `main.dart.js` gzip `1,349,223 B` / `+49,777 B` headroom)
