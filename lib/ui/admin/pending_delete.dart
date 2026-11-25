@@ -264,6 +264,11 @@ class SoftDeleteUndo {
   ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? _controller;
   final ValueNotifier<({int count, String title})?> _barState = ValueNotifier(null);
   Timer? _barTimer;
+  bool _barMounted = false;
+  bool _pendingBarTimerOnMount = false;
+  bool _queuedMountDelayed = false;
+  int _barMountSeq = 0;
+  final Map<String, Object> _queuedBarHolds = {};
   final List<SnackBar> _deferredSnacks = [];
 
   SoftDeleteUndo({
@@ -364,11 +369,14 @@ class SoftDeleteUndo {
     final id = doc.id;
     if (_pending.isPending(id)) return;
     final docData = doc.data;
-    final deleteNow = DateTime.now().toUtc();
+    final prevCutoff = _undoneCutoffs[id];
+    var deleteNow = DateTime.now().toUtc();
+    if (prevCutoff != null && !deleteNow.isAfter(prevCutoff)) {
+      deleteNow = prevCutoff.add(const Duration(milliseconds: 1));
+    }
     final gen = (_gen[id] ?? 0) + 1;
     _gen[id] = gen;
     _restoringIds.remove(id);
-    _undoneCutoffs.remove(id);
     _pendingDeletedAt[id] = deleteNow;
 
     final priorPending = [
@@ -523,6 +531,126 @@ class SoftDeleteUndo {
     _barTimer = null;
     _controller = null;
     _barState.value = null;
+    _barMounted = false;
+    _pendingBarTimerOnMount = false;
+    _queuedMountDelayed = false;
+  }
+
+  void _dismissController(
+    ScaffoldMessengerState? messenger,
+    ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? ctrl,
+    bool wasMounted, {
+    bool dismissUnrelatedIfIdle = false,
+  }) {
+    if (messenger == null || !messenger.mounted) return;
+    if (wasMounted || (ctrl == null && dismissUnrelatedIfIdle)) {
+      messenger.removeCurrentSnackBar();
+    }
+  }
+
+  void _holdPendingWhileQueued(int seq) {
+    if (!_queuedMountDelayed) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!isMounted() || _controller == null || seq != _barMountSeq || _barMounted) return;
+        _queuedMountDelayed = true;
+      });
+    }
+    final missing = [
+      for (final pid in _pending.pendingIds)
+        if (!_queuedBarHolds.containsKey(pid)) pid,
+    ];
+    if (missing.isEmpty) return;
+    _queuedBarHolds.addAll(_pending.holdAll(missing));
+  }
+
+  void _onBarMounted(
+    int seq,
+    ScaffoldMessengerState messenger, {
+    required String failedMsg,
+    required String undoLabel,
+    required String undoAllLabel,
+  }) {
+    if (!isMounted() || _controller == null || seq != _barMountSeq) return;
+    _barMounted = true;
+    final delayed = _queuedMountDelayed;
+    _queuedMountDelayed = false;
+    if (_pendingBarTimerOnMount) {
+      _pendingBarTimerOnMount = false;
+      _scheduleBarTimer(
+        messenger,
+        failedMsg: failedMsg,
+        undoLabel: undoLabel,
+        undoAllLabel: undoAllLabel,
+      );
+    }
+    if (_queuedBarHolds.isEmpty) return;
+    final holds = Map<String, Object>.from(_queuedBarHolds);
+    _queuedBarHolds.clear();
+    final mountNow = DateTime.now().toUtc();
+    final delayedIds = delayed
+        ? [
+            for (final pid in holds.keys)
+              if (_pending.isPending(pid)) pid,
+          ]
+        : const <String>[];
+    if (delayedIds.isEmpty) {
+      for (final e in holds.entries) {
+        unawaited(_pending.releaseHold(e.key, extend: false, token: e.value));
+      }
+      return;
+    }
+    final freshTokens = _pending.holdAll(delayedIds);
+    for (final e in holds.entries) {
+      unawaited(_pending.releaseHold(e.key, extend: false, token: e.value));
+    }
+    for (final pid in delayedIds) {
+      final info = _entries[pid];
+      final freshToken = freshTokens[pid];
+      final gen = _gen[pid];
+      if (info == null || freshToken == null || gen == null) {
+        if (freshToken != null) {
+          unawaited(_pending.releaseHold(pid, extend: false, token: freshToken));
+        }
+        continue;
+      }
+      final prevCutoff = _undoneCutoffs[pid];
+      var renewedAt = mountNow;
+      if (prevCutoff != null && !renewedAt.isAfter(prevCutoff)) {
+        renewedAt = prevCutoff.add(const Duration(milliseconds: 1));
+      }
+      _pendingDeletedAt[pid] = renewedAt;
+      unawaited(_enqueueWrite(pid, (prevChain) async {
+        var priorWritten = true;
+        if (prevChain != null) {
+          try {
+            priorWritten = await prevChain;
+          } catch (_) {
+            priorWritten = false;
+          }
+        }
+        if (!isMounted() || _gen[pid] != gen || !_pending.isPending(pid)) {
+          return priorWritten;
+        }
+        var renewed = false;
+        try {
+          await info.repo.update(info.collection, pid, {'deletedAt': renewedAt});
+          renewed = true;
+        } catch (_) {}
+        if (!isMounted()) return priorWritten || renewed;
+        if (_gen[pid] == gen) {
+          await _pending.releaseHold(pid, extend: renewed, token: freshToken);
+          if (isMounted()) {
+            _syncAfterExpiry(
+              messenger,
+              failedMsg: failedMsg,
+              undoLabel: undoLabel,
+              undoAllLabel: undoAllLabel,
+            );
+          }
+        }
+        return priorWritten || renewed;
+      }));
+    }
   }
 
   void _syncAfterExpiry(
@@ -533,13 +661,12 @@ class SoftDeleteUndo {
   }) {
     if (!isMounted()) return;
     if (!_pending.hasPending) {
-      final hadActiveBar = _controller != null;
+      final prevCtrl = _controller;
+      final wasMounted = _barMounted;
       _clearActiveBarState();
-      if (hadActiveBar) {
+      if (prevCtrl != null) {
         onBarChanged?.call(false);
-        if (messenger != null && messenger.mounted) {
-          messenger.removeCurrentSnackBar();
-        }
+        _dismissController(messenger, prevCtrl, wasMounted);
         onChanged();
       }
       flushDeferredSnacks(messenger);
@@ -584,11 +711,12 @@ class SoftDeleteUndo {
         );
         return;
       }
-      final hadActiveBar = _controller != null;
+      final prevCtrl = _controller;
+      final wasMounted = _barMounted;
       _clearActiveBarState();
-      if (hadActiveBar) {
+      if (prevCtrl != null) {
         onBarChanged?.call(false);
-        if (messenger.mounted) messenger.removeCurrentSnackBar();
+        _dismissController(messenger, prevCtrl, wasMounted);
         onChanged();
       }
       flushDeferredSnacks(messenger);
@@ -601,10 +729,12 @@ class SoftDeleteUndo {
     required String fallbackCollection,
     required String failedMsg,
   }) async {
-    final hadActiveBar = _controller != null;
+    final prevCtrl = _controller;
+    final wasMounted = _barMounted;
     _clearActiveBarState();
-    if (hadActiveBar) onBarChanged?.call(false);
-    if (messenger.mounted) messenger.removeCurrentSnackBar();
+    _queuedBarHolds.clear();
+    if (prevCtrl != null) onBarChanged?.call(false);
+    _dismissController(messenger, prevCtrl, wasMounted);
 
     final ids = _pending.pendingIds.toList();
     final undone = <({String id, AdminBackend repo, String collection, Future<bool>? inFlight, int undoGen})>[];
@@ -625,7 +755,7 @@ class SoftDeleteUndo {
         ));
       }
     }
-    if (isMounted() && (hadActiveBar || undone.isNotEmpty)) onChanged();
+    if (isMounted() && (prevCtrl != null || undone.isNotEmpty)) onChanged();
     // Yield past SnackBarAction._handlePressed()'s trailing hideCurrentSnackBar call
     // so flushed errors are not immediately dismissed as if they were the Undo bar.
     await Future<void>.microtask(() {});
@@ -688,6 +818,11 @@ class SoftDeleteUndo {
     onBarChanged?.call(true);
 
     if (_controller != null && prevMulti == wantMulti) {
+      if (!_barMounted) {
+        _holdPendingWhileQueued(_barMountSeq);
+        if (resetTimer) _pendingBarTimerOnMount = true;
+        return;
+      }
       if (resetTimer) {
         _scheduleBarTimer(
           messenger,
@@ -699,26 +834,42 @@ class SoftDeleteUndo {
       return;
     }
 
+    final prevCtrl = _controller;
+    final wasMounted = _barMounted;
     if (resetTimer) {
       _barTimer?.cancel();
       _barTimer = null;
     }
     _controller = null;
-    messenger.removeCurrentSnackBar();
+    _barMounted = false;
+    _dismissController(
+      messenger,
+      prevCtrl,
+      wasMounted,
+      dismissUnrelatedIfIdle: resetTimer,
+    );
+    final mountSeq = ++_barMountSeq;
+    if (resetTimer || !wasMounted) {
+      _holdPendingWhileQueued(mountSeq);
+      _pendingBarTimerOnMount = true;
+    }
     final undoController = messenger.showSnackBar(
       SnackBar(
         duration: _pending.window,
         persist: true,
-        content: ValueListenableBuilder<({int count, String title})?>(
-          valueListenable: _barState,
-          builder: (ctx, state, _) {
-            final count = state?.count ?? pendingCount;
-            final lastTitle = state?.title ?? title;
-            final text = count > 1
-                ? ctx.tr('deletedItemMultiUndo', {'n': '$count', 'last': lastTitle})
-                : ctx.tr('deletedItemUndo', {'n': lastTitle});
-            return Text(text);
-          },
+        content: _UndoBarContent(
+          barState: _barState,
+          initialCount: pendingCount,
+          initialTitle: title,
+          messenger: messenger,
+          isActive: () => isMounted() && _controller != null && mountSeq == _barMountSeq,
+          onMount: () => _onBarMounted(
+            mountSeq,
+            messenger,
+            failedMsg: failedMsg,
+            undoLabel: undoLabel,
+            undoAllLabel: undoAllLabel,
+          ),
         ),
         action: SnackBarAction(
           label: wantMulti ? undoAllLabel : undoLabel,
@@ -735,36 +886,41 @@ class SoftDeleteUndo {
     onChanged();
     undoController.closed.then((_) {
       if (identical(_controller, undoController)) {
+        final holds = Map<String, Object>.from(_queuedBarHolds);
+        _queuedBarHolds.clear();
         _clearActiveBarState();
+        for (final e in holds.entries) {
+          unawaited(_pending.releaseHold(e.key, extend: false, token: e.value));
+        }
         onBarChanged?.call(false);
         onChanged();
         flushDeferredSnacks(messenger);
       }
     });
-    if (resetTimer) {
-      _scheduleBarTimer(
-        messenger,
-        failedMsg: failedMsg,
-        undoLabel: undoLabel,
-        undoAllLabel: undoAllLabel,
-      );
-    }
   }
 
   void dispose() {
     _barTimer?.cancel();
     _barTimer = null;
+    final wasMounted = _barMounted;
+    _barMounted = false;
+    _pendingBarTimerOnMount = false;
+    _queuedMountDelayed = false;
+    _queuedBarHolds.clear();
+    _barMountSeq++;
     final ctrl = _controller;
     _controller = null;
     if (ctrl != null) {
-      // Defer close() out of State.dispose()'s locked finalizeTree phase, and keep
-      // _barState alive until the ~250 ms exit transition finishes so late or sibling
-      // Scaffold rebuilds never observe a disposed ValueNotifier.
-      Future<void>.microtask(() {
-        try {
-          ctrl.close();
-        } catch (_) {}
-      });
+      if (wasMounted) {
+        // Defer close() out of State.dispose()'s locked finalizeTree phase, and keep
+        // _barState alive until the ~250 ms exit transition finishes so late or sibling
+        // Scaffold rebuilds never observe a disposed ValueNotifier.
+        Future<void>.microtask(() {
+          try {
+            ctrl.close();
+          } catch (_) {}
+        });
+      }
       unawaited(ctrl.closed.whenComplete(_barState.dispose));
     } else {
       _barState.dispose();
@@ -777,5 +933,68 @@ class SoftDeleteUndo {
     _inFlightWrites.clear();
     _gen.clear();
     _restoringIds.clear();
+  }
+}
+
+class _UndoBarContent extends StatefulWidget {
+  final ValueNotifier<({int count, String title})?> barState;
+  final int initialCount;
+  final String initialTitle;
+  final ScaffoldMessengerState messenger;
+  final bool Function() isActive;
+  final VoidCallback onMount;
+
+  const _UndoBarContent({
+    required this.barState,
+    required this.initialCount,
+    required this.initialTitle,
+    required this.messenger,
+    required this.isActive,
+    required this.onMount,
+  });
+
+  @override
+  State<_UndoBarContent> createState() => _UndoBarContentState();
+}
+
+class _UndoBarContentState extends State<_UndoBarContent> {
+  bool _obsolete = false;
+  bool _disposed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (!widget.isActive()) {
+      _obsolete = true;
+      Future<void>.microtask(() {
+        if (!_disposed && widget.messenger.mounted) {
+          widget.messenger.removeCurrentSnackBar();
+        }
+      });
+      return;
+    }
+    widget.onMount();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_obsolete) return const SizedBox.shrink();
+    return ValueListenableBuilder<({int count, String title})?>(
+      valueListenable: widget.barState,
+      builder: (ctx, state, _) {
+        final count = state?.count ?? widget.initialCount;
+        final lastTitle = state?.title ?? widget.initialTitle;
+        final text = count > 1
+            ? ctx.tr('deletedItemMultiUndo', {'n': '$count', 'last': lastTitle})
+            : ctx.tr('deletedItemUndo', {'n': lastTitle});
+        return Text(text);
+      },
+    );
   }
 }

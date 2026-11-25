@@ -6858,6 +6858,192 @@ void main() {
         expect(repo.deletedIds, isNot(contains('contact_messages/msg-b')));
       });
 
+      testWidgets('SoftDeleteUndo keeps undone cutoff if re-delete write fails so stale purge still skips doc',
+          (tester) async {
+        final messengerKey = GlobalKey<ScaffoldMessengerState>();
+        final undo = SoftDeleteUndo(
+          isMounted: () => true,
+          onChanged: () {},
+          removeMedia: false,
+        );
+        addTearDown(undo.dispose);
+
+        final repo = _ControlledUpdateBackend(initialCollections: {
+          'contact_messages': [
+            AdminDoc('msg-a', {
+              'name': 'Expired A',
+              'message': 'Old tombstone',
+              'createdAt': DateTime.utc(2026, 11, 15, 10),
+              'deletedAt': DateTime.now().toUtc().subtract(const Duration(seconds: 30)),
+              'status': 'new',
+            }),
+            AdminDoc('msg-b', {
+              'name': 'Restored B',
+              'message': 'Undo then failed re-delete while purge in flight',
+              'createdAt': DateTime.utc(2026, 11, 15, 11),
+              'status': 'new',
+            }),
+          ],
+        });
+        addTearDown(repo.dispose);
+
+        await tester.pumpWidget(MaterialApp(
+          locale: const Locale('ar'),
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          scaffoldMessengerKey: messengerKey,
+          home: const Scaffold(body: SizedBox.shrink()),
+        ));
+        await tester.pumpAndSettle();
+
+        final docB = repo.collections['contact_messages']!.last;
+        await undo.delete(
+          repo: repo,
+          collection: 'contact_messages',
+          doc: docB,
+          title: 'Restored B',
+          messenger: messengerKey.currentState,
+          failedMsg: 'Failed: {e}',
+          undoLabel: 'تراجع',
+          undoAllLabel: 'تراجع عن الكل',
+        );
+        await tester.pumpAndSettle();
+
+        final staleSnapshot = [
+          AdminDoc('msg-a', Map<String, dynamic>.from(repo.collections['contact_messages']!.first.data)),
+          AdminDoc('msg-b', {
+            ...Map<String, dynamic>.from(docB.data),
+            'deletedAt': DateTime.now().toUtc().subtract(const Duration(seconds: 15)),
+          }),
+        ];
+        final holdDeleteA = repo.holdDelete('contact_messages', 'msg-a');
+        const msgDef = CollectionDef('contact_messages', '', '', [], []);
+        undo.checkLazyPurge(repo, msgDef, staleSnapshot);
+        await tester.pump();
+
+        // Undo sets _undoneCutoffs['msg-b']
+        await tester.tap(find.text('تراجع'));
+        await tester.pumpAndSettle();
+        expect(isSoftDeleted(repo.collections['contact_messages']!.last.data), isFalse);
+
+        // Second delete attempt fails on Firestore write -> cutoff must remain intact!
+        final failReDelete = repo.hold('contact_messages', 'msg-b');
+        await undo.delete(
+          repo: repo,
+          collection: 'contact_messages',
+          doc: repo.collections['contact_messages']!.last,
+          title: 'Restored B',
+          messenger: messengerKey.currentState,
+          failedMsg: 'Failed: {e}',
+          undoLabel: 'تراجع',
+          undoAllLabel: 'تراجع عن الكل',
+        );
+        failReDelete.completeError(FirebaseException(plugin: 'cloud_firestore', code: 'unavailable', message: 'Offline'));
+        await tester.pumpAndSettle();
+
+        // Stale purge resumes after msg-a -> msg-b is STILL protected by preserved cutoff!
+        holdDeleteA.complete();
+        await tester.pumpAndSettle();
+        expect(repo.deletedIds, ['contact_messages/msg-a']);
+        expect(repo.deletedIds, isNot(contains('contact_messages/msg-b')));
+      });
+
+      testWidgets('SoftDeleteUndo holds deletes and keeps full 10s Undo window behind a long unrelated SnackBar',
+          (tester) async {
+        final messengerKey = GlobalKey<ScaffoldMessengerState>();
+        final undo = SoftDeleteUndo(
+          isMounted: () => true,
+          onChanged: () {},
+          removeMedia: false,
+        );
+        addTearDown(undo.dispose);
+
+        final m1 = AdminDoc('msg-q1', {
+          'name': 'Queued One',
+          'message': 'First',
+          'createdAt': DateTime.utc(2026, 11, 15, 10),
+          'status': 'new',
+        });
+        final m2 = AdminDoc('msg-q2', {
+          'name': 'Queued Two',
+          'message': 'Second',
+          'createdAt': DateTime.utc(2026, 11, 15, 11),
+          'status': 'new',
+        });
+        final repo = _TestAdminBackend(initialCollections: {
+          'contact_messages': [m1, m2],
+        });
+
+        await tester.pumpWidget(MaterialApp(
+          locale: const Locale('ar'),
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          scaffoldMessengerKey: messengerKey,
+          home: const Scaffold(body: SizedBox.shrink()),
+        ));
+        await tester.pumpAndSettle();
+
+        // Show an active transient bar plus a queued 15-second SnackBar (> 10s delete window).
+        messengerKey.currentState!.showSnackBar(
+          const SnackBar(content: Text('Active Transient'), duration: Duration(seconds: 1)),
+        );
+        messengerKey.currentState!.showSnackBar(
+          const SnackBar(content: Text('Long Unrelated Notice'), duration: Duration(seconds: 15)),
+        );
+        await tester.pump();
+
+        // Delete m1 at t=0 (dismisses transient, promotes Long Unrelated Notice), then m2 at t=2s while queued behind it.
+        await undo.delete(
+          repo: repo,
+          collection: 'contact_messages',
+          doc: m1,
+          title: 'Queued One',
+          messenger: messengerKey.currentState,
+          failedMsg: 'Failed: {e}',
+          undoLabel: 'تراجع',
+          undoAllLabel: 'تراجع عن الكل',
+        );
+        await tester.pumpAndSettle();
+        await tester.pump(const Duration(seconds: 2));
+        expect(find.text('Long Unrelated Notice'), findsOneWidget);
+
+        await undo.delete(
+          repo: repo,
+          collection: 'contact_messages',
+          doc: m2,
+          title: 'Queued Two',
+          messenger: messengerKey.currentState,
+          failedMsg: 'Failed: {e}',
+          undoLabel: 'تراجع',
+          undoAllLabel: 'تراجع عن الكل',
+        );
+        await tester.pump();
+        expect(find.text('Long Unrelated Notice'), findsOneWidget);
+
+        // Advance past 12s (still inside the 15s unrelated bar): neither doc commits before Undo shows!
+        await tester.pump(const Duration(seconds: 12));
+        expect(repo.deletedIds, isEmpty);
+        expect(find.text('Long Unrelated Notice'), findsOneWidget);
+
+        // Advance past 15s unrelated bar exit -> batched Undo all mounts directly (stale single Undo never appears)
+        await tester.pump(const Duration(seconds: 2));
+        await tester.pumpAndSettle();
+        expect(find.text('تراجع عن الكل'), findsOneWidget);
+        expect(find.text('تراجع'), findsNothing);
+        expect(repo.deletedIds, isEmpty);
+
+        // Undo stays available for the full 10s window while visible (check at +8s), then restores both cleanly!
+        await tester.pump(const Duration(seconds: 8));
+        expect(find.text('تراجع عن الكل'), findsOneWidget);
+        expect(repo.deletedIds, isEmpty);
+
+        await tester.tap(find.text('تراجع عن الكل'));
+        await tester.pumpAndSettle();
+        expect(repo.deletedIds, isEmpty);
+        expect(isSoftDeleted(repo.collections['contact_messages']!.first.data), isFalse);
+        expect(isSoftDeleted(repo.collections['contact_messages']!.last.data), isFalse);
+      });
+
       testWidgets('FeaturesScreen never shows updatedElsewhere banner on failed save with rollback', (tester) async {
         final initialDoc = AdminDoc('features', {
           'updatedAt': DateTime.utc(2026, 11, 1, 10),

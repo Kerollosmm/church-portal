@@ -17,9 +17,9 @@
 
 ### Steps
 - [ ] Add a failing deny test in `tool/rules_test/rules.test.mjs` asserting public `getDocs`/`getDoc` and admin `setDoc`/`updateDoc`/`deleteDoc` on `'clinics'` all fail (`assertFails`). Migrate generic CRUD/soft-delete/image/legacy tests that used `'clinics'` as a sample collection over to `'facilities'`.
-- [ ] Run `cd tool/rules_test && npm test` → confirm the new deny test FAILS.
+- [ ] Run `(cd tool/rules_test && npm test)` → confirm the new deny test FAILS.
 - [ ] Apply the `firestore.rules` edits above.
-- [ ] Run `cd tool/rules_test && npm test` → confirm 100% PASS (including worst-case expression-budget tests).
+- [ ] Run `(cd tool/rules_test && npm test)` → confirm 100% PASS (including worst-case expression-budget tests).
 - [ ] Commit with explicit pathspecs.
 
 ---
@@ -65,5 +65,5 @@
 
 ### Steps
 - [ ] Apply edits and sync the 7 docs/READMEs.
-- [ ] Run full verification: `flutter analyze && flutter test`, `cd tool/rules_test && npm test`, `flutter build web --release`, `python3 tool/fingerprint_icon_fonts.py build/web`, `node tool/check_web_bundle.mjs build/web`.
+- [ ] Run full verification: `flutter analyze && flutter test`, `(cd tool/rules_test && npm test)`, `flutter build web --release`, `python3 tool/fingerprint_icon_fonts.py build/web`, `node tool/check_web_bundle.mjs build/web`.
 - [ ] Update `docs/plans/phase5/STATUS.md`, push, run PR review loop, squash-merge, verify deploy.

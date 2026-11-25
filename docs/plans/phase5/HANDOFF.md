@@ -25,7 +25,7 @@ Run inside the PR worktree:
 flutter pub get
 flutter analyze
 flutter test                                # sandbox/proxy: NO_PROXY=127.0.0.1,localhost flutter test
-cd tool/rules_test && npm ci && npm test    # when firestore.rules or rules tests change (Java 11+)
+(cd tool/rules_test && npm ci && npm test)  # when firestore.rules or rules tests change (Java 11+)
 python3 tool/gen_seed.py && git diff --exit-code -- assets/seed/seed.json tool/retired_seed_ids.json tool/known_seed_ids.json
 flutter build web --release
 python3 tool/fingerprint_icon_fonts.py build/web
