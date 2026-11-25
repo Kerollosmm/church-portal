@@ -243,12 +243,13 @@ class PushSettings {
   final Set<String> reminderSources;
 
   static const allReminderSources = {'lit', 'mtg', 'day'};
+  static const defaultReminderLeads = [0, 15, 60, 1440];
 
   const PushSettings({
     this.enabled = false,
     this.vapidKey = '',
     this.offered = NotifyType.values,
-    this.reminderLeads = const [0, 15, 60, 1440],
+    this.reminderLeads = defaultReminderLeads,
     this.defaultLead = 60,
     this.reminderSources = allReminderSources,
   });
@@ -297,7 +298,7 @@ class PushSettings {
       }
     }
 
-    List<int> reminderLeads = const [0, 15, 60, 1440];
+    List<int> reminderLeads = defaultReminderLeads;
     final rawLeads = m['reminderLeads'];
     if (rawLeads is List) {
       final parsed = <int>[];
@@ -372,17 +373,20 @@ const bool kPushDeliveryShipped = true;
 /// PR B / PR D can honour it; there is no quiet-hours UI in PR A (plan: it
 /// needs a delivery path).
 class QuietHours {
+  static const defaultFrom = '22:00';
+  static const defaultTo = '07:00';
+
   final String from;
   final String to;
 
-  const QuietHours({this.from = '22:00', this.to = '07:00'});
+  const QuietHours({this.from = defaultFrom, this.to = defaultTo});
 
   Map<String, dynamic> toJson() => {'from': from, 'to': to};
 
   factory QuietHours.fromJson(Map<String, dynamic>? m) {
     if (m == null) return const QuietHours();
-    final f = m['from'] is String ? m['from'] as String : '22:00';
-    final t = m['to'] is String ? m['to'] as String : '07:00';
+    final f = m['from'] is String ? m['from'] as String : defaultFrom;
+    final t = m['to'] is String ? m['to'] as String : defaultTo;
     return QuietHours(from: f, to: t);
   }
 
@@ -641,7 +645,7 @@ class NotifyTypeSpec {
     ),
     NotifyType.verse_daily: NotifyTypeSpec(
       type: NotifyType.verse_daily,
-      time: '07:00',
+      time: NotifyTypeConfig.defaultVerseTime,
       daysBefore: 0,
       titleAr: 'آية اليوم',
       titleEn: 'Daily Verse',
@@ -652,7 +656,7 @@ class NotifyTypeSpec {
     ),
     NotifyType.katameros_daily: NotifyTypeSpec(
       type: NotifyType.katameros_daily,
-      time: '06:30',
+      time: NotifyTypeConfig.defaultKatamerosTime,
       daysBefore: 0,
       titleAr: 'قراءات اليوم',
       titleEn: 'Daily Readings',
@@ -676,7 +680,7 @@ class NotifyTypeSpec {
     ),
     NotifyType.feasts: NotifyTypeSpec(
       type: NotifyType.feasts,
-      time: '07:30',
+      time: NotifyTypeConfig.defaultFeastsTime,
       daysBefore: 0,
       titleAr: 'عيد اليوم: {feast}',
       titleEn: "Today's Feast: {feast}",
