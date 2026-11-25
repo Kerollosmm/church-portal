@@ -1,10 +1,15 @@
 import 'dart:async';
+
+import 'package:material_ui/material_ui.dart';
+
+import '../../core/l10n.dart';
 import '../../data/admin_repository.dart';
 import '../../data/error_reporting.dart';
 import '../../data/media_repository.dart';
 import '../../domain/media.dart';
 import '../../domain/models.dart';
 import 'admin_schema.dart';
+import 'admin_validators.dart';
 
 /// Buffers destructive deletions for a reversible grace window (default 10 s).
 ///
@@ -218,6 +223,7 @@ Future<void> purgeExpiredSoftDeletes(
   DateTime Function()? clock,
   bool Function(String id)? isLocalPending,
   Set<String>? purging,
+  bool removeMedia = true,
 }) async {
   final now = (clock?.call() ?? DateTime.now()).toUtc();
   for (final d in List<AdminDoc>.from(docs)) {
@@ -226,11 +232,552 @@ Future<void> purgeExpiredSoftDeletes(
     if (purging != null && !purging.add(d.id)) continue;
     try {
       await repo.delete(def.name, d.id);
-      await removeOrphanedDocMedia(repo.media, d.data);
+      if (removeMedia) {
+        await removeOrphanedDocMedia(repo.media, d.data);
+      }
     } catch (e, st) {
       ErrorReporting.capture(e, st, section: 'admin.purge');
     } finally {
       purging?.remove(d.id);
     }
+  }
+}
+
+/// Coordinates 10s batch soft-delete, serialized per-ID write guards, batched
+/// "Undo all" SnackBar presentation, deferred non-undo SnackBars, and lazy purge
+/// across admin list screens (`CollectionListScreen` and `MessagesScreen`).
+class SoftDeleteUndo {
+  final PendingDelete _pending;
+  final bool Function() isMounted;
+  final void Function() onChanged;
+  final VoidCallback? onBarShown;
+  final VoidCallback? onBarHidden;
+  final String singleUndoKey;
+  final bool closeBarOnDispose;
+
+  final Map<String, ({AdminBackend repo, String collection, String title})> _entries = {};
+  final Map<String, Future<bool>> _inFlightWrites = {};
+  final Map<String, int> _gen = {};
+  final Set<String> _restoringIds = {};
+  final Set<String> _purging = {};
+  ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? _controller;
+  int _barCount = 0;
+  bool _barUsesMulti = false;
+  final ValueNotifier<({int count, String title})?> _barState = ValueNotifier(null);
+  Timer? _barTimer;
+  final List<SnackBar> _deferredSnacks = [];
+
+  SoftDeleteUndo({
+    required this.isMounted,
+    required this.onChanged,
+    this.onBarShown,
+    this.onBarHidden,
+    this.singleUndoKey = 'deletedItemUndo',
+    this.closeBarOnDispose = false,
+    Duration window = const Duration(seconds: 10),
+  }) : _pending = PendingDelete(window: window);
+
+  bool get hasPending => _pending.hasPending;
+  bool get hasActiveBar => _controller != null;
+  bool isPending(String id) => _pending.isPending(id);
+  bool isRestoring(String id) => _restoringIds.contains(id);
+
+  bool isVisible(AdminDoc d) =>
+      (!isSoftDeleted(d.data) || _restoringIds.contains(d.id)) && !_pending.isPending(d.id);
+
+  bool isProtectedFromPurge(String id) =>
+      _pending.isPending(id) || _restoringIds.contains(id) || _inFlightWrites.containsKey(id);
+
+  void clearTransitionState() {
+    _restoringIds.clear();
+    _deferredSnacks.clear();
+  }
+
+  void checkLazyPurge(
+    AdminBackend repo,
+    CollectionDef def,
+    List<AdminDoc> docs, {
+    bool removeMedia = true,
+  }) {
+    final now = DateTime.now().toUtc();
+    if (docs.any((d) => isExpiredSoftDelete(d.data, now) && !isProtectedFromPurge(d.id))) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (isMounted()) {
+          purgeExpiredSoftDeletes(
+            repo,
+            def,
+            docs,
+            isLocalPending: isProtectedFromPurge,
+            purging: _purging,
+            removeMedia: removeMedia,
+          );
+        }
+      });
+    }
+  }
+
+  void showSnack(ScaffoldMessengerState? messenger, SnackBar bar, {bool deferWhileUndo = false}) {
+    if (!isMounted() || messenger == null || !messenger.mounted) return;
+    if (deferWhileUndo && _controller != null) {
+      _deferredSnacks.add(bar);
+      return;
+    }
+    messenger.showSnackBar(bar);
+  }
+
+  void flushDeferredSnacks(ScaffoldMessengerState? messenger) {
+    if (!isMounted() || messenger == null || !messenger.mounted) return;
+    if (_controller != null || _deferredSnacks.isEmpty) return;
+    for (final bar in _deferredSnacks) {
+      messenger.showSnackBar(bar);
+    }
+    _deferredSnacks.clear();
+  }
+
+  Future<bool> _enqueueWrite(String id, Future<bool> Function(Future<bool>? prev) fn) {
+    final prev = _inFlightWrites[id];
+    final next = fn(prev);
+    _inFlightWrites[id] = next;
+    unawaited(next.whenComplete(() {
+      if (identical(_inFlightWrites[id], next)) {
+        _inFlightWrites.remove(id);
+      }
+    }));
+    return next;
+  }
+
+  Future<void> delete({
+    required AdminBackend repo,
+    required String collection,
+    required AdminDoc doc,
+    required String title,
+    required ScaffoldMessengerState? messenger,
+    required String failedMsg,
+    required String undoLabel,
+    required String undoAllLabel,
+    bool removeMedia = true,
+  }) async {
+    final id = doc.id;
+    if (_pending.isPending(id)) return;
+    final docData = doc.data;
+    final deleteNow = DateTime.now().toUtc();
+    final gen = (_gen[id] ?? 0) + 1;
+    _gen[id] = gen;
+    _restoringIds.remove(id);
+
+    final priorPending = [
+      for (final entry in _entries.entries.toList())
+        if (entry.key != id && _pending.isPending(entry.key)) (id: entry.key, info: entry.value),
+    ];
+
+    // Register before awaiting Firestore so rapid consecutive deletes and immediate
+    // "Undo all" taps always operate on the full batch atomically.
+    _entries[id] = (repo: repo, collection: collection, title: title);
+    _pending.schedule(id, () async {
+      _entries.remove(id);
+      try {
+        await repo.delete(collection, id);
+        if (removeMedia) {
+          await removeOrphanedDocMedia(repo.media, docData);
+        }
+      } catch (e) {
+        try {
+          await repo.update(collection, id, {'deletedAt': null});
+        } catch (_) {}
+        if (!isMounted()) return;
+        onChanged();
+        _syncAfterExpiry(
+          messenger,
+          failedMsg: failedMsg,
+          undoLabel: undoLabel,
+          undoAllLabel: undoAllLabel,
+        );
+        showSnack(
+          messenger,
+          SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))),
+          deferWhileUndo: true,
+        );
+        return;
+      }
+      if (!isMounted()) return;
+      _syncAfterExpiry(
+        messenger,
+        failedMsg: failedMsg,
+        undoLabel: undoLabel,
+        undoAllLabel: undoAllLabel,
+      );
+    });
+    onChanged();
+
+    // Acquire holds BEFORE scheduling _barTimer so renewal anchors stay aligned at t = 10s.
+    final initialToken = _pending.holdAll([id])[id];
+    final priorTokens = priorPending.isEmpty
+        ? const <String, Object>{}
+        : _pending.holdAll([for (final p in priorPending) p.id]);
+
+    _presentBar(
+      messenger,
+      title: title,
+      fallbackRepo: repo,
+      fallbackCollection: collection,
+      failedMsg: failedMsg,
+      undoLabel: undoLabel,
+      undoAllLabel: undoAllLabel,
+      resetTimer: true,
+      clearQueue: true,
+    );
+
+    unawaited(_enqueueWrite(id, (priorSelfWrite) async {
+      if (priorSelfWrite != null) {
+        try {
+          await priorSelfWrite;
+        } catch (_) {}
+      }
+      var written = false;
+      try {
+        await repo.update(collection, id, {'deletedAt': deleteNow});
+        written = true;
+      } catch (e) {
+        if (isMounted() && _gen[id] == gen) {
+          _pending.undo(id);
+          _entries.remove(id);
+          onChanged();
+          _syncAfterExpiry(
+            messenger,
+            failedMsg: failedMsg,
+            undoLabel: undoLabel,
+            undoAllLabel: undoAllLabel,
+          );
+          showSnack(
+            messenger,
+            SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))),
+            deferWhileUndo: true,
+          );
+        }
+        return false;
+      }
+      if (!isMounted()) return written;
+      if (_gen[id] == gen) {
+        await _pending.releaseHold(id, extend: true, token: initialToken);
+        if (isMounted()) {
+          _syncAfterExpiry(
+            messenger,
+            failedMsg: failedMsg,
+            undoLabel: undoLabel,
+            undoAllLabel: undoAllLabel,
+          );
+        }
+      }
+      return written;
+    }));
+
+    // Renew deletedAt for prior pending items, serialized per item so slower earlier
+    // renewals never overwrite newer deletedAt timestamps.
+    for (final p in priorPending) {
+      final token = priorTokens[p.id];
+      final priorGen = _gen[p.id];
+      unawaited(_enqueueWrite(p.id, (prevChain) async {
+        var priorWritten = true;
+        if (prevChain != null) {
+          try {
+            priorWritten = await prevChain;
+          } catch (_) {
+            priorWritten = false;
+          }
+        }
+        if (!isMounted() || _gen[p.id] != priorGen || !_pending.isPending(p.id)) {
+          return priorWritten;
+        }
+        var renewed = false;
+        try {
+          await p.info.repo.update(p.info.collection, p.id, {'deletedAt': deleteNow});
+          renewed = true;
+        } catch (_) {}
+        if (!isMounted()) return priorWritten || renewed;
+        if (_gen[p.id] == priorGen) {
+          await _pending.releaseHold(p.id, extend: renewed, token: token);
+          if (isMounted()) {
+            _syncAfterExpiry(
+              messenger,
+              failedMsg: failedMsg,
+              undoLabel: undoLabel,
+              undoAllLabel: undoAllLabel,
+            );
+          }
+        }
+        return priorWritten || renewed;
+      }));
+    }
+  }
+
+  void _clearActiveBarState() {
+    _barTimer?.cancel();
+    _barTimer = null;
+    _controller = null;
+    _barCount = 0;
+    _barUsesMulti = false;
+    _barState.value = null;
+  }
+
+  void _syncAfterExpiry(
+    ScaffoldMessengerState? messenger, {
+    required String failedMsg,
+    required String undoLabel,
+    required String undoAllLabel,
+  }) {
+    if (!isMounted()) return;
+    if (!_pending.hasPending) {
+      final hadActiveBar = _controller != null;
+      _clearActiveBarState();
+      if (hadActiveBar) {
+        onBarHidden?.call();
+        if (messenger != null && messenger.mounted) {
+          messenger.removeCurrentSnackBar();
+        }
+        onChanged();
+      }
+      flushDeferredSnacks(messenger);
+      return;
+    }
+    final pendingCount = _pending.pendingIds.length;
+    if (_controller == null || _barCount == pendingCount) return;
+    final last = _entries.values.isNotEmpty ? _entries.values.last : null;
+    if (last == null) return;
+    _presentBar(
+      messenger,
+      title: last.title,
+      fallbackRepo: last.repo,
+      fallbackCollection: last.collection,
+      failedMsg: failedMsg,
+      undoLabel: undoLabel,
+      undoAllLabel: undoAllLabel,
+      resetTimer: false,
+      clearQueue: false,
+    );
+  }
+
+  void _scheduleBarTimer(
+    ScaffoldMessengerState messenger, {
+    required String failedMsg,
+    required String undoLabel,
+    required String undoAllLabel,
+  }) {
+    _barTimer?.cancel();
+    _barTimer = Timer(_pending.window, () {
+      if (!isMounted()) return;
+      if (_pending.hasPending && _entries.values.isNotEmpty) {
+        final last = _entries.values.last;
+        _presentBar(
+          messenger,
+          title: last.title,
+          fallbackRepo: last.repo,
+          fallbackCollection: last.collection,
+          failedMsg: failedMsg,
+          undoLabel: undoLabel,
+          undoAllLabel: undoAllLabel,
+          resetTimer: true,
+          clearQueue: false,
+        );
+        return;
+      }
+      final hadActiveBar = _controller != null;
+      _clearActiveBarState();
+      if (hadActiveBar) {
+        onBarHidden?.call();
+        if (messenger.mounted) messenger.removeCurrentSnackBar();
+        onChanged();
+      }
+      flushDeferredSnacks(messenger);
+    });
+  }
+
+  Future<void> _undoAll(
+    ScaffoldMessengerState messenger, {
+    required AdminBackend fallbackRepo,
+    required String fallbackCollection,
+    required String failedMsg,
+  }) async {
+    final hadActiveBar = _controller != null;
+    _clearActiveBarState();
+    onBarHidden?.call();
+    if (hadActiveBar) onChanged();
+    if (messenger.mounted) messenger.removeCurrentSnackBar();
+
+    final ids = _pending.pendingIds.toList();
+    final undone = <({String id, AdminBackend repo, String collection, Future<bool>? inFlight})>[];
+    for (final pid in ids) {
+      if (_pending.undo(pid)) {
+        _gen[pid] = (_gen[pid] ?? 0) + 1;
+        final entry = _entries.remove(pid);
+        _restoringIds.add(pid);
+        undone.add((
+          id: pid,
+          repo: entry?.repo ?? fallbackRepo,
+          collection: entry?.collection ?? fallbackCollection,
+          inFlight: _inFlightWrites[pid],
+        ));
+      }
+    }
+    if (isMounted() && undone.isNotEmpty) onChanged();
+    // Yield past SnackBarAction._handlePressed()'s trailing hideCurrentSnackBar call
+    // so flushed errors are not immediately dismissed as if they were the Undo bar.
+    await Future<void>.microtask(() {});
+    flushDeferredSnacks(messenger);
+    if (undone.isEmpty) return;
+
+    final restoreTasks = <Future<bool>>[];
+    for (final item in undone) {
+      restoreTasks.add(_enqueueWrite(item.id, (_) async {
+        var hadSoftDeleteWrite = true;
+        if (item.inFlight != null) {
+          try {
+            hadSoftDeleteWrite = await item.inFlight!;
+          } catch (_) {
+            hadSoftDeleteWrite = false;
+          }
+        }
+        if (!hadSoftDeleteWrite) {
+          _restoringIds.remove(item.id);
+          if (isMounted()) onChanged();
+          return false;
+        }
+        try {
+          await item.repo.update(item.collection, item.id, {'deletedAt': null});
+          return false;
+        } catch (e) {
+          if (isMounted()) {
+            showSnack(
+              messenger,
+              SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))),
+              deferWhileUndo: true,
+            );
+          }
+          return true;
+        } finally {
+          _restoringIds.remove(item.id);
+          if (isMounted()) onChanged();
+        }
+      }));
+    }
+    await Future.wait(restoreTasks);
+  }
+
+  void _presentBar(
+    ScaffoldMessengerState? messenger, {
+    required String title,
+    required AdminBackend fallbackRepo,
+    required String fallbackCollection,
+    required String failedMsg,
+    required String undoLabel,
+    required String undoAllLabel,
+    required bool resetTimer,
+    bool clearQueue = false,
+  }) {
+    if (!isMounted() || messenger == null || !messenger.mounted) return;
+    final pendingCount = _pending.pendingIds.length;
+    if (pendingCount == 0) return;
+    final wantMulti = pendingCount > 1;
+    _barState.value = (count: pendingCount, title: title);
+    _barCount = pendingCount;
+    onBarShown?.call();
+
+    if (_controller != null && _barUsesMulti == wantMulti) {
+      if (resetTimer) {
+        _scheduleBarTimer(
+          messenger,
+          failedMsg: failedMsg,
+          undoLabel: undoLabel,
+          undoAllLabel: undoAllLabel,
+        );
+      }
+      return;
+    }
+
+    if (resetTimer) {
+      _barTimer?.cancel();
+      _barTimer = null;
+    }
+    _controller = null;
+    _barUsesMulti = wantMulti;
+    if (clearQueue) messenger.clearSnackBars();
+    messenger.removeCurrentSnackBar();
+    final undoController = messenger.showSnackBar(
+      SnackBar(
+        duration: _pending.window,
+        persist: true,
+        content: ValueListenableBuilder<({int count, String title})?>(
+          valueListenable: _barState,
+          builder: (ctx, state, _) {
+            final count = state?.count ?? pendingCount;
+            final lastTitle = state?.title ?? title;
+            final text = count > 1
+                ? ctx.tr('deletedItemMultiUndo', {'n': '$count', 'last': lastTitle})
+                : ctx.tr(singleUndoKey, {'n': lastTitle});
+            return Text(text);
+          },
+        ),
+        action: SnackBarAction(
+          label: wantMulti ? undoAllLabel : undoLabel,
+          onPressed: () => _undoAll(
+            messenger,
+            fallbackRepo: fallbackRepo,
+            fallbackCollection: fallbackCollection,
+            failedMsg: failedMsg,
+          ),
+        ),
+      ),
+    );
+    _controller = undoController;
+    onChanged();
+    undoController.closed.then((reason) {
+      if (identical(_controller, undoController)) {
+        _clearActiveBarState();
+        if (reason == SnackBarClosedReason.timeout &&
+            isMounted() &&
+            _pending.hasPending &&
+            _entries.values.isNotEmpty) {
+          final last = _entries.values.last;
+          _presentBar(
+            messenger,
+            title: last.title,
+            fallbackRepo: last.repo,
+            fallbackCollection: last.collection,
+            failedMsg: failedMsg,
+            undoLabel: undoLabel,
+            undoAllLabel: undoAllLabel,
+            resetTimer: true,
+          );
+        } else {
+          onBarHidden?.call();
+          onChanged();
+          flushDeferredSnacks(messenger);
+        }
+      }
+    });
+    if (resetTimer) {
+      _scheduleBarTimer(
+        messenger,
+        failedMsg: failedMsg,
+        undoLabel: undoLabel,
+        undoAllLabel: undoAllLabel,
+      );
+    }
+  }
+
+  void dispose() {
+    _barTimer?.cancel();
+    _barTimer = null;
+    final ctrl = _controller;
+    _controller = null;
+    _barCount = 0;
+    _barUsesMulti = false;
+    if (closeBarOnDispose) ctrl?.close();
+    _barState.dispose();
+    _deferredSnacks.clear();
+    _pending.dispose();
+    _entries.clear();
+    _inFlightWrites.clear();
+    _gen.clear();
+    _restoringIds.clear();
   }
 }
