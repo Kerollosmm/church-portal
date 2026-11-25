@@ -295,35 +295,35 @@ For each `CollectionDef`:
   **kept** — Firestore may still commit the queued write pointing at them; any other error deletes them (BUG-13).
   Note: `AdminRepository.save`/`saveDoc` set no timeout of their own today (the only 15 s timeout is the role/access read
   in `adminAccess`), so this path applies to a timeout raised by a caller/backend wrapper.
-- **Add** (FAB) / tap to **edit** → full-screen `DocEditor`; **delete** in `collection_list.dart` uses a 10-second
-  reversible soft-delete buffer (`PendingDelete`, `pending_delete.dart`). Non-category items register synchronously into
-  `_pendingDelete` / `_pendingEntries` and immediately write Firestore
+- **Add** (FAB) / tap to **edit** → full-screen `DocEditor`; **delete** in `collection_list.dart` uses the shared 10-second
+  reversible soft-delete coordinator (`SoftDeleteUndo` + `PendingDelete`, `pending_delete.dart`). Non-category items register synchronously into
+  `SoftDeleteUndo` and immediately write Firestore
   `deletedAt: DateTime.now().toUtc()` (allowed by `meta()` and `optTimestamp(d, 'deletedAt')` in `firestore.rules`,
-  serialized per doc via `_inFlightDeleteWrites` with monotonic `_deleteGen` guards so rapid consecutive deletes never
+  serialized per doc via `_inFlightWrites` with monotonic `_gen` guards so rapid consecutive deletes never
   race or fall back to a single-item bar),
-  hide immediately from the visible list (`_pendingDelete.isPending` / `isSoftDeleted`), and show a 10-second `SnackBar`
-  right away (`persist: true` driven by `_undoSnackBarTimer`, updating multi-delete text in place via `_undoBarState`
-  across 2 → 3+ deletes without `ScaffoldMessenger` queue churn, while clearing prior queues on user deletes and
-  preserving queued external bars on automatic expiry refreshes) on `CollectionListScreen`'s inner `ScaffoldMessenger`.
+  hide immediately from the visible list (`SoftDeleteUndo.isVisible` / `isSoftDeleted`), and show a 10-second `SnackBar`
+  right away (`persist: true` driven by `_barTimer`, updating multi-delete text in place via `_barState`
+  across 2 → 3+ deletes without `ScaffoldMessenger` queue churn, while clearing prior queues on user deletes)
+  on `CollectionListScreen`'s inner `ScaffoldMessenger`.
   While the Undo bar is active, `_UndoClearFabLocation` elevates the `+` FAB with a **48 px** vertical gap above the
   SnackBar and holds that elevated clearance across SnackBar swaps and for a **650 ms** post-close cooldown
-  (`_fabCooldownTimer`, paired with a transparent `undo-vacated-tap-shield` over the vacated SnackBar strip) so follow-up taps aimed at the vacated Undo button never hit the FAB or underlying rows to open `DocEditor`
+  (`_fabCooldownTimer` triggered via `onBarShown` / `onBarHidden`, paired with a transparent `undo-vacated-tap-shield` over the vacated SnackBar strip) so follow-up taps aimed at the vacated Undo button never hit the FAB or underlying rows to open `DocEditor`
   (verified across desktop, 342 px, and 320 px / 200 %). The Undo bar uses «تم مسح «{n}»» (`deletedItemUndo`,
-  neutral wording — the page is feminine, the section/item masculine; the inbox keeps `deletedUndo` «اتمسح «{n}»») and
+  neutral wording — the page is feminine, the section/item masculine; the inbox passes `singleUndoKey: 'deletedUndo'` «اتمسح «{n}»») and
   action «تراجع» (`undo`) or «تراجع عن الكل» (`undoAll`), and renews `deletedAt` + extends local timers via
   `PendingDelete.holdAll` / `releaseHold` (monotonic `_PendingHold.seq`, newest extending hold wins, cancelled anchor timers cleaned up) for earlier pending items whose renewal succeeds (preserving
   remaining original deadlines on failed renewals and updating the active Undo bar if an un-renewed item expires early).
   The soft-deleted document immediately vanishes from
   public collection views (`_docs` and `_col` in `FirestoreRepository`) and sitemap exports (`sitemapContentFromExport`).
-  Tapping «تراجع» / «تراجع عن الكل» (`_undoAllPending`) atomically cancels all pending timers, restores all rows in the UI immediately via optimistic `_restoringIds`, and clears `deletedAt: null` concurrently across the batch after each item's serialized write chain settles (`_checkLazyPurge` skips pending, `_restoringIds`, and `_inFlightDeleteWrites` docs via `_isProtectedFromPurge` so an expired snapshot during restore can never hard-delete an item being undone). If the 10 seconds elapse without undo, the deletion
-  commits to hard delete `widget.repo.delete(def.name, d.id)` and cleans up orphaned media (`removeOrphanedDocMedia`).
+  Tapping «تراجع» / «تراجع عن الكل» (`_undoAll`) atomically cancels all pending timers, restores all rows in the UI immediately via optimistic `_restoringIds`, and clears `deletedAt: null` concurrently across the batch after each item's serialized write chain settles (`checkLazyPurge` skips pending, `_restoringIds`, and `_inFlightWrites` docs via `isProtectedFromPurge` so an expired snapshot during restore can never hard-delete an item being undone). If the 10 seconds elapse without undo, the deletion
+  commits to hard delete `repo.delete(collection, id)` and (when `removeMedia: true`) cleans up orphaned media (`removeOrphanedDocMedia`).
   Pending-deletion items stay in `_lastDocs` until commit so their slugs remain reserved in `takenSlugs`, and scheduling
-  deletion captures `repo`, `def`, `media` and document data in closure. **Page refresh / navigation away (`dispose()`):**
-  local timers are cancelled **without** calling `flush()` or sending `repo.delete()`; `beforeunload` is strictly NOT used
+  deletion captures `repo`, `collection`, `media` and document data in closure. **Page refresh / navigation away (`dispose()`):**
+  local timers are cancelled **without** forwarding hard deletes (`repo.delete()`); `beforeunload` is strictly NOT used
   in `PendingDelete` (exclusive to `UnsavedGuard`). Because `deletedAt` was already written at delete time and in-memory
   Undo state resets on reload, refreshing the browser ~2 s after deleting intentionally keeps the item hidden from admin
   and public lists (while the Firestore doc still remains untouched until `deletedAt + 10s`), and subsequent admin opens
-  deterministically hard-delete it once expired via lazy purge (`purgeExpiredSoftDeletes`). Custom
+  deterministically hard-delete it once expired via `SoftDeleteUndo.checkLazyPurge` (`purgeExpiredSoftDeletes`). Custom
   categories (`categories`) remain confirmed via dialog (`_deleteCategory`) because deleting a category cascades to hide
   member items and clear category links. A new item saved in several writes keeps the id the first write created (the editor's
   `onSave` remembers it).

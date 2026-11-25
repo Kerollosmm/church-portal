@@ -6627,6 +6627,7 @@ void main() {
           await tester.pump(const Duration(milliseconds: 500));
 
           expect(find.text('Sender One'), findsNothing);
+          expect(find.text(isAr ? 'اتمسح «Sender One»' : 'Deleted "Sender One"'), findsOneWidget);
           expect(find.text(isAr ? 'تراجع' : 'Undo'), findsOneWidget);
 
           // Confirm & soft-delete second message rapidly within 10s window
@@ -6637,6 +6638,10 @@ void main() {
           await tester.pump(const Duration(milliseconds: 500));
 
           expect(find.text('Sender Two'), findsNothing);
+          expect(
+            find.text(isAr ? 'تم مسح 2 عناصر (آخرهم «Sender Two»)' : 'Deleted 2 items (latest: "Sender Two")'),
+            findsOneWidget,
+          );
           expect(find.text(isAr ? 'تراجع عن الكل' : 'Undo all'), findsOneWidget);
           expect(repo.deletedIds, isEmpty);
 
@@ -6657,6 +6662,102 @@ void main() {
           await tester.pumpAndSettle();
           expect(repo.deletedIds, isEmpty);
         }
+      });
+
+      testWidgets('MessagesScreen.dispose() keeps _barState alive through exit animation, preserves unrelated SnackBars, and skips media deletion (removeMedia: false)',
+          (tester) async {
+        final mediaRepo = _TestMediaRepo();
+        final repo = _MediaTestAdminBackend(mediaRepo, initialCollections: {
+          'contact_messages': [
+            AdminDoc('msg-anim', {
+              'name': 'Anim Sender',
+              'message': 'Dispose exit animation safety',
+              'createdAt': DateTime.utc(2026, 11, 15, 14),
+              'status': 'new',
+              'image': {'inline': 'm1'},
+            }),
+            AdminDoc('msg-expired', {
+              'name': 'Expired Sender',
+              'message': 'Already expired soft delete',
+              'createdAt': DateTime.utc(2026, 11, 15, 13),
+              'deletedAt': DateTime.utc(2026, 11, 15, 13),
+              'status': 'new',
+              'image': {'inline': 'm2'},
+            }),
+          ],
+        });
+        final messengerKey = GlobalKey<ScaffoldMessengerState>();
+        Widget screen = MessagesScreen(repo: repo);
+
+        await tester.pumpWidget(StatefulBuilder(
+          builder: (context, setHost) => MaterialApp(
+            locale: const Locale('ar'),
+            supportedLocales: const [Locale('ar'), Locale('en')],
+            localizationsDelegates: GlobalMaterialLocalizations.delegates,
+            scaffoldMessengerKey: messengerKey,
+            home: screen,
+          ),
+        ));
+        await tester.pumpAndSettle();
+
+        // Lazy purge ran on msg-expired without deleting media (removeMedia: false)
+        expect(repo.deletedIds, contains('contact_messages/msg-expired'));
+        expect(mediaRepo.deleted, isEmpty);
+
+        // Soft-delete msg-anim, let Undo SnackBar present, then unmount MessagesScreen
+        await tester.tap(find.byTooltip('حذف').first);
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+        await tester.pump();
+        expect(find.text('تراجع'), findsOneWidget);
+
+        // Unmount to a plain Container (no Scaffold), pump mid-exit (100ms), then mount a new Scaffold
+        screen = const SizedBox.shrink();
+        await tester.pumpWidget(MaterialApp(
+          locale: const Locale('ar'),
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          scaffoldMessengerKey: messengerKey,
+          home: screen,
+        ));
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(tester.takeException(), isNull);
+
+        await tester.pumpWidget(MaterialApp(
+          locale: const Locale('ar'),
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          scaffoldMessengerKey: messengerKey,
+          home: const Scaffold(body: Text('Next Scaffold')),
+        ));
+        messengerKey.currentState!.showSnackBar(const SnackBar(content: Text('Unrelated Note')));
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+        expect(find.text('تراجع'), findsNothing);
+        expect(find.text('Unrelated Note'), findsOneWidget);
+
+        // Verify commit path with removeMedia: false directly via fresh MessagesScreen
+        final repoCommit = _MediaTestAdminBackend(mediaRepo, initialCollections: {
+          'contact_messages': [
+            AdminDoc('msg-media', {
+              'name': 'Commit Sender',
+              'message': 'Check removeMedia false on commit',
+              'createdAt': DateTime.utc(2026, 11, 15, 15),
+              'status': 'new',
+              'image': {'inline': 'm3'},
+            }),
+          ],
+        });
+        await tester.pumpWidget(_app(MessagesScreen(repo: repoCommit), locale: const Locale('ar')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('حذف').first);
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+        await tester.pump(const Duration(seconds: 11));
+        await tester.pumpAndSettle();
+        expect(repoCommit.deletedIds, contains('contact_messages/msg-media'));
+        expect(mediaRepo.deleted, isEmpty);
       });
 
       testWidgets('FeaturesScreen never shows updatedElsewhere banner on failed save with rollback', (tester) async {
@@ -7173,6 +7274,14 @@ void main() {
   });
 }
 
+class _MediaTestAdminBackend extends _TestAdminBackend {
+  final _TestMediaRepo _media;
+  _MediaTestAdminBackend(this._media, {super.initialCollections});
+
+  @override
+  MediaRepository? get media => _media;
+}
+
 class _TestAdminBackend extends AdminBackend {
   final Map<String, List<AdminDoc>> collections = {};
   final Map<String, Map<String, dynamic>> docs = {};
@@ -7303,6 +7412,8 @@ class _ReactiveAdminBackend extends _TestAdminBackend {
 }
 
 class _TestMediaRepo implements MediaRepository {
+  final List<String> deleted = [];
+
   @override
   String get source => 'firestore';
 
@@ -7314,7 +7425,9 @@ class _TestMediaRepo implements MediaRepository {
       MediaImage(source: MediaSource.inline, mediaId: 'm1');
 
   @override
-  Future<void> delete(String mediaId) async {}
+  Future<void> delete(String mediaId) async {
+    deleted.add(mediaId);
+  }
 }
 
 class _SlowSaveBackend extends _TestAdminBackend {

@@ -104,7 +104,7 @@ The `admin` package implements the authenticated back-office management console 
 - `[admin_page.dart:AdminPage]`: Unauthenticated users must be intercepted by `_AdminCheck` and prevented from accessing dashboard tabs.
 - `[confirm_named.dart:confirmNamedAction]`: Push notifications targeting all subscribers or immediate dispatch (matching recipients and timing with dedicated summaries and action labels, plus post-await past-time check), visitor message deletions, and administrator removals must explicitly name the target item/action in a confirmation dialog before proceeding.
 - `[unsaved_guard.dart:UnsavedGuard]`: Unsaved administrative edits must intercept back-navigation, dashboard destination changes, logout, and browser window close/refresh; the default dialog action button must be «متابعة التعديل».
-- `[pending_delete.dart:PendingDelete]`: Collection item deletions must immediately write Firestore `deletedAt` and hide from the view with a 10-second grace window allowing undo (reserving slugs in `takenSlugs` until deletion commits), canceling local timers on dispose while expired soft-deletes are lazily purged on admin open.
+- `[pending_delete.dart:SoftDeleteUndo]`: Collection and inbox deletions must immediately write Firestore `deletedAt` and hide from the view with a 10-second batch undo window (reserving slugs in `takenSlugs` until deletion commits), canceling local timers on dispose while expired soft-deletes are lazily purged on admin open.
 - `[unsaved_bar.dart:UnsavedBar]`: Editing forms with uncommitted edits must render a sticky bottom save bar without overflowing at 320 px or 200% text scaling.
 - `[state_switch.dart:AdminStateSwitch]`: All switches across `/admin` must present an explicit written state badge pill (`onLabel` / `offLabel`) rather than relying on toggle color alone, without overflowing at 320 px and 200% text scaling.
 - `[doc_editor.dart:_replacesDayPreview]`: When `replacesDay` is enabled in `DocEditor`, an inline preview card must display all regular masses superseded on that day computed by pure helper `liturgiesHiddenBy`, formatted with 12-hour Cairo time.
@@ -115,7 +115,7 @@ The `admin` package implements the authenticated back-office management console 
 - `[messages_screen.dart:_MessagesScreenState]`: Updates message document status flags (`read`, `archived`) in Firestore.
 - `[features_editor.dart:FeaturesEditorState]`: Overwrites global feature flags in `settings/features`.
 - `[season_preset_admin.dart:_SeasonPresetScreenState]`: Replaces seasonal configuration fields in `settings/features` when applying liturgical presets.
-- `[pending_delete.dart:PendingDelete]`: Marks `deletedAt` in Firestore immediately, commits hard document deletion (`repo.delete`) and deletes unreferenced media documents after the 10-second grace window expires or via `purgeExpiredSoftDeletes`.
+- `[pending_delete.dart:SoftDeleteUndo]`: Marks `deletedAt` in Firestore immediately, commits hard document deletion (`repo.delete`) and optionally deletes unreferenced media documents (`removeMedia: true`) after the 10-second grace window expires or via `purgeExpiredSoftDeletes`.
 
 ## Verification
 - Run: `flutter test`

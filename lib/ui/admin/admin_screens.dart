@@ -687,6 +687,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
     },
     singleUndoKey: 'deletedUndo',
     closeBarOnDispose: true,
+    removeMedia: false,
   );
   static const _messagesDef = CollectionDef('contact_messages', '', '', [], []);
   late Stream<List<AdminDoc>> _stream = widget.repo.watch('contact_messages');
@@ -739,7 +740,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
   }
 
   Widget _body(BuildContext context, ContactSettings cfg, List<AdminDoc> docs) {
-    _undo.checkLazyPurge(widget.repo, _messagesDef, docs, removeMedia: false);
+    _undo.checkLazyPurge(widget.repo, _messagesDef, docs);
     final visible = docs.where(_undo.isVisible).toList();
     final all = [...visible]..sort((a, b) {
         final ta = a.data['createdAt'], tb = b.data['createdAt'];
@@ -1029,7 +1030,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
       failedMsg: context.tr('deleteFailed', {'e': '{e}'}),
       undoLabel: context.tr('undo'),
       undoAllLabel: context.tr('undoAll'),
-      removeMedia: false,
     );
   }
 }

@@ -254,6 +254,7 @@ class SoftDeleteUndo {
   final VoidCallback? onBarHidden;
   final String singleUndoKey;
   final bool closeBarOnDispose;
+  final bool removeMedia;
 
   final Map<String, ({AdminBackend repo, String collection, String title})> _entries = {};
   final Map<String, Future<bool>> _inFlightWrites = {};
@@ -261,7 +262,6 @@ class SoftDeleteUndo {
   final Set<String> _restoringIds = {};
   final Set<String> _purging = {};
   ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? _controller;
-  int _barCount = 0;
   bool _barUsesMulti = false;
   final ValueNotifier<({int count, String title})?> _barState = ValueNotifier(null);
   Timer? _barTimer;
@@ -274,6 +274,7 @@ class SoftDeleteUndo {
     this.onBarHidden,
     this.singleUndoKey = 'deletedItemUndo',
     this.closeBarOnDispose = false,
+    this.removeMedia = true,
     Duration window = const Duration(seconds: 10),
   }) : _pending = PendingDelete(window: window);
 
@@ -296,9 +297,8 @@ class SoftDeleteUndo {
   void checkLazyPurge(
     AdminBackend repo,
     CollectionDef def,
-    List<AdminDoc> docs, {
-    bool removeMedia = true,
-  }) {
+    List<AdminDoc> docs,
+  ) {
     final now = DateTime.now().toUtc();
     if (docs.any((d) => isExpiredSoftDelete(d.data, now) && !isProtectedFromPurge(d.id))) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -355,7 +355,6 @@ class SoftDeleteUndo {
     required String failedMsg,
     required String undoLabel,
     required String undoAllLabel,
-    bool removeMedia = true,
   }) async {
     final id = doc.id;
     if (_pending.isPending(id)) return;
@@ -514,7 +513,6 @@ class SoftDeleteUndo {
     _barTimer?.cancel();
     _barTimer = null;
     _controller = null;
-    _barCount = 0;
     _barUsesMulti = false;
     _barState.value = null;
   }
@@ -540,7 +538,7 @@ class SoftDeleteUndo {
       return;
     }
     final pendingCount = _pending.pendingIds.length;
-    if (_controller == null || _barCount == pendingCount) return;
+    if (_controller == null || _barState.value?.count == pendingCount) return;
     final last = _entries.values.isNotEmpty ? _entries.values.last : null;
     if (last == null) return;
     _presentBar(
@@ -599,15 +597,15 @@ class SoftDeleteUndo {
   }) async {
     final hadActiveBar = _controller != null;
     _clearActiveBarState();
-    onBarHidden?.call();
-    if (hadActiveBar) onChanged();
+    if (hadActiveBar) onBarHidden?.call();
     if (messenger.mounted) messenger.removeCurrentSnackBar();
 
     final ids = _pending.pendingIds.toList();
-    final undone = <({String id, AdminBackend repo, String collection, Future<bool>? inFlight})>[];
+    final undone = <({String id, AdminBackend repo, String collection, Future<bool>? inFlight, int undoGen})>[];
     for (final pid in ids) {
       if (_pending.undo(pid)) {
-        _gen[pid] = (_gen[pid] ?? 0) + 1;
+        final undoGen = (_gen[pid] ?? 0) + 1;
+        _gen[pid] = undoGen;
         final entry = _entries.remove(pid);
         _restoringIds.add(pid);
         undone.add((
@@ -615,10 +613,11 @@ class SoftDeleteUndo {
           repo: entry?.repo ?? fallbackRepo,
           collection: entry?.collection ?? fallbackCollection,
           inFlight: _inFlightWrites[pid],
+          undoGen: undoGen,
         ));
       }
     }
-    if (isMounted() && undone.isNotEmpty) onChanged();
+    if (isMounted() && (hadActiveBar || undone.isNotEmpty)) onChanged();
     // Yield past SnackBarAction._handlePressed()'s trailing hideCurrentSnackBar call
     // so flushed errors are not immediately dismissed as if they were the Undo bar.
     await Future<void>.microtask(() {});
@@ -637,7 +636,7 @@ class SoftDeleteUndo {
           }
         }
         if (!hadSoftDeleteWrite) {
-          _restoringIds.remove(item.id);
+          if (_gen[item.id] == item.undoGen) _restoringIds.remove(item.id);
           if (isMounted()) onChanged();
           return false;
         }
@@ -654,7 +653,7 @@ class SoftDeleteUndo {
           }
           return true;
         } finally {
-          _restoringIds.remove(item.id);
+          if (_gen[item.id] == item.undoGen) _restoringIds.remove(item.id);
           if (isMounted()) onChanged();
         }
       }));
@@ -678,7 +677,6 @@ class SoftDeleteUndo {
     if (pendingCount == 0) return;
     final wantMulti = pendingCount > 1;
     _barState.value = (count: pendingCount, title: title);
-    _barCount = pendingCount;
     onBarShown?.call();
 
     if (_controller != null && _barUsesMulti == wantMulti) {
@@ -729,29 +727,12 @@ class SoftDeleteUndo {
     );
     _controller = undoController;
     onChanged();
-    undoController.closed.then((reason) {
+    undoController.closed.then((_) {
       if (identical(_controller, undoController)) {
         _clearActiveBarState();
-        if (reason == SnackBarClosedReason.timeout &&
-            isMounted() &&
-            _pending.hasPending &&
-            _entries.values.isNotEmpty) {
-          final last = _entries.values.last;
-          _presentBar(
-            messenger,
-            title: last.title,
-            fallbackRepo: last.repo,
-            fallbackCollection: last.collection,
-            failedMsg: failedMsg,
-            undoLabel: undoLabel,
-            undoAllLabel: undoAllLabel,
-            resetTimer: true,
-          );
-        } else {
-          onBarHidden?.call();
-          onChanged();
-          flushDeferredSnacks(messenger);
-        }
+        onBarHidden?.call();
+        onChanged();
+        flushDeferredSnacks(messenger);
       }
     });
     if (resetTimer) {
@@ -769,10 +750,20 @@ class SoftDeleteUndo {
     _barTimer = null;
     final ctrl = _controller;
     _controller = null;
-    _barCount = 0;
     _barUsesMulti = false;
-    if (closeBarOnDispose) ctrl?.close();
-    _barState.dispose();
+    if (closeBarOnDispose && ctrl != null) {
+      // Defer close() out of State.dispose()'s locked finalizeTree phase, and keep
+      // _barState alive until the ~250 ms exit transition finishes so late or sibling
+      // Scaffold rebuilds never observe a disposed ValueNotifier.
+      Future<void>.microtask(() {
+        try {
+          ctrl.close();
+        } catch (_) {}
+      });
+      unawaited(ctrl.closed.whenComplete(_barState.dispose));
+    } else {
+      _barState.dispose();
+    }
     _deferredSnacks.clear();
     _pending.dispose();
     _entries.clear();
