@@ -43,7 +43,6 @@ const Map<String, List<String>> adminStrings = {
     'Pause this admin? They will not be able to edit until re-enabled.'
   ],
   'confirmResumeAdmin': ['إعادة تفعيل صلاحية هذا المشرف؟', 'Re-enable this admin\'s access?'],
-  'adminExpiresAt': ['تاريخ انتهاء الصلاحية (اختياري)', 'End date (optional)'],
   'adminNoExpiry': ['بدون تاريخ انتهاء', 'No end date'],
   'adminExpiresOn': ['ينتهي في {d}', 'Ends on {d}'],
   'adminExpiredOn': ['انتهى في {d}', 'Expired on {d}'],
@@ -149,7 +148,6 @@ const Map<String, List<String>> adminStrings = {
   'grp_ownerSettings': ['الإعدادات (للمالك)', 'Settings (owner)'],
   'tab_seasonsList': ['قائمة المواسم', 'Seasons list'],
   'tab_seasonPreset': ['تجهيز الموسم', 'Season preparation'],
-  'seasonsTitle': ['المواسم', 'Seasons'],
   'appNotificationsTitle': ['الإعلانات والإشعارات', 'Announcements & notifications'],
   'messagesTitle': ['رسائل الزوار', 'Contact messages'],
   'contactCatsTitle': ['أنواع رسائل التواصل', 'Contact form types'],
@@ -384,7 +382,6 @@ const Map<String, List<String>> adminStrings = {
   'orderSaved': ['تم حفظ الترتيب', 'Order saved'],
   'deleted': ['تم الحذف', 'Deleted'],
   'deletedUndo': ['اتمسح «{n}»', 'Deleted "{n}"'],
-  'deletedMultiUndo': ['اتمسح {n} عناصر (آخرهم «{last}»)', 'Deleted {n} items (latest: "{last}")'],
   'undo': ['تراجع', 'Undo'],
   'undoAll': ['تراجع عن الكل', 'Undo all'],
   'discardChanges': ['لديك تعديلات غير محفوظة. هل تريد تجاهلها؟', 'You have unsaved changes. Discard them?'],
