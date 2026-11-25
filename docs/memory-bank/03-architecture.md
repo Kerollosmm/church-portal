@@ -77,8 +77,8 @@ lib/
                             normalizeFirestoreValue/normalizeDoc
     seed_data.dart          SeedData: typed view over assets/seed/seed.json
     admin_repository.dart   AdminBackend (interface; `media`), AdminRepository (Firestore+Auth), AdminDoc, AdminRoles
-    media_repository.dart   MediaRepository, FirestoreMediaRepository (media/{id} base64), StorageMediaRepository
-                            (Blaze stub), MediaCache (in-memory LRU), EncodedImage
+    media_repository.dart   MediaRepository, FirestoreMediaRepository (media/{id} base64), ReadOnlyMediaRepository,
+                            MediaCache (in-memory LRU), EncodedImage
     image_processing.dart   prepareUpload/compressDecoded; codecs image_codec/image_codec_web.dart (canvas, WebP)
                             and image_codec_io.dart (`image` package, JPEG) via conditional import
     local_notifications*.dart LocalNotifier, PlatformLocalNotifier (flutter_local_notifications wrapper, channels, exact alarms) — ADR-058

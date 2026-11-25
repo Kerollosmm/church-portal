@@ -57,11 +57,6 @@ class AppConfig {
   /// PR previews, production), [siteOriginDefine] on Android.
   static String get dataOrigin => kIsWeb ? Uri.base.origin : siteOriginDefine;
 
-  /// Where uploaded images are stored: `firestore` (default — inline base64
-  /// in `media/{id}`, works on the Spark plan) or `storage` (Cloud Storage for
-  /// Firebase, needs the Blaze plan; see StorageMediaRepository).
-  static const String mediaBackend = String.fromEnvironment('MEDIA_BACKEND', defaultValue: 'firestore');
-
   /// Sentry error tracking (ADR-034). `--dart-define=SENTRY_DSN=…` overrides
   /// the DSN (an empty value switches reporting off); without it release
   /// builds use [sentryDefaultDsn] and debug / profile builds report nothing.

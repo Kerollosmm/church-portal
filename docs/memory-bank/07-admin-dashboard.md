@@ -202,7 +202,7 @@ budget in one write).
 ### App & notifications («التطبيق والإشعارات», `AppAndNotificationsScreen`, `lib/ui/admin/notifications_admin.dart`) → `settings/features` & `settings/notifications` (ADR-057, ADR-059; UX rework PR #55)
 
 Two tabs: «الإشعارات» (`NotificationsAdminSection`, kept alive across tab switches) and «تثبيت التطبيق»
-(`ChurchInfoScreen` over `appSettingsDoc`). The notifications tab is one list of cards, Arabic first:
+(`ChurchInfoScreen` over `appInstallDoc`). The notifications tab is one list of cards, Arabic first:
 1. **Status** — master switch (`push`) with on/off explanation and a «متوقفة» banner; sender health from
    `health.lastRunAt` in plain words: ok (≤ 1 h, «آخر فحص منذ …» in Cairo time), late (> 1 h), stopped (> 3 h or
    `status: error`), never run (no stamp — neutral, not red). Since ADR-060: web push subscriber stats from
