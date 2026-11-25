@@ -15,6 +15,7 @@ import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/custom_content.dart';
 import 'package:church_portal/domain/features.dart';
 import 'package:church_portal/domain/occasion_theme.dart';
+import 'package:church_portal/domain/reminders.dart' show isoDate;
 import 'package:church_portal/router.dart';
 import 'package:church_portal/state/providers.dart';
 import 'package:flutter/rendering.dart';
@@ -306,7 +307,7 @@ void main() {
         2023: '2023-04-16', 2024: '2024-05-05', 2025: '2025-04-20', 2026: '2026-04-12', 2027: '2027-05-02',
         2028: '2028-04-16', 2029: '2029-04-08', 2030: '2030-04-28',
       };
-      known.forEach((y, d) => expect(formatDate(orthodoxEaster(y)), d, reason: '$y'));
+      known.forEach((y, d) => expect(isoDate(orthodoxEaster(y)), d, reason: '$y'));
     });
 
     test('always a Sunday between 4 April and 8 May (1900–2099)', () {
