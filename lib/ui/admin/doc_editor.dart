@@ -191,15 +191,13 @@ class DocEditorState extends State<DocEditor> {
   GlobalKey _fieldKey(String id) => _fieldKeys.putIfAbsent(id, () => GlobalKey());
   FocusNode _focusNode(String id) => _focusNodes.putIfAbsent(id, () => FocusNode());
 
-  bool _isFieldShown(FieldDef f) =>
+  bool _isShown(FieldDef f, Map<String, Object?> values) =>
       !f.hidden &&
       (widget.englishEnabled || f.lang != 'en') &&
-      (f.showWhen == null || f.showWhen!.value.contains(_values[f.showWhen!.key]));
+      (f.showWhen == null || f.showWhen!.value.contains(values[f.showWhen!.key]));
 
-  bool _isSubFieldShown(FieldDef sf, _Row row) =>
-      !sf.hidden &&
-      (widget.englishEnabled || sf.lang != 'en') &&
-      (sf.showWhen == null || sf.showWhen!.value.contains(row.values[sf.showWhen!.key]));
+  String _blockTypeOf(_Row row) =>
+      (row.values['type'] ?? row.text['type']?.text ?? BlockTypes.paragraph).toString();
 
   @override
   void initState() {
@@ -308,10 +306,7 @@ class DocEditorState extends State<DocEditor> {
         if (f.collapsibleRows) {
           final rList = _rows[f.key]!;
           if (rList.isNotEmpty) {
-            final donationIdx = rList.indexWhere((r) {
-              final type = r.values['type'] ?? r.text['type']?.text;
-              return type == BlockTypes.donation;
-            });
+            final donationIdx = rList.indexWhere((r) => _blockTypeOf(r) == BlockTypes.donation);
             _expandedRow[f.key] = donationIdx >= 0 ? donationIdx : 0;
           } else {
             _expandedRow[f.key] = null;
@@ -521,13 +516,13 @@ class DocEditorState extends State<DocEditor> {
     final out = <_FieldErrorEntry>[];
     final ordered = <FieldDef>[
       for (final f in widget.fields)
-        if (f.group == FieldGroup.basic && !f.advanced && _isFieldShown(f)) f,
+        if (f.group == FieldGroup.basic && !f.advanced && _isShown(f, _values)) f,
       for (final f in widget.fields)
-        if (f.group == FieldGroup.basic && f.advanced && _isFieldShown(f)) f,
+        if (f.group == FieldGroup.basic && f.advanced && _isShown(f, _values)) f,
       for (final g in FieldGroup.values)
         if (g != FieldGroup.basic)
           for (final f in widget.fields)
-            if (f.group == g && _isFieldShown(f)) f,
+            if (f.group == g && _isShown(f, _values)) f,
     ];
     for (final f in ordered) {
       final group = f.group == FieldGroup.basic ? null : f.group;
@@ -538,7 +533,7 @@ class DocEditorState extends State<DocEditor> {
           final r = rows[i];
           final rowMap = {for (final e in r.text.entries) e.key: e.value.text};
           for (final sf in f.subFields) {
-            if (!_isSubFieldShown(sf, r)) continue;
+            if (!_isShown(sf, r.values)) continue;
             var bad = false;
             if (sf.type == FieldType.choice) {
               bad = sf.required && (r.values[sf.key] == null || '${r.values[sf.key]}'.isEmpty);
@@ -1938,7 +1933,7 @@ class DocEditorState extends State<DocEditor> {
   /// A collapsible card for one detail-page group. Collapsed fields stay
   /// mounted (maintainState) so the form still validates and collects them.
   Widget _groupCard(FieldGroup g) {
-    final fields = [for (final f in widget.fields) if (f.group == g && _isFieldShown(f)) f];
+    final fields = [for (final f in widget.fields) if (f.group == g && _isShown(f, _values)) f];
     return Card(
       key: ValueKey('groupCard-${g.name}'),
       margin: const EdgeInsets.only(bottom: 12),
@@ -2136,7 +2131,7 @@ class DocEditorState extends State<DocEditor> {
   }
 
   String? _blockSnippet(_Row row) {
-    final type = (row.values['type'] ?? row.text['type']?.text ?? BlockTypes.paragraph).toString();
+    final type = _blockTypeOf(row);
     if (type == BlockTypes.list) {
       return blockSnippetSummary(
         type: type,
@@ -2177,6 +2172,46 @@ class DocEditorState extends State<DocEditor> {
     );
   }
 
+  void _moveObjectRow(FieldDef f, int index, int delta) {
+    final rows = _rows[f.key]!;
+    final target = index + delta;
+    if (target < 0 || target >= rows.length) return;
+    setState(() {
+      final moved = rows.removeAt(index);
+      rows.insert(target, moved);
+      if (f.collapsibleRows) {
+        final expanded = _expandedRow[f.key];
+        if (expanded == index) {
+          _expandedRow[f.key] = target;
+        } else if (expanded == target) {
+          _expandedRow[f.key] = index;
+        }
+      }
+      _dirty = true;
+    });
+  }
+
+  void _removeObjectRow(FieldDef f, int index) {
+    final rows = _rows[f.key]!;
+    setState(() {
+      final removed = rows.removeAt(index);
+      if (_pendingErrorFocus != null && removed.ownsFocusNode(_pendingErrorFocus!.focusNode)) {
+        _clearPendingErrorFocus();
+      }
+      removed.dispose();
+      if (f.collapsibleRows) {
+        final expanded = _expandedRow[f.key];
+        if (expanded == index) {
+          _expandedRow[f.key] = null;
+        } else if (expanded != null && expanded > index) {
+          _expandedRow[f.key] = expanded - 1;
+        }
+      }
+      _dirty = true;
+      _syncErrorSummaryAfterChange();
+    });
+  }
+
   Widget _objectList(FieldDef f) {
     final rows = _rows[f.key]!;
     return InputDecorator(
@@ -2211,7 +2246,7 @@ class DocEditorState extends State<DocEditor> {
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: Text(
-                                choiceLabel(context, (rows[i].values['type'] ?? rows[i].text['type']?.text ?? BlockTypes.paragraph).toString()),
+                                choiceLabel(context, _blockTypeOf(rows[i])),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(fontSize: 12, color: context.pal.primary, fontWeight: FontWeight.w600),
@@ -2249,34 +2284,12 @@ class DocEditorState extends State<DocEditor> {
                               IconButton(
                                 tooltip: context.tr('moveUp'),
                                 icon: const Icon(Icons.arrow_upward, size: 20),
-                                onPressed: i == 0
-                                    ? null
-                                    : () => setState(() {
-                                          final moved = rows.removeAt(i);
-                                          rows.insert(i - 1, moved);
-                                          if (_expandedRow[f.key] == i) {
-                                            _expandedRow[f.key] = i - 1;
-                                          } else if (_expandedRow[f.key] == i - 1) {
-                                            _expandedRow[f.key] = i;
-                                          }
-                                          _dirty = true;
-                                        }),
+                                onPressed: i == 0 ? null : () => _moveObjectRow(f, i, -1),
                               ),
                               IconButton(
                                 tooltip: context.tr('moveDown'),
                                 icon: const Icon(Icons.arrow_downward, size: 20),
-                                onPressed: i == rows.length - 1
-                                    ? null
-                                    : () => setState(() {
-                                          final moved = rows.removeAt(i);
-                                          rows.insert(i + 1, moved);
-                                          if (_expandedRow[f.key] == i) {
-                                            _expandedRow[f.key] = i + 1;
-                                          } else if (_expandedRow[f.key] == i + 1) {
-                                            _expandedRow[f.key] = i;
-                                          }
-                                          _dirty = true;
-                                        }),
+                                onPressed: i == rows.length - 1 ? null : () => _moveObjectRow(f, i, 1),
                               ),
                             ],
                           ),
@@ -2286,20 +2299,7 @@ class DocEditorState extends State<DocEditor> {
                               IconButton(
                                 tooltip: context.tr('remove'),
                                 icon: Icon(Icons.delete_outline, color: context.pal.alert, size: 20),
-                                onPressed: () => setState(() {
-                                  final removed = rows.removeAt(i);
-                                  if (_pendingErrorFocus != null && removed.ownsFocusNode(_pendingErrorFocus!.focusNode)) {
-                                    _clearPendingErrorFocus();
-                                  }
-                                  removed.dispose();
-                                  if (_expandedRow[f.key] == i) {
-                                    _expandedRow[f.key] = null;
-                                  } else if (_expandedRow[f.key] != null && _expandedRow[f.key]! > i) {
-                                    _expandedRow[f.key] = _expandedRow[f.key]! - 1;
-                                  }
-                                  _dirty = true;
-                                  _syncErrorSummaryAfterChange();
-                                }),
+                                onPressed: () => _removeObjectRow(f, i),
                               ),
                               IconButton(
                                 tooltip: context.tr('expandBlock'),
@@ -2344,7 +2344,7 @@ class DocEditorState extends State<DocEditor> {
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Text(
-                                  choiceLabel(context, (rows[i].values['type'] ?? rows[i].text['type']?.text ?? BlockTypes.paragraph).toString()),
+                                  choiceLabel(context, _blockTypeOf(rows[i])),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(fontSize: 12, color: context.pal.primary, fontWeight: FontWeight.w600),
@@ -2362,7 +2362,7 @@ class DocEditorState extends State<DocEditor> {
                       ),
                     ),
                   for (final sf in f.subFields)
-                    if (_isSubFieldShown(sf, rows[i]))
+                    if (_isShown(sf, rows[i].values))
                     KeyedSubtree(
                       key: rows[i].keyFor(sf.key),
                       child: Padding(
@@ -2535,46 +2535,17 @@ class DocEditorState extends State<DocEditor> {
                     Row(mainAxisSize: MainAxisSize.min, children: [
                     IconButton(
                       tooltip: context.tr('moveUp'),
-                      onPressed: i == 0
-                          ? null
-                          : () => setState(() {
-                                final moved = rows.removeAt(i);
-                                rows.insert(i - 1, moved);
-                                if (f.collapsibleRows) _expandedRow[f.key] = i - 1;
-                                _dirty = true;
-                              }),
+                      onPressed: i == 0 ? null : () => _moveObjectRow(f, i, -1),
                       icon: const Icon(Icons.arrow_upward),
                     ),
                     IconButton(
                       tooltip: context.tr('moveDown'),
-                      onPressed: i == rows.length - 1
-                          ? null
-                          : () => setState(() {
-                                final moved = rows.removeAt(i);
-                                rows.insert(i + 1, moved);
-                                if (f.collapsibleRows) _expandedRow[f.key] = i + 1;
-                                _dirty = true;
-                              }),
+                      onPressed: i == rows.length - 1 ? null : () => _moveObjectRow(f, i, 1),
                       icon: const Icon(Icons.arrow_downward),
                     ),
                     ]),
                     TextButton.icon(
-                      onPressed: () => setState(() {
-                        final removed = rows.removeAt(i);
-                        if (_pendingErrorFocus != null && removed.ownsFocusNode(_pendingErrorFocus!.focusNode)) {
-                          _clearPendingErrorFocus();
-                        }
-                        removed.dispose();
-                        if (f.collapsibleRows) {
-                          if (_expandedRow[f.key] == i) {
-                            _expandedRow[f.key] = null;
-                          } else if (_expandedRow[f.key] != null && _expandedRow[f.key]! > i) {
-                            _expandedRow[f.key] = _expandedRow[f.key]! - 1;
-                          }
-                        }
-                        _dirty = true;
-                        _syncErrorSummaryAfterChange();
-                      }),
+                      onPressed: () => _removeObjectRow(f, i),
                       icon: Icon(Icons.delete_outline, color: context.pal.alert),
                       label: Text(context.tr('remove'), style: TextStyle(color: context.pal.alert)),
                     ),
@@ -2651,7 +2622,7 @@ class DocEditorState extends State<DocEditor> {
     final narrowTopBar = MediaQuery.sizeOf(context).width < 480;
     final advancedFields = [
       for (final f in widget.fields)
-        if (f.group == FieldGroup.basic && f.advanced && _isFieldShown(f)) f,
+        if (f.group == FieldGroup.basic && f.advanced && _isShown(f, _values)) f,
     ];
     final summaryErrors = _showErrorSummary ? _collectErrors() : const <_FieldErrorEntry>[];
     final saveButton = FilledButton.icon(
@@ -2749,11 +2720,11 @@ class DocEditorState extends State<DocEditor> {
                       if (_saveError != null) _saveErrorBanner(context, _saveError!),
                       if (summaryErrors.isNotEmpty) _errorSummaryCard(context, summaryErrors),
                       for (final f in widget.fields)
-                        if (f.group == FieldGroup.basic && !f.advanced && _isFieldShown(f))
+                        if (f.group == FieldGroup.basic && !f.advanced && _isShown(f, _values))
                           Padding(padding: const EdgeInsets.only(bottom: 12), child: _field(f)),
                       if (advancedFields.isNotEmpty) _advancedCard(advancedFields),
                       for (final g in FieldGroup.values)
-                        if (g != FieldGroup.basic && widget.fields.any((f) => f.group == g && _isFieldShown(f)))
+                        if (g != FieldGroup.basic && widget.fields.any((f) => f.group == g && _isShown(f, _values)))
                           _groupCard(g),
                       const SizedBox(height: 8),
                       if (_canPreviewPage)
@@ -2892,6 +2863,7 @@ class _Row {
   final Map<String, GlobalKey> keys = {};
   final Map<String, dynamic> initial = {};
   final List<FieldDef> fields;
+  late final bool _hasTypeField = fields.any((f) => f.key == 'type');
   String listStyle = ListStyles.bullet;
   final List<ListItemDraft> listItems = [];
   DetailsDraft? detailsDraft;
@@ -2928,7 +2900,8 @@ class _Row {
           r.text[f.key] = TextEditingController(text: v?.toString() ?? '')..addListener(onChange);
       }
     }
-    if (fields.any((f) => f.key == 'type') && r.values['type'] == BlockTypes.list) {
+    final blockType = r._hasTypeField ? r.values['type'] : null;
+    if (blockType == BlockTypes.list) {
       r.listStyle = (data['account']?.toString() == ListStyles.numbered)
           ? ListStyles.numbered
           : ListStyles.bullet;
@@ -2947,7 +2920,7 @@ class _Row {
         r.listItems.add(ListItemDraft.from());
       }
     }
-    if (fields.any((f) => f.key == 'type') && r.values['type'] == BlockTypes.details) {
+    if (blockType == BlockTypes.details) {
       final parsed = PageBlock.fromMap(data)?.details;
       r.detailsDraft = DetailsDraft.from(
         summaryAr: parsed?.summaryAr ?? '',
@@ -2961,7 +2934,8 @@ class _Row {
   }
 
   Map<String, dynamic> collect({bool englishEnabled = true}) {
-    if (values['type'] == BlockTypes.list && fields.any((f) => f.key == 'type')) {
+    final blockType = _hasTypeField ? values['type'] : null;
+    if (blockType == BlockTypes.list) {
       return PageBlock.list(
         items: [
           for (final it in listItems)
@@ -2970,7 +2944,7 @@ class _Row {
         style: listStyle,
       ).toMap();
     }
-    if (values['type'] == BlockTypes.details && fields.any((f) => f.key == 'type')) {
+    if (blockType == BlockTypes.details) {
       final d = detailsDraft;
       if (d == null) return const PageBlock(type: BlockTypes.details).toMap();
       return PageBlock.details(

@@ -226,15 +226,8 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
   // ---- scheduled announcement editor ----
   bool _editorOpen = false;
   bool _editingExisting = false;
-  String _draftId = '';
-  bool _draftSoon = false;
-  DateTime _draftDay = DateTime(2026);
-  int _draftMinutes = 19 * 60;
-  String _draftTargets = 'all';
-  String _draftLink = '/';
-  String _draftLinkLabelAr = 'الرئيسية';
-  String _draftLinkLabelEn = 'Home';
-  String _draftEventKey = '';
+  _Draft _draft = _Draft.initial();
+  _Draft _initialDraft = _Draft.initial();
   Map<String, String> _draftFieldErrors = const {};
   String? _draftBannerError;
   bool _englishRevealedForError = false;
@@ -256,25 +249,14 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
   String _initialDraftTitleEn = '';
   String _initialDraftBodyAr = '';
   String _initialDraftBodyEn = '';
-  String _initialDraftTargets = 'all';
-  bool _initialDraftSoon = false;
-  DateTime _initialDraftDay = DateTime(2026);
-  int _initialDraftMinutes = 19 * 60;
-  String _initialDraftLink = '/';
-  String _initialDraftEventKey = '';
 
   bool get _isDraftDirty {
     if (!_editorOpen) return false;
-    return _draftTitleAr.text != _initialDraftTitleAr ||
+    return _draft != _initialDraft ||
+        _draftTitleAr.text != _initialDraftTitleAr ||
         _draftTitleEn.text != _initialDraftTitleEn ||
         _draftBodyAr.text != _initialDraftBodyAr ||
-        _draftBodyEn.text != _initialDraftBodyEn ||
-        _draftTargets != _initialDraftTargets ||
-        _draftSoon != _initialDraftSoon ||
-        _draftDay != _initialDraftDay ||
-        _draftMinutes != _initialDraftMinutes ||
-        _draftLink != _initialDraftLink ||
-        _draftEventKey != _initialDraftEventKey;
+        _draftBodyEn.text != _initialDraftBodyEn;
   }
 
   void _closeEditorState() {
@@ -518,20 +500,21 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
       _draftBannerError = null;
       _englishRevealedForError = false;
       _previewEnglish = false;
-      _draftId = _editingExisting ? row!.id : DayEvent.generateRandomId();
+      final bool soon;
+      final DateTime day;
+      final int minutes;
       if (row != null && !retry) {
         final c = CairoTime.fromInstant(row.atUtc);
-        _draftSoon = false;
-        _draftDay = DateTime(c.year, c.month, c.day);
-        _draftMinutes = c.hour * 60 + c.minute;
+        soon = false;
+        day = DateTime(c.year, c.month, c.day);
+        minutes = c.hour * 60 + c.minute;
       } else {
         // New: tomorrow 9 AM Cairo is a sane default; a retry goes out soon.
         final t = DateTime(now.year, now.month, now.day + 1);
-        _draftSoon = retry;
-        _draftDay = t;
-        _draftMinutes = 9 * 60;
+        soon = retry;
+        day = t;
+        minutes = 9 * 60;
       }
-      _draftTargets = row?.targets ?? 'all';
       final titleAr = row?.titleAr ?? '';
       final titleEn = row?.titleEn ?? '';
       final bodyAr = row?.bodyAr ?? '';
@@ -549,25 +532,28 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
       } else {
         _englishTileCtrl.collapse();
       }
-      _draftLink = row?.link ?? '/';
-      _draftEventKey = row?.eventKey ?? '';
-      _draftLinkLabelAr = _linkName(_draftLink);
-      if (_draftEventKey.isNotEmpty) _draftLinkLabelAr = '$_draftLinkLabelAr${context.tr('nm_linkedEventSuffix')}';
-      _draftLinkLabelEn = _draftLinkLabelAr;
-      if (retry && row != null) {
-        _draftTargets = _retryTargets(row);
-      }
+      final link = row?.link ?? '/';
+      final eventKey = row?.eventKey ?? '';
+      var linkLabel = _linkName(link);
+      if (eventKey.isNotEmpty) linkLabel = '$linkLabel${context.tr('nm_linkedEventSuffix')}';
+      final next = _Draft(
+        id: _editingExisting ? row!.id : DayEvent.generateRandomId(),
+        soon: soon,
+        day: day,
+        minutes: minutes,
+        targets: retry && row != null ? _retryTargets(row) : (row?.targets ?? 'all'),
+        link: link,
+        linkLabelAr: linkLabel,
+        linkLabelEn: linkLabel,
+        eventKey: eventKey,
+      );
+      _draft = next;
+      _initialDraft = next;
       _draftTitleAr.selection = TextSelection.collapsed(offset: _draftTitleAr.text.length);
       _initialDraftTitleAr = _draftTitleAr.text;
       _initialDraftTitleEn = _draftTitleEn.text;
       _initialDraftBodyAr = _draftBodyAr.text;
       _initialDraftBodyEn = _draftBodyEn.text;
-      _initialDraftTargets = _draftTargets;
-      _initialDraftSoon = _draftSoon;
-      _initialDraftDay = _draftDay;
-      _initialDraftMinutes = _draftMinutes;
-      _initialDraftLink = _draftLink;
-      _initialDraftEventKey = _draftEventKey;
     });
   }
 
@@ -576,9 +562,9 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
   String _retryTargets(ScheduledNotification row) =>
       _schedule.cloneDraftForRetry(row, row.id, row.atUtc).targets;
 
-  LinkTargetLike? _knownLink(String path) {
+  ({String labelAr, String labelEn})? _knownLink(String path) {
     for (final t in builtInLinkTargets) {
-      if (t.path == path) return LinkTargetLike(t.labelAr, t.labelEn);
+      if (t.path == path) return (labelAr: t.labelAr, labelEn: t.labelEn);
     }
     return null;
   }
@@ -593,9 +579,9 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
     return '\u2066$path\u2069';
   }
 
-  DateTime get _draftAtUtc => _draftSoon
+  DateTime get _draftAtUtc => _draft.soon
       ? DateTime.now().toUtc()
-      : CairoTime.at(_draftDay.year, _draftDay.month, _draftDay.day, _draftMinutes).toUtc();
+      : CairoTime.at(_draft.day.year, _draft.day.month, _draft.day.day, _draft.minutes).toUtc();
 
   void _revealAndScrollToFirstError(Map<String, String> fieldErrors) {
     final hasEnErr = fieldErrors.containsKey('titleEn') || fieldErrors.containsKey('bodyEn');
@@ -635,19 +621,19 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
 
   Future<void> _saveDraft() async {
     final row = ScheduledNotification(
-      id: _draftId,
+      id: _draft.id,
       atUtc: _draftAtUtc,
-      targets: _draftTargets,
+      targets: _draft.targets,
       titleAr: _draftTitleAr.text.trim(),
       titleEn: _draftTitleEn.text.trim(),
       bodyAr: _draftBodyAr.text.trim(),
       bodyEn: _draftBodyEn.text.trim(),
-      link: safeNotificationLink(_draftLink),
-      eventKey: _draftEventKey,
+      link: safeNotificationLink(_draft.link),
+      eventKey: _draft.eventKey,
     );
     final fieldErrors = Map<String, String>.of(validateScheduledNotificationFields(row));
     final bannerErr = fieldErrors.remove('id');
-    if (!_draftSoon && !row.atUtc.isAfter(DateTime.now().toUtc())) {
+    if (!_draft.soon && !row.atUtc.isAfter(DateTime.now().toUtc())) {
       fieldErrors['when'] = 'nm_errPast';
     }
     if (fieldErrors.isNotEmpty || bannerErr != null) {
@@ -661,19 +647,19 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
       _revealAndScrollToFirstError(fieldErrors);
       return;
     }
-    if (_draftTargets == 'all' || _draftSoon) {
+    if (_draft.targets == 'all' || _draft.soon) {
       final String summary;
       final String actionLabel;
-      if (_draftTargets == 'all' && _draftSoon) {
+      if (_draft.targets == 'all' && _draft.soon) {
         summary = context.tr('nm_confirmSendAllSummary', {'t': row.titleAr});
         actionLabel = context.tr('nm_sendToAllBtn');
-      } else if (_draftSoon) {
+      } else if (_draft.soon) {
         final target = _targetLook(row.targets).$1;
         summary = context.tr('nm_confirmSendTargetSoonSummary', {'target': target, 't': row.titleAr});
         actionLabel = context.tr('nm_sendNowBtn');
       } else {
         final when = _whenText(row.atUtc);
-        if (_draftTargets == 'all') {
+        if (_draft.targets == 'all') {
           summary = context.tr('nm_confirmScheduleAllSummary', {'when': when, 't': row.titleAr});
         } else {
           final target = _targetLook(row.targets).$1;
@@ -688,7 +674,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
       );
       if (!confirmed || !mounted) return;
     }
-    if (!_draftSoon && !row.atUtc.isAfter(DateTime.now().toUtc())) {
+    if (!_draft.soon && !row.atUtc.isAfter(DateTime.now().toUtc())) {
       const errs = {'when': 'nm_errPast'};
       setState(() {
         _draftFieldErrors = errs;
@@ -717,7 +703,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
       });
       if (!mounted) return;
       setState(_closeEditorState);
-      _snack(context.tr(_draftSoon ? 'nm_savedSoon' : 'nm_savedAt', {'when': _whenText(row.atUtc)}));
+      _snack(context.tr(_draft.soon ? 'nm_savedSoon' : 'nm_savedAt', {'when': _whenText(row.atUtc)}));
     } on _UserFacing catch (e) {
       if (mounted) {
         setState(() {
@@ -757,7 +743,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
         };
       });
       if (!mounted) return;
-      if (_editorOpen && _draftId == row.id) setState(_closeEditorState);
+      if (_editorOpen && _draft.id == row.id) setState(_closeEditorState);
       _snack(context.tr('nm_deleted'));
     } on _UserFacing catch (e) {
       if (mounted) _snack(context.tr(e.key), error: true);
@@ -856,10 +842,12 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
     );
     if (picked == null || !mounted) return;
     setState(() {
-      _draftLink = picked.path;
-      _draftEventKey = picked.eventKey;
-      _draftLinkLabelAr = picked.labelAr;
-      _draftLinkLabelEn = picked.labelEn;
+      _draft = _draft.copyWith(
+        link: picked.path,
+        eventKey: picked.eventKey,
+        linkLabelAr: picked.labelAr,
+        linkLabelEn: picked.labelEn,
+      );
       _clearDraftErrorKey('link');
     });
   }
@@ -1487,9 +1475,9 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
                   key: const ValueKey('when-soon'),
                   label: context.tr('sendAtEarliest'),
                   icon: Icons.bolt,
-                  selected: _draftSoon,
+                  selected: _draft.soon,
                   onSelected: (_) => setState(() {
-                    _draftSoon = true;
+                    _draft = _draft.copyWith(soon: true);
                     _clearDraftErrorKey('when');
                   }),
                 ),
@@ -1497,32 +1485,32 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
                   key: const ValueKey('when-at'),
                   label: context.tr('nm_whenAt'),
                   icon: Icons.event,
-                  selected: !_draftSoon,
+                  selected: !_draft.soon,
                   onSelected: (_) => setState(() {
-                    _draftSoon = false;
+                    _draft = _draft.copyWith(soon: false);
                     _clearDraftErrorKey('when');
                   }),
                 ),
               ]),
-              if (!_draftSoon) ...[
+              if (!_draft.soon) ...[
                 const SizedBox(height: 10),
                 Wrap(spacing: 8, runSpacing: 8, children: [
                   OutlinedButton.icon(
                     key: const ValueKey('pick-date'),
                     icon: const Icon(Icons.calendar_today, size: 18),
-                    label: Text('${weekdayName(_draftDay.weekday, arabic: context.isAr)} ${formatDate(_draftDay, arabic: context.isAr)}'),
+                    label: Text('${weekdayName(_draft.day.weekday, arabic: context.isAr)} ${formatDate(_draft.day, arabic: context.isAr)}'),
                     onPressed: () async {
                       final today = CairoTime.now();
                       final first = DateTime(today.year, today.month, today.day);
                       final picked = await showDatePicker(
                         context: context,
-                        initialDate: _draftDay.isBefore(first) ? first : _draftDay,
+                        initialDate: _draft.day.isBefore(first) ? first : _draft.day,
                         firstDate: first,
                         lastDate: first.add(const Duration(days: 120)),
                       );
                       if (picked != null && mounted) {
                         setState(() {
-                          _draftDay = DateTime(picked.year, picked.month, picked.day);
+                          _draft = _draft.copyWith(day: DateTime(picked.year, picked.month, picked.day));
                           _clearDraftErrorKey('when');
                         });
                       }
@@ -1531,15 +1519,15 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
                   OutlinedButton.icon(
                     key: const ValueKey('pick-time'),
                     icon: const Icon(Icons.access_time, size: 18),
-                    label: Text(_hmText(_draftMinutes)),
+                    label: Text(_hmText(_draft.minutes)),
                     onPressed: () async {
                       final picked = await showTimePicker(
                         context: context,
-                        initialTime: TimeOfDay(hour: _draftMinutes ~/ 60, minute: _draftMinutes % 60),
+                        initialTime: TimeOfDay(hour: _draft.minutes ~/ 60, minute: _draft.minutes % 60),
                       );
                       if (picked != null && mounted) {
                         setState(() {
-                          _draftMinutes = picked.hour * 60 + picked.minute;
+                          _draft = _draft.copyWith(minutes: picked.hour * 60 + picked.minute);
                           _clearDraftErrorKey('when');
                         });
                       }
@@ -1571,9 +1559,9 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
                     key: ValueKey('target-$t'),
                     label: _targetLook(t).$1,
                     icon: _targetLook(t).$2,
-                    selected: _draftTargets == t,
+                    selected: _draft.targets == t,
                     onSelected: (_) => setState(() {
-                      _draftTargets = t;
+                      _draft = _draft.copyWith(targets: t);
                       _clearDraftErrorKey('targets');
                     }),
                   ),
@@ -1605,9 +1593,9 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
                 suffixIcon: const Icon(Icons.arrow_drop_down),
               ),
               child: Row(children: [
-                Icon(_draftEventKey.isNotEmpty ? Icons.event_available_outlined : Icons.web_outlined, size: 18, color: context.pal.primary),
+                Icon(_draft.eventKey.isNotEmpty ? Icons.event_available_outlined : Icons.web_outlined, size: 18, color: context.pal.primary),
                 const SizedBox(width: 8),
-                Expanded(child: Text(context.pick(_draftLinkLabelAr, _draftLinkLabelEn), overflow: TextOverflow.ellipsis)),
+                Expanded(child: Text(context.pick(_draft.linkLabelAr, _draft.linkLabelEn), overflow: TextOverflow.ellipsis)),
               ]),
             ),
           ),
@@ -2126,10 +2114,69 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
   }
 }
 
-/// A friendly name for a stored link.
-class LinkTargetLike {
-  final String labelAr, labelEn;
-  const LinkTargetLike(this.labelAr, this.labelEn);
+/// Non-text snapshot of the scheduled-announcement editor draft + baseline.
+class _Draft {
+  final String id;
+  final bool soon;
+  final DateTime day;
+  final int minutes;
+  final String targets;
+  final String link;
+  final String linkLabelAr;
+  final String linkLabelEn;
+  final String eventKey;
+
+  const _Draft({
+    this.id = '',
+    this.soon = false,
+    required this.day,
+    this.minutes = 19 * 60,
+    this.targets = 'all',
+    this.link = '/',
+    this.linkLabelAr = 'الرئيسية',
+    this.linkLabelEn = 'Home',
+    this.eventKey = '',
+  });
+
+  factory _Draft.initial() => _Draft(day: DateTime(2026));
+
+  _Draft copyWith({
+    String? id,
+    bool? soon,
+    DateTime? day,
+    int? minutes,
+    String? targets,
+    String? link,
+    String? linkLabelAr,
+    String? linkLabelEn,
+    String? eventKey,
+  }) =>
+      _Draft(
+        id: id ?? this.id,
+        soon: soon ?? this.soon,
+        day: day ?? this.day,
+        minutes: minutes ?? this.minutes,
+        targets: targets ?? this.targets,
+        link: link ?? this.link,
+        linkLabelAr: linkLabelAr ?? this.linkLabelAr,
+        linkLabelEn: linkLabelEn ?? this.linkLabelEn,
+        eventKey: eventKey ?? this.eventKey,
+      );
+
+  // Display labels derive from link/eventKey and are omitted from dirty equality.
+  @override
+  bool operator ==(Object other) =>
+      other is _Draft &&
+      id == other.id &&
+      soon == other.soon &&
+      day == other.day &&
+      minutes == other.minutes &&
+      targets == other.targets &&
+      link == other.link &&
+      eventKey == other.eventKey;
+
+  @override
+  int get hashCode => Object.hash(id, soon, day, minutes, targets, link, eventKey);
 }
 
 class _UserFacing implements Exception {
