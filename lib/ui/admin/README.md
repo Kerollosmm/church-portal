@@ -77,8 +77,9 @@ The `admin` package implements the authenticated back-office management console 
 - `occasion_editor.dart`:
   - `OccasionThemeEditor`: Visual seasonal theme editor for previewing and customizing church banner artwork and color schemes.
 - `pending_delete.dart`:
-  - `PendingDelete`: 10-second soft-delete buffer scheduling async deletion commit while immediately marking `deletedAt` in Firestore and hiding items in UI, supporting undo (setting `deletedAt: null`).
-  - `purgeExpiredSoftDeletes(...)`: Deterministic lazy purge helper called on admin dashboard open and collection snapshots to clean up soft-deleted items older than 10 seconds and remove orphaned media.
+  - `PendingDelete`: 10-second soft-delete timer & hold coordinator supporting overlapping batch renewals (`holdAll` / `releaseHold`) and cancellation (`undo` / `dispose`).
+  - `SoftDeleteUndo`: Shared soft-delete coordinator used by `CollectionListScreen` and `MessagesScreen` for atomic batch registration, serialized per-ID `deletedAt` write/restore guards, in-place `"Undo"` / `"Undo all"` SnackBar updates, deferred non-undo SnackBars, and lazy purge scheduling (leaving FAB elevation/cooldown local to `CollectionListScreen`).
+  - `purgeExpiredSoftDeletes(...)`: Deterministic lazy purge helper called on admin dashboard open and collection snapshots to clean up soft-deleted items older than 10 seconds (with optional `removeMedia`, disabled for `MessagesScreen`).
 - `season_preset_admin.dart`:
   - `SeasonPresetScreen`: Administrative screen for selecting, previewing, and activating liturgical season presets.
 - `state_switch.dart`:

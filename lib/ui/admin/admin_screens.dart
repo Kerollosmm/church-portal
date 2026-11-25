@@ -680,35 +680,22 @@ class MessagesScreen extends StatefulWidget {
 class _MessagesScreenState extends State<MessagesScreen> {
   String _filter = 'new';
   String _box = 'all';
-  final _pendingDelete = PendingDelete();
-  final Set<String> _purging = {};
+  late final _undo = SoftDeleteUndo(
+    isMounted: () => mounted,
+    onChanged: () {
+      if (mounted) setState(() {});
+    },
+    singleUndoKey: 'deletedUndo',
+    closeBarOnDispose: true,
+  );
   static const _messagesDef = CollectionDef('contact_messages', '', '', [], []);
   late Stream<List<AdminDoc>> _stream = widget.repo.watch('contact_messages');
   late Stream<AdminDoc?> _config = widget.repo.watchDoc('settings/contact');
-  ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? _undoSnackBarController;
 
   @override
   void dispose() {
-    _pendingDelete.dispose();
-    _undoSnackBarController?.close();
+    _undo.dispose();
     super.dispose();
-  }
-
-  void _checkLazyPurge(List<AdminDoc> docs) {
-    final now = DateTime.now().toUtc();
-    if (docs.any((d) => isExpiredSoftDelete(d.data, now) && !_pendingDelete.isPending(d.id))) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          purgeExpiredSoftDeletes(
-            widget.repo,
-            _messagesDef,
-            docs,
-            isLocalPending: _pendingDelete.isPending,
-            purging: _purging,
-          );
-        }
-      });
-    }
   }
 
   @override
@@ -716,6 +703,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
     super.didUpdateWidget(oldWidget);
     // A different backend: re-bind the streams.
     if (widget.repo != oldWidget.repo) {
+      _undo.clearTransitionState();
       _stream = widget.repo.watch('contact_messages');
       _config = widget.repo.watchDoc('settings/contact');
     }
@@ -751,8 +739,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
   }
 
   Widget _body(BuildContext context, ContactSettings cfg, List<AdminDoc> docs) {
-    _checkLazyPurge(docs);
-    final visible = docs.where((d) => !isSoftDeleted(d.data) && !_pendingDelete.isPending(d.id)).toList();
+    _undo.checkLazyPurge(widget.repo, _messagesDef, docs, removeMedia: false);
+    final visible = docs.where(_undo.isVisible).toList();
     final all = [...visible]..sort((a, b) {
         final ta = a.data['createdAt'], tb = b.data['createdAt'];
         if (ta is DateTime && tb is DateTime) return tb.compareTo(ta);
@@ -1013,7 +1001,11 @@ class _MessagesScreenState extends State<MessagesScreen> {
     try {
       await widget.repo.update('contact_messages', d.id, data);
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e)))));
+      _undo.showSnack(
+        messenger,
+        SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e)))),
+        deferWhileUndo: true,
+      );
     }
   }
 
@@ -1028,68 +1020,17 @@ class _MessagesScreenState extends State<MessagesScreen> {
       destructive: true,
     );
     if (!ok || !context.mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
-    final failedMsg = context.tr('deleteFailed', {'e': '{e}'});
-    final id = d.id;
-
-    final undoText = context.tr('deletedUndo', {'n': sender});
-    final undoLabel = context.tr('undo');
-
-    try {
-      await widget.repo.update('contact_messages', id, {'deletedAt': DateTime.now().toUtc()});
-    } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
-      return;
-    }
-
-    if (!mounted) return;
-
-    setState(() {
-      _pendingDelete.schedule(id, () async {
-        try {
-          await widget.repo.delete('contact_messages', id);
-        } catch (e) {
-          try {
-            await widget.repo.update('contact_messages', id, {'deletedAt': null});
-          } catch (_) {}
-          if (!mounted) return;
-          setState(() {});
-          messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
-        }
-      });
-    });
-
-    messenger.removeCurrentSnackBar();
-    final undoController = messenger.showSnackBar(
-      SnackBar(
-        duration: const Duration(seconds: 10),
-        persist: false,
-        content: Text(undoText),
-        action: SnackBarAction(
-          label: undoLabel,
-          onPressed: () async {
-            _undoSnackBarController = null;
-            if (_pendingDelete.undo(id)) {
-              messenger.removeCurrentSnackBar();
-              if (mounted) setState(() {});
-              try {
-                await widget.repo.update('contact_messages', id, {'deletedAt': null});
-              } catch (e) {
-                if (mounted) {
-                  messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
-                }
-              }
-            }
-          },
-        ),
-      ),
+    await _undo.delete(
+      repo: widget.repo,
+      collection: 'contact_messages',
+      doc: d,
+      title: sender,
+      messenger: ScaffoldMessenger.of(context),
+      failedMsg: context.tr('deleteFailed', {'e': '{e}'}),
+      undoLabel: context.tr('undo'),
+      undoAllLabel: context.tr('undoAll'),
+      removeMedia: false,
     );
-    _undoSnackBarController = undoController;
-    undoController.closed.then((_) {
-      if (identical(_undoSnackBarController, undoController)) {
-        _undoSnackBarController = null;
-      }
-    });
   }
 }
 

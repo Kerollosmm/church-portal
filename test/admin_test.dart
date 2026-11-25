@@ -6596,6 +6596,69 @@ void main() {
         expect(repo.deletedIds, contains('contact_messages/msg-2'));
       });
 
+      testWidgets('MessagesScreen rapid 2-message soft-delete shows batched Undo all and restores both with 0 hard deletes',
+          (tester) async {
+        for (final locale in const [Locale('ar'), Locale('en')]) {
+          final isAr = locale.languageCode == 'ar';
+          final m1 = AdminDoc('msg-b1', {
+            'name': 'Sender One',
+            'message': 'First inbox message',
+            'createdAt': DateTime.utc(2026, 11, 15, 13),
+            'status': 'new',
+          });
+          final m2 = AdminDoc('msg-b2', {
+            'name': 'Sender Two',
+            'message': 'Second inbox message',
+            'createdAt': DateTime.utc(2026, 11, 15, 12),
+            'status': 'new',
+          });
+          final repo = _TestAdminBackend(initialCollections: {
+            'contact_messages': [m1, m2],
+          });
+
+          await tester.pumpWidget(_app(MessagesScreen(repo: repo), locale: locale));
+          await tester.pumpAndSettle();
+
+          // Confirm & soft-delete first message
+          await tester.tap(find.byTooltip(isAr ? 'حذف' : 'Delete').first);
+          await tester.pumpAndSettle();
+          await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 500));
+
+          expect(find.text('Sender One'), findsNothing);
+          expect(find.text(isAr ? 'تراجع' : 'Undo'), findsOneWidget);
+
+          // Confirm & soft-delete second message rapidly within 10s window
+          await tester.tap(find.byTooltip(isAr ? 'حذف' : 'Delete').first);
+          await tester.pumpAndSettle();
+          await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 500));
+
+          expect(find.text('Sender Two'), findsNothing);
+          expect(find.text(isAr ? 'تراجع عن الكل' : 'Undo all'), findsOneWidget);
+          expect(repo.deletedIds, isEmpty);
+
+          // Tap batched Undo all -> restores both messages with deletedAt: null and 0 hard deletes
+          await tester.tap(find.text(isAr ? 'تراجع عن الكل' : 'Undo all'));
+          await tester.pumpAndSettle();
+
+          expect(find.text('Sender One'), findsOneWidget);
+          expect(find.text('Sender Two'), findsOneWidget);
+          for (final id in ['msg-b1', 'msg-b2']) {
+            final doc = repo.collections['contact_messages']!.firstWhere((d) => d.id == id);
+            expect(isSoftDeleted(doc.data), isFalse, reason: '$id deletedAt should be cleared');
+          }
+          expect(repo.deletedIds, isEmpty);
+
+          // Wait past 10s grace window -> still 0 hard deletes
+          await tester.pump(const Duration(seconds: 12));
+          await tester.pumpAndSettle();
+          expect(repo.deletedIds, isEmpty);
+        }
+      });
+
       testWidgets('FeaturesScreen never shows updatedElsewhere banner on failed save with rollback', (tester) async {
         final initialDoc = AdminDoc('features', {
           'updatedAt': DateTime.utc(2026, 11, 1, 10),
