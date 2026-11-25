@@ -166,6 +166,69 @@ int notificationIdFor(String key) {
   }
 }
 
+tz.TZDateTime _shiftOutOfQuietHours(tz.TZDateTime scheduledAt, PushPrefs prefs) {
+  if (!prefs.quietHoursEnabled) return scheduledAt;
+  final (inQuiet, quietEnd) = evaluateQuietHours(scheduledAt, prefs.quiet.from, prefs.quiet.to);
+  return inQuiet ? quietEnd : scheduledAt;
+}
+
+PlannedNotification? _buildReminderNotification({
+  required Reminder reminder,
+  required tz.TZDateTime effectiveStart,
+  required String dateIso,
+  required DateTime now,
+  required PushPrefs prefs,
+  required bool exactAlarmsAllowed,
+}) {
+  final nominalFire = effectiveStart.subtract(Duration(minutes: reminder.lead));
+  final scheduledAt = reminderFireTime(
+    nominalFire: nominalFire,
+    now: now,
+    createdAt: reminder.createdAt,
+    exactAllowed: exactAlarmsAllowed,
+  );
+  if (scheduledAt == null) return null;
+
+  var silent = false;
+  if (prefs.quietHoursEnabled && prefs.remindersRespectQuietHours) {
+    final (inQuiet, _) = evaluateQuietHours(scheduledAt, prefs.quiet.from, prefs.quiet.to);
+    if (inQuiet) silent = true;
+  }
+
+  final rawAr = reminder.title['ar']?.trim() ?? '';
+  final rawEn = reminder.title['en']?.trim() ?? '';
+  final titleAr = rawAr.isNotEmpty ? 'تذكير: $rawAr' : 'تذكير';
+  final titleEn = rawEn.isNotEmpty ? 'Reminder: $rawEn' : 'Reminder';
+
+  final cOcc = CairoTime.fromInstant(effectiveStart);
+  final hm = '${cOcc.hour.toString().padLeft(2, '0')}:${cOcc.minute.toString().padLeft(2, '0')}';
+  final bodyAr = '${leadLabel(reminder.lead, 'ar')} — ${formatTimeArabic(hm)}';
+  final bodyEn = '${leadLabel(reminder.lead, 'en')} — ${formatTimeLatin(hm)}';
+
+  final key = 'local:reminders:$dateIso:${reminder.eventKey}:${reminder.lead}';
+  final payload = jsonEncode({
+    'type': 'reminders',
+    'eventKey': reminder.eventKey,
+    'date': dateIso,
+    'lead': reminder.lead,
+  });
+
+  return PlannedNotification(
+    id: notificationIdFor(key),
+    key: key,
+    type: NotifyType.reminders,
+    scheduledAt: scheduledAt,
+    titleAr: titleAr,
+    titleEn: titleEn,
+    bodyAr: bodyAr,
+    bodyEn: bodyEn,
+    payload: payload,
+    exact: exactAlarmsAllowed,
+    channelId: NotifyType.reminders.name,
+    silent: silent,
+  );
+}
+
 /// Plans pending local notifications on Android for a rolling ~9-day window.
 ///
 /// Only local-owned Android types are scheduled (`verse_daily`, `katameros_daily`,
@@ -211,14 +274,10 @@ List<PlannedNotification> planNotifications({
       final spec = notifyConfig.specFor(NotifyType.verse_daily);
       final vTime = prefs.verseTime ?? (spec.time.isNotEmpty ? spec.time : NotifyTypeConfig.defaultVerseTime);
       final parsedVTime = parseHm(vTime) ?? (7 * 60);
-      var vScheduledAt = CairoTime.at(dayDate.year, dayDate.month, dayDate.day, parsedVTime);
-
-      if (prefs.quietHoursEnabled) {
-        final (inQuiet, quietEnd) = evaluateQuietHours(vScheduledAt, prefs.quiet.from, prefs.quiet.to);
-        if (inQuiet) {
-          vScheduledAt = quietEnd;
-        }
-      }
+      var vScheduledAt = _shiftOutOfQuietHours(
+        CairoTime.at(dayDate.year, dayDate.month, dayDate.day, parsedVTime),
+        prefs,
+      );
 
       if (!vScheduledAt.isBefore(now)) {
         // Same choice as Home / the reading screen: fixed admin verse, else the active season's set.
@@ -294,14 +353,10 @@ List<PlannedNotification> planNotifications({
       final spec = notifyConfig.specFor(NotifyType.katameros_daily);
       final kTime = prefs.katamerosTime ?? (spec.time.isNotEmpty ? spec.time : NotifyTypeConfig.defaultKatamerosTime);
       final parsedKTime = parseHm(kTime) ?? (6 * 60 + 30);
-      var kScheduledAt = CairoTime.at(dayDate.year, dayDate.month, dayDate.day, parsedKTime);
-
-      if (prefs.quietHoursEnabled) {
-        final (inQuiet, quietEnd) = evaluateQuietHours(kScheduledAt, prefs.quiet.from, prefs.quiet.to);
-        if (inQuiet) {
-          kScheduledAt = quietEnd;
-        }
-      }
+      var kScheduledAt = _shiftOutOfQuietHours(
+        CairoTime.at(dayDate.year, dayDate.month, dayDate.day, parsedKTime),
+        prefs,
+      );
 
       if (!kScheduledAt.isBefore(now)) {
         final readings = cachedReadings[dateIso];
@@ -379,14 +434,10 @@ List<PlannedNotification> planNotifications({
         final spec = notifyConfig.specFor(NotifyType.feasts);
         final fTime = spec.time.isNotEmpty ? spec.time : NotifyTypeConfig.defaultFeastsTime;
         final parsedFTime = parseHm(fTime) ?? (7 * 60 + 30);
-        var fScheduledAt = CairoTime.at(dayDate.year, dayDate.month, dayDate.day, parsedFTime);
-
-        if (prefs.quietHoursEnabled) {
-          final (inQuiet, quietEnd) = evaluateQuietHours(fScheduledAt, prefs.quiet.from, prefs.quiet.to);
-          if (inQuiet) {
-            fScheduledAt = quietEnd;
-          }
-        }
+        var fScheduledAt = _shiftOutOfQuietHours(
+          CairoTime.at(dayDate.year, dayDate.month, dayDate.day, parsedFTime),
+          prefs,
+        );
 
         if (!fScheduledAt.isBefore(now)) {
           final feastVarsAr = {'date': dateIso, 'feast': feast.ar};
@@ -483,62 +534,16 @@ List<PlannedNotification> planNotifications({
           }
 
           if (!replaced) {
-            final nominalFire = effectiveStart.subtract(Duration(minutes: reminder.lead));
-            final scheduledAt = reminderFireTime(
-              nominalFire: nominalFire,
+            final planned = _buildReminderNotification(
+              reminder: reminder,
+              effectiveStart: effectiveStart,
+              dateIso: candDateIso,
               now: now,
-              createdAt: reminder.createdAt,
-              exactAllowed: exactAlarmsAllowed,
+              prefs: prefs,
+              exactAlarmsAllowed: exactAlarmsAllowed,
             );
-            final exact = exactAlarmsAllowed;
-
-            if (scheduledAt != null) {
-              bool silent = false;
-              if (prefs.quietHoursEnabled && prefs.remindersRespectQuietHours) {
-                final (inQuiet, _) = evaluateQuietHours(scheduledAt, prefs.quiet.from, prefs.quiet.to);
-                if (inQuiet) silent = true;
-              }
-
-              final titleAr = reminder.title['ar']?.trim().isNotEmpty == true
-                  ? 'تذكير: ${reminder.title['ar']!.trim()}'
-                  : 'تذكير';
-              final titleEn = reminder.title['en']?.trim().isNotEmpty == true
-                  ? 'Reminder: ${reminder.title['en']!.trim()}'
-                  : 'Reminder';
-
-              final cOcc = CairoTime.fromInstant(effectiveStart);
-              final hm = '${cOcc.hour.toString().padLeft(2, '0')}:${cOcc.minute.toString().padLeft(2, '0')}';
-              final leadAr = leadLabel(reminder.lead, 'ar');
-              final leadEn = leadLabel(reminder.lead, 'en');
-              final timeAr = formatTimeArabic(hm);
-              final timeEn = formatTimeLatin(hm);
-
-              final bodyAr = '$leadAr — $timeAr';
-              final bodyEn = '$leadEn — $timeEn';
-
-              final key = 'local:reminders:$candDateIso:${reminder.eventKey}:${reminder.lead}';
-              final payload = jsonEncode({
-                'type': 'reminders',
-                'eventKey': reminder.eventKey,
-                'date': candDateIso,
-                'lead': reminder.lead,
-              });
-
-              reminderNotifications.add(PlannedNotification(
-                id: notificationIdFor(key),
-                key: key,
-                type: NotifyType.reminders,
-                scheduledAt: scheduledAt,
-                titleAr: titleAr,
-                titleEn: titleEn,
-                bodyAr: bodyAr,
-                bodyEn: bodyEn,
-                payload: payload,
-                exact: exact,
-                channelId: NotifyType.reminders.name,
-                silent: silent,
-              ));
-
+            if (planned != null) {
+              reminderNotifications.add(planned);
               scheduledOccurrences++;
             }
           }
@@ -586,61 +591,16 @@ List<PlannedNotification> planNotifications({
         }
 
         if (!replaced) {
-          final nominalFire = startsAt.subtract(Duration(minutes: reminder.lead));
-          final scheduledAt = reminderFireTime(
-            nominalFire: nominalFire,
+          final planned = _buildReminderNotification(
+            reminder: reminder,
+            effectiveStart: startsAt,
+            dateIso: remDateIso,
             now: now,
-            createdAt: reminder.createdAt,
-            exactAllowed: exactAlarmsAllowed,
+            prefs: prefs,
+            exactAlarmsAllowed: exactAlarmsAllowed,
           );
-          final exact = exactAlarmsAllowed;
-
-          if (scheduledAt != null) {
-            bool silent = false;
-            if (prefs.quietHoursEnabled && prefs.remindersRespectQuietHours) {
-              final (inQuiet, _) = evaluateQuietHours(scheduledAt, prefs.quiet.from, prefs.quiet.to);
-              if (inQuiet) silent = true;
-            }
-
-            final titleAr = reminder.title['ar']?.trim().isNotEmpty == true
-                ? 'تذكير: ${reminder.title['ar']!.trim()}'
-                : 'تذكير';
-            final titleEn = reminder.title['en']?.trim().isNotEmpty == true
-                ? 'Reminder: ${reminder.title['en']!.trim()}'
-                : 'Reminder';
-
-            final cStarts = CairoTime.fromInstant(startsAt);
-            final hm = '${cStarts.hour.toString().padLeft(2, '0')}:${cStarts.minute.toString().padLeft(2, '0')}';
-            final leadAr = leadLabel(reminder.lead, 'ar');
-            final leadEn = leadLabel(reminder.lead, 'en');
-            final timeAr = formatTimeArabic(hm);
-            final timeEn = formatTimeLatin(hm);
-
-            final bodyAr = '$leadAr — $timeAr';
-            final bodyEn = '$leadEn — $timeEn';
-
-            final key = 'local:reminders:$remDateIso:${reminder.eventKey}:${reminder.lead}';
-            final payload = jsonEncode({
-              'type': 'reminders',
-              'eventKey': reminder.eventKey,
-              'date': remDateIso,
-              'lead': reminder.lead,
-            });
-
-            reminderNotifications.add(PlannedNotification(
-              id: notificationIdFor(key),
-              key: key,
-              type: NotifyType.reminders,
-              scheduledAt: scheduledAt,
-              titleAr: titleAr,
-              titleEn: titleEn,
-              bodyAr: bodyAr,
-              bodyEn: bodyEn,
-              payload: payload,
-              exact: exact,
-              channelId: NotifyType.reminders.name,
-              silent: silent,
-            ));
+          if (planned != null) {
+            reminderNotifications.add(planned);
           }
         }
       }
