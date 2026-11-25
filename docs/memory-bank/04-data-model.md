@@ -457,8 +457,7 @@ Rate throttle doc for `push_queue` batch writes:
 ### `admins/{uid}`
 `{email: string (≤254, required), role: 'owner' | 'editor'}` (+ optional `updatedAt/updatedBy`, checked by
 `stampOk` since PR 1).
-Doc id = Firebase Auth **UID**. Missing/unknown role is treated as **editor** (`AdminRepository.adminRole`,
-`roleChanges`; rules `isOwner` checks `role == 'owner'`). `AdminRoles` in `admin_repository.dart`.
+Doc id = Firebase Auth **UID**. Missing/unknown role is treated as **editor** (`evaluateAdminAccess` in `lib/ui/admin/admin_access.dart`, via `AdminRepositoryAccessExt.adminAccess` / `accessChanges`; rules `isOwner` checks `role == 'owner'`). `AdminRoles` in `admin_repository.dart`.
 
 ## Seed ids & retirement (`tool/`)
 

@@ -7036,6 +7036,78 @@ void main() {
       expect(clipped.length, 41);
     });
   });
+
+  group('appInstallDoc schema & DocEditor', () {
+    test('schema defines all 13 app install & APK fields', () {
+      expect(appInstallDoc.fields.length, 13);
+      final keys = appInstallDoc.fields.map((f) => f.key).toSet();
+      expect(
+        keys,
+        containsAll([
+          'installPrompt',
+          'installTitleAr',
+          'installTitleEn',
+          'installBodyAr',
+          'installBodyEn',
+          'installAndroidUrl',
+          'installAndroidUrl32',
+          'installApkVersion',
+          'installApkBuild',
+          'installApkSizeMb',
+          'installApkSize32Mb',
+          'installReshowDays',
+          'installRemindDays',
+        ]),
+      );
+    });
+
+    testWidgets('DocEditor renders appInstallDoc with initial values and saves only changed fields', (tester) async {
+      tester.view.physicalSize = const Size(1200, 4000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      Map<String, dynamic>? saved;
+      final initialData = <String, dynamic>{
+        'installPrompt': true,
+        'installTitleAr': 'تطبيق الكنيسة',
+        'installTitleEn': 'Church App',
+        'installBodyAr': 'نص الشريط',
+        'installBodyEn': 'Banner text',
+        'installAndroidUrl': 'https://example.com/app.apk',
+        'installApkVersion': '1.1.0',
+        'installApkBuild': 12,
+        'installApkSizeMb': 18.4,
+        'installReshowDays': 14,
+        'installRemindDays': 3,
+      };
+
+      await tester.pumpWidget(_app(DocEditor(
+        title: appInstallDoc.labelAr,
+        fields: appInstallDoc.fields,
+        data: initialData,
+        popOnSave: false,
+        onSave: (d) async => saved = d,
+      )));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('editor-save')), findsOneWidget);
+      for (final f in appInstallDoc.fields) {
+        expect(find.byKey(ValueKey('field-${f.key}')), findsOneWidget, reason: 'Field ${f.key} must be rendered');
+      }
+
+      await tester.enterText(find.byKey(const ValueKey('field-installApkVersion')), '1.2.0');
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+
+      expect(saved, isNotNull);
+      expect(saved!['installApkVersion'], '1.2.0');
+      expect(saved!.containsKey('installApkBuild'), isFalse);
+      expect(saved!.containsKey('installApkSizeMb'), isFalse);
+      expect(saved!.containsKey('installPrompt'), isFalse);
+    });
+  });
 }
 
 class _TestAdminBackend extends AdminBackend {
