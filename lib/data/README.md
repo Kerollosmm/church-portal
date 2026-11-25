@@ -7,72 +7,72 @@ The `lib/data` layer manages all local persistence, remote networking, platform 
 - [image_codec](./image_codec/README.md) - Platform-specific WebP/image decoding
 
 ### Admin & Content Repositories
-- [`AdminDoc`](file:///c:/Users/Kerollos/church-portal/lib/data/admin_repository.dart#L7): Represents a Firestore admin document with id, normalized data, and audit metadata (`updatedAt`, `updatedBy`).
-- [`AdminRoles`](file:///c:/Users/Kerollos/church-portal/lib/data/admin_repository.dart#L17): Role definitions for `owner` and `editor`.
-- [`AdminBackend`](file:///c:/Users/Kerollos/church-portal/lib/data/admin_repository.dart#L26): Abstract interface for admin CRUD operations, reordering, and role assignments.
-- [`AdminRepository`](file:///c:/Users/Kerollos/church-portal/lib/data/admin_repository.dart#L79): Concrete Firestore implementation of `AdminBackend` with Firebase Auth management (`signIn`, `signOut`, `sendPasswordReset`).
-- [`ContentRepository`](file:///c:/Users/Kerollos/church-portal/lib/data/content_repository.dart#L20): Abstract contract for public content streaming and contact message submission.
-- [`SeedRepository`](file:///c:/Users/Kerollos/church-portal/lib/data/content_repository.dart#L60): Offline/unconfigured fallback content repository backed by `SeedData`.
-- [`FirestoreRepository`](file:///c:/Users/Kerollos/church-portal/lib/data/content_repository.dart#L453): Live Firestore content repository with fallback guards.
-- [`ContactUnavailableException`](file:///c:/Users/Kerollos/church-portal/lib/data/content_repository.dart#L14): Thrown when contact submission is attempted without live Firebase.
-- [`SeedGate`](file:///c:/Users/Kerollos/church-portal/lib/data/content_repository.dart#L138): Seeding marker tracker detecting if `settings/church` exists in Firestore.
-- [`guardSeeded`](file:///c:/Users/Kerollos/church-portal/lib/data/content_repository.dart#L205): Stream wrapper preventing stranded fallbacks while awaiting seeding confirmation.
-- [`settleFirst`](file:///c:/Users/Kerollos/church-portal/lib/data/content_repository.dart#L378): Stream combinator delaying provisional cache reads for custom content until confirmed by server.
-- [`normalizeFirestoreValue`](file:///c:/Users/Kerollos/church-portal/lib/data/content_repository.dart#L113), [`normalizeDoc`](file:///c:/Users/Kerollos/church-portal/lib/data/content_repository.dart#L120): Normalizes Firestore `Timestamp` objects into UTC `DateTime` values.
-- [`LiveReading`](file:///c:/Users/Kerollos/church-portal/lib/data/content_repository.dart#L365): Typed record describing a snapshot's value, provisional cache status, and change flag.
-- [`SeedData`](file:///c:/Users/Kerollos/church-portal/lib/data/seed_data.dart#L10): Typed parser and static loader over bundled `assets/seed/seed.json`.
+- [`AdminDoc`](admin_repository.dart#L7): Represents a Firestore admin document with id, normalized data, and audit metadata (`updatedAt`, `updatedBy`).
+- [`AdminRoles`](admin_repository.dart#L17): Role definitions for `owner` and `editor`.
+- [`AdminBackend`](admin_repository.dart#L26): Abstract interface for admin CRUD operations, reordering, and role assignments.
+- [`AdminRepository`](admin_repository.dart#L79): Concrete Firestore implementation of `AdminBackend` with Firebase Auth management (`signIn`, `signOut`, `sendPasswordReset`).
+- [`ContentRepository`](content_repository.dart#L20): Abstract contract for public content streaming and contact message submission.
+- [`SeedRepository`](content_repository.dart#L60): Offline/unconfigured fallback content repository backed by `SeedData`.
+- [`FirestoreRepository`](content_repository.dart#L453): Live Firestore content repository with fallback guards.
+- [`ContactUnavailableException`](content_repository.dart#L14): Thrown when contact submission is attempted without live Firebase.
+- [`SeedGate`](content_repository.dart#L138): Seeding marker tracker detecting if `settings/church` exists in Firestore.
+- [`guardSeeded`](content_repository.dart#L205): Stream wrapper preventing stranded fallbacks while awaiting seeding confirmation.
+- [`settleFirst`](content_repository.dart#L378): Stream combinator delaying provisional cache reads for custom content until confirmed by server.
+- [`normalizeFirestoreValue`](content_repository.dart#L113), [`normalizeDoc`](content_repository.dart#L120): Normalizes Firestore `Timestamp` objects into UTC `DateTime` values.
+- [`LiveReading`](content_repository.dart#L365): Typed record describing a snapshot's value, provisional cache status, and change flag.
+- [`SeedData`](seed_data.dart#L10): Typed parser and static loader over bundled `assets/seed/seed.json`.
 
 ### Media & Image Processing
-- [`EncodedImage`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L21): Holds compressed image bytes, MIME type, width, and height.
-- [`MediaRepository`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L31): Abstract contract for loading, uploading, and deleting media files.
-- [`FirestoreMediaRepository`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L46): Spark-plan implementation storing base64 image data inline in Firestore `media/{id}`.
-- [`ReadOnlyMediaRepository`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L128): Spark-plan read-only public media loader (`upload`/`delete` throw `UnsupportedError`).
-- [`MediaCache`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L172): In-memory LRU cache of inline image bytes (default capacity 60).
-- [`decodeMediaDoc`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L83): Extracts and decodes base64 bytes from a `media/{id}` document map.
-- [`createPublicMediaRepository`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L151): Factory returning read-only `ReadOnlyMediaRepository` for public startup without Firebase Auth.
-- [`createMediaRepository`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L155): Factory returning writable `FirestoreMediaRepository` for `/admin`.
-- [`ImageTooLargeException`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L158), [`ImageDecodeException`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L164): Exceptions for image processing errors.
-- [`DecodedImage`](file:///c:/Users/Kerollos/church-portal/lib/data/image_processing.dart#L13): Abstract decoded image interface for resizing and re-encoding.
-- [`decodeImage`](file:///c:/Users/Kerollos/church-portal/lib/data/image_processing.dart#L23): Conditional decoder forwarding to the platform codec.
-- [`compressDecoded`](file:///c:/Users/Kerollos/church-portal/lib/data/image_processing.dart#L31): Multi-pass downscaling and quality reduction targeting <= 250 KB.
-- [`prepareUpload`](file:///c:/Users/Kerollos/church-portal/lib/data/image_processing.dart#L45): Complete picked image validation, decoding, and compression pipeline.
-- [`maxInputBytes`](file:///c:/Users/Kerollos/church-portal/lib/data/image_processing.dart#L26): Input guard constant limiting uploads to 25 MB before decoding.
+- [`EncodedImage`](media_repository.dart#L21): Holds compressed image bytes, MIME type, width, and height.
+- [`MediaRepository`](media_repository.dart#L31): Abstract contract for loading, uploading, and deleting media files.
+- [`FirestoreMediaRepository`](media_repository.dart#L46): Spark-plan implementation storing base64 image data inline in Firestore `media/{id}`.
+- [`ReadOnlyMediaRepository`](media_repository.dart#L128): Spark-plan read-only public media loader (`upload`/`delete` throw `UnsupportedError`).
+- [`MediaCache`](media_repository.dart#L172): In-memory LRU cache of inline image bytes (default capacity 60).
+- [`decodeMediaDoc`](media_repository.dart#L83): Extracts and decodes base64 bytes from a `media/{id}` document map.
+- [`createPublicMediaRepository`](media_repository.dart#L151): Factory returning read-only `ReadOnlyMediaRepository` for public startup without Firebase Auth.
+- [`createMediaRepository`](media_repository.dart#L155): Factory returning writable `FirestoreMediaRepository` for `/admin`.
+- [`ImageTooLargeException`](media_repository.dart#L158), [`ImageDecodeException`](media_repository.dart#L164): Exceptions for image processing errors.
+- [`DecodedImage`](image_processing.dart#L13): Abstract decoded image interface for resizing and re-encoding.
+- [`decodeImage`](image_processing.dart#L23): Conditional decoder forwarding to the platform codec.
+- [`compressDecoded`](image_processing.dart#L31): Multi-pass downscaling and quality reduction targeting <= 250 KB.
+- [`prepareUpload`](image_processing.dart#L45): Complete picked image validation, decoding, and compression pipeline.
+- [`maxInputBytes`](image_processing.dart#L26): Input guard constant limiting uploads to 25 MB before decoding.
 
 ### Application Lifecycle, Firebase & Telemetry
-- [`FirebaseStatus`](file:///c:/Users/Kerollos/church-portal/lib/data/firebase_bootstrap.dart#L10): Status record reporting Firebase availability, App Check configuration state, and errors.
-- [`isAppCheckConfigured`](file:///c:/Users/Kerollos/church-portal/lib/data/firebase_bootstrap.dart#L20): Pure build/platform check matching `selectAppCheckPlan(...).activate` without importing `firebase_app_check`.
-- [`kFirestoreCacheSizeBytes`](file:///c:/Users/Kerollos/church-portal/lib/data/firebase_bootstrap.dart#L28): Default 40 MB on-disk Firestore cache threshold.
-- [`firestoreSettings`](file:///c:/Users/Kerollos/church-portal/lib/data/firebase_bootstrap.dart#L39): Platform Firestore `Settings` builder; enables `WebPersistentMultipleTabManager` on web (`isWeb == true`) while keeping native platforms unchanged (`webPersistentTabManager == null`).
-- [`bootstrapFirebase`](file:///c:/Users/Kerollos/church-portal/lib/data/firebase_bootstrap.dart#L47): Safe Firebase core initialization with 40 MB offline Firestore cache (multi-tab synchronized on web, ADR-078).
-- [`AppCheckPlan`](file:///c:/Users/Kerollos/church-portal/lib/data/app_check_providers.dart#L12): Chosen provider plan across web, Android, Apple, and debug targets.
-- [`selectAppCheckPlan`](file:///c:/Users/Kerollos/church-portal/lib/data/app_check_providers.dart#L45): Provider selection algorithm based on platform and debug configuration.
-- [`ensureAppCheckActivated`](file:///c:/Users/Kerollos/church-portal/lib/data/app_check_providers.dart#L83): Lazy activation of App Check on first assistant request (deferred with `/ask`).
-- [`ErrorReportingGate`](file:///c:/Users/Kerollos/church-portal/lib/data/error_reporting.dart#L22): Reactive gate synchronizing error reporting with the admin feature switch.
-- [`ErrorReporting`](file:///c:/Users/Kerollos/church-portal/lib/data/error_reporting.dart#L143): Global telemetry entry point managing Sentry lifecycle and breadcrumbs.
-- [`scrubEvent`](file:///c:/Users/Kerollos/church-portal/lib/data/error_reporting.dart#L71), [`scrubBreadcrumb`](file:///c:/Users/Kerollos/church-portal/lib/data/error_reporting.dart#L119): Sanitizers eliminating PII, query params, and sensitive contexts.
-- [`installSentryJsGate`](file:///c:/Users/Kerollos/church-portal/lib/data/sentry_js_gate.dart#L4): Browser-level gate ensuring web window errors adhere to admin switch and PII scrubbing.
+- [`FirebaseStatus`](firebase_bootstrap.dart#L10): Status record reporting Firebase availability, App Check configuration state, and errors.
+- [`isAppCheckConfigured`](firebase_bootstrap.dart#L20): Pure build/platform check matching `selectAppCheckPlan(...).activate` without importing `firebase_app_check`.
+- [`kFirestoreCacheSizeBytes`](firebase_bootstrap.dart#L28): Default 40 MB on-disk Firestore cache threshold.
+- [`firestoreSettings`](firebase_bootstrap.dart#L39): Platform Firestore `Settings` builder; enables `WebPersistentMultipleTabManager` on web (`isWeb == true`) while keeping native platforms unchanged (`webPersistentTabManager == null`).
+- [`bootstrapFirebase`](firebase_bootstrap.dart#L47): Safe Firebase core initialization with 40 MB offline Firestore cache (multi-tab synchronized on web, ADR-078).
+- [`AppCheckPlan`](app_check_providers.dart#L12): Chosen provider plan across web, Android, Apple, and debug targets.
+- [`selectAppCheckPlan`](app_check_providers.dart#L45): Provider selection algorithm based on platform and debug configuration.
+- [`ensureAppCheckActivated`](app_check_providers.dart#L83): Lazy activation of App Check on first assistant request (deferred with `/ask`).
+- [`ErrorReportingGate`](error_reporting.dart#L22): Reactive gate synchronizing error reporting with the admin feature switch.
+- [`ErrorReporting`](error_reporting.dart#L143): Global telemetry entry point managing Sentry lifecycle and breadcrumbs.
+- [`scrubEvent`](error_reporting.dart#L71), [`scrubBreadcrumb`](error_reporting.dart#L119): Sanitizers eliminating PII, query params, and sensitive contexts.
+- [`installSentryJsGate`](sentry_js_gate.dart#L4): Browser-level gate ensuring web window errors adhere to admin switch and PII scrubbing.
 
 ### AI Assistant & Device Local Stores
-- [`FirebaseAssistantModel`](file:///c:/Users/Kerollos/church-portal/lib/data/assistant_model.dart#L12): Stateless Gemini client communicating with Firebase AI Logic.
-- [`PrefsUsageStore`](file:///c:/Users/Kerollos/church-portal/lib/data/assistant_usage_store.dart#L8): Daily quota tracker persisting usage in `SharedPreferences`.
-- [`ReadingsStore`](file:///c:/Users/Kerollos/church-portal/lib/data/readings_store.dart#L12): Katameros daily readings cache and static hosting fetcher with automatic pruning.
-- [`ReminderStore`](file:///c:/Users/Kerollos/church-portal/lib/data/reminder_store.dart#L25): Local storage manager for event reminders enforcing a 30-item device cap.
-- [`remindersStorageKey`](file:///c:/Users/Kerollos/church-portal/lib/data/reminder_store.dart#L6): Storage key `church_portal_reminders`.
-- [`maxDeviceReminders`](file:///c:/Users/Kerollos/church-portal/lib/data/reminder_store.dart#L9): Constant device limit (30).
-- [`ReminderPutResult`](file:///c:/Users/Kerollos/church-portal/lib/data/reminder_store.dart#L12): Outcome enum (`ok`, `full`, `storageError`).
-- [`SynaxariumSource`](file:///c:/Users/Kerollos/church-portal/lib/data/synaxarium_source.dart#L17): Fetches and caches daily `/data/today.json` commemorations.
+- [`FirebaseAssistantModel`](assistant_model.dart#L12): Stateless Gemini client communicating with Firebase AI Logic.
+- [`PrefsUsageStore`](assistant_usage_store.dart#L8): Daily quota tracker persisting usage in `SharedPreferences`.
+- [`ReadingsStore`](readings_store.dart#L12): Katameros daily readings cache and static hosting fetcher with automatic pruning.
+- [`ReminderStore`](reminder_store.dart#L25): Local storage manager for event reminders enforcing a 30-item device cap.
+- [`remindersStorageKey`](reminder_store.dart#L6): Storage key `church_portal_reminders`.
+- [`maxDeviceReminders`](reminder_store.dart#L9): Constant device limit (30).
+- [`ReminderPutResult`](reminder_store.dart#L12): Outcome enum (`ok`, `full`, `storageError`).
+- [`SynaxariumSource`](synaxarium_source.dart#L17): Fetches and caches daily `/data/today.json` commemorations.
 
 ### Android Native System Services
-- [`AppUpdater`](file:///c:/Users/Kerollos/church-portal/lib/data/app_updater.dart#L14): Cross-platform entry point for in-app APK updates.
-- [`PlatformAppUpdater`](file:///c:/Users/Kerollos/church-portal/lib/data/app_updater_io.dart#L31): Android implementation managing manifest checks, resumable downloads, SHA-256 integrity verification, signature matching, and package installer intents.
-- [`createPlatformAppUpdater`](file:///c:/Users/Kerollos/church-portal/lib/data/app_updater.dart#L24): Factory returning platform updater implementation.
-- [`LocalNotifier`](file:///c:/Users/Kerollos/church-portal/lib/data/local_notifications.dart#L56): Cross-platform interface for local notifications.
-- [`LocalNotifierImpl`](file:///c:/Users/Kerollos/church-portal/lib/data/local_notifications_io.dart#L15): Android implementation utilizing `FlutterLocalNotificationsPlugin` for scheduled and instant notifications across 6 channels.
-- [`LocalNotifierStub`](file:///c:/Users/Kerollos/church-portal/lib/data/local_notifications_stub.dart#L10): No-op stub for web/desktop.
-- [`createLocalNotifier`](file:///c:/Users/Kerollos/church-portal/lib/data/local_notifications.dart#L59): Factory creating platform notification provider.
-- [`NotificationChannels`](file:///c:/Users/Kerollos/church-portal/lib/data/local_notifications.dart#L22): Canonical channel definitions (`verse`, `readings`, `feasts`, `reminders`, `announcements`, `seasons`).
-- [`resolveChannelId`](file:///c:/Users/Kerollos/church-portal/lib/data/local_notifications.dart#L34): Channel identifier resolver with fallback to reminders.
-- [`notificationColor`](file:///c:/Users/Kerollos/church-portal/lib/data/local_notifications.dart#L14), [`notificationSmallIcon`](file:///c:/Users/Kerollos/church-portal/lib/data/local_notifications.dart#L19): Brand color (`#6E1C1C`) and monochrome seal icon constants.
+- [`AppUpdater`](app_updater.dart#L14): Cross-platform entry point for in-app APK updates.
+- [`PlatformAppUpdater`](app_updater_io.dart#L31): Android implementation managing manifest checks, resumable downloads, SHA-256 integrity verification, signature matching, and package installer intents.
+- [`createPlatformAppUpdater`](app_updater.dart#L24): Factory returning platform updater implementation.
+- [`LocalNotifier`](local_notifications.dart#L56): Cross-platform interface for local notifications.
+- [`LocalNotifierImpl`](local_notifications_io.dart#L15): Android implementation utilizing `FlutterLocalNotificationsPlugin` for scheduled and instant notifications across 6 channels.
+- [`LocalNotifierStub`](local_notifications_stub.dart#L10): No-op stub for web/desktop.
+- [`createLocalNotifier`](local_notifications.dart#L59): Factory creating platform notification provider.
+- [`NotificationChannels`](local_notifications.dart#L22): Canonical channel definitions (`verse`, `readings`, `feasts`, `reminders`, `announcements`, `seasons`).
+- [`resolveChannelId`](local_notifications.dart#L34): Channel identifier resolver with fallback to reminders.
+- [`notificationColor`](local_notifications.dart#L14), [`notificationSmallIcon`](local_notifications.dart#L19): Brand color (`#6E1C1C`) and monochrome seal icon constants.
 
 ## Invariants
 - `[admin_repository.dart:AdminRepository]`: All document mutations automatically stamp server timestamp `updatedAt` and actor identifier `updatedBy`.

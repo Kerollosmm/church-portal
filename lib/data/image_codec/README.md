@@ -4,9 +4,9 @@
 Platform-conditional image decoding and encoding backend for client-side image processing. Provides dedicated implementations for IO platforms (Android, iOS, desktop, test runners) via pure-Dart `package:image` and for Web platforms via browser canvas and `createImageBitmap` APIs (leveraging browser WebP capabilities and canvas blob conversion).
 
 ## Interface
-- `Future<DecodedImage> decode(Uint8List bytes)`: Platform-specific image decoder entry point ([`image_codec_io.dart:decode`](file:///c:/Users/Kerollos/church-portal/lib/data/image_codec/image_codec_io.dart#L10), [`image_codec_web.dart:decode`](file:///c:/Users/Kerollos/church-portal/lib/data/image_codec/image_codec_web.dart#L12)).
-- `_IoImage`: Pure-Dart `DecodedImage` implementation caching resized variants and encoding to JPEG with alpha flattened onto white ([`image_codec_io.dart:_IoImage`](file:///c:/Users/Kerollos/church-portal/lib/data/image_codec/image_codec_io.dart#L16)).
-- `_WebImage`: Web browser `DecodedImage` implementation utilizing `HTMLCanvasElement`, `ImageBitmap`, and `toBlob` supporting WebP with JPEG/PNG fallback ([`image_codec_web.dart:_WebImage`](file:///c:/Users/Kerollos/church-portal/lib/data/image_codec/image_codec_web.dart#L27)).
+- `Future<DecodedImage> decode(Uint8List bytes)`: Platform-specific image decoder entry point ([`image_codec_io.dart:decode`](image_codec_io.dart#L10), [`image_codec_web.dart:decode`](image_codec_web.dart#L12)).
+- `_IoImage`: Pure-Dart `DecodedImage` implementation caching resized variants and encoding to JPEG with alpha flattened onto white ([`image_codec_io.dart:_IoImage`](image_codec_io.dart#L16)).
+- `_WebImage`: Web browser `DecodedImage` implementation utilizing `HTMLCanvasElement`, `ImageBitmap`, and `toBlob` supporting WebP with JPEG/PNG fallback ([`image_codec_web.dart:_WebImage`](image_codec_web.dart#L27)).
 
 ## Invariants
 - `[image_codec_io.dart:decode]`: Throws `ImageDecodeException` if decoded image is null or dimensions (`width`, `height`) are non-positive (`<= 0`). Automatically bakes EXIF orientation into pixels via `img.bakeOrientation`.
