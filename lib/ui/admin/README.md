@@ -20,7 +20,7 @@ The `admin` package implements the authenticated back-office management console 
   - `AdminSessionGuard`: Activity monitor resetting the idle clock on pointer and keyboard input, showing the countdown warning banner, and running `confirmDiscardChanges` before signing out if a form is dirty.
 - `admin_schema.dart`:
   - Adds `donationPageTemplate()` returning pre-filled donation page defaults with empty financial fields (P1-15), marks `slug` fields as `advanced: true` (P1-14), and adds `placement` + `categoryId` (`showWhen: placement == 'section'`) + `featured` fields to `pages` (P1-18).
-  - `FieldType`, `FieldGroup`, `FieldDef`, `CollectionDef`, `DocDef`, `seasonKeys`, `imageCollections`, `adminCollections`, `churchInfoDoc`, `assistantSettingsDoc`, `todaySettingsDoc`, `seasonSettingsDoc`, `appSettingsDoc`.
+  - `FieldType`, `FieldGroup`, `FieldDef`, `CollectionDef`, `DocDef`, `seasonKeys`, `imageCollections`, `adminCollections`, `churchInfoDoc`, `assistantSettingsDoc`, `todaySettingsDoc`, `seasonSettingsDoc`.
 - `admin_screens.dart`:
   - `OverviewScreen`: High-level metrics dashboard displaying content collection summaries and quick action links.
   - `ChurchInfoScreen`: Dedicated administrative form for church metadata, geographic coordinates, and social media links.

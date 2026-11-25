@@ -1,7 +1,7 @@
 # Config Component Package
 
 ## Overview
-The `lib/config` package centralizes build-time configurations, environment definitions (`--dart-define`), and operational constants across web and native targets. It provides immutable, compile-time defaults for telemetry (Sentry), App Check security (reCAPTCHA Enterprise), origin resolution, backend media selection, and Firebase AI Logic models without mutating runtime state.
+The `lib/config` package centralizes build-time configurations, environment definitions (`--dart-define`), and operational constants across web and native targets. It provides immutable, compile-time defaults for telemetry (Sentry), App Check security (reCAPTCHA Enterprise), origin resolution, and Firebase AI Logic models without mutating runtime state.
 
 ## Interface
 - [`AppConfig`](file:///c:/Users/Kerollos/church-portal/lib/config/app_config.dart#L10-L84): Static utility class hosting build-environment bindings.
@@ -13,7 +13,6 @@ The `lib/config` package centralizes build-time configurations, environment defi
   - [`AppConfig.isUsableSiteKey`](file:///c:/Users/Kerollos/church-portal/lib/config/app_config.dart#L41-L44): Helper verifying that a site key is non-empty and does not contain `'PLACEHOLDER'`.
   - [`AppConfig.siteOriginDefine`](file:///c:/Users/Kerollos/church-portal/lib/config/app_config.dart#L49-L50): Build-time origin URL (`SITE_ORIGIN`, defaults to `'https://maximos-domadios-church.web.app'`).
   - [`AppConfig.dataOrigin`](file:///c:/Users/Kerollos/church-portal/lib/config/app_config.dart#L54): Dynamic origin for static asset fetches (`Uri.base.origin` on web, `siteOriginDefine` on Android).
-  - [`AppConfig.mediaBackend`](file:///c:/Users/Kerollos/church-portal/lib/config/app_config.dart#L59): Media repository target storage engine (`'firestore'` or `'storage'`).
   - [`AppConfig.sentryDefaultDsn`](file:///c:/Users/Kerollos/church-portal/lib/config/app_config.dart#L65-L66): Hardcoded fallback Sentry ingest DSN.
   - [`AppConfig.sentryDsn`](file:///c:/Users/Kerollos/church-portal/lib/config/app_config.dart#L69-L71): Resolved Sentry DSN (honors `SENTRY_DSN` define; defaults to `sentryDefaultDsn` in release mode, null in debug/profile).
   - [`AppConfig.sentryEnvironment`](file:///c:/Users/Kerollos/church-portal/lib/config/app_config.dart#L74): Sentry runtime environment name (`'production'`, `'preview'`, or `'debug'`).

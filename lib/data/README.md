@@ -10,7 +10,7 @@ The `lib/data` layer manages all local persistence, remote networking, platform 
 - [`AdminDoc`](file:///c:/Users/Kerollos/church-portal/lib/data/admin_repository.dart#L7): Represents a Firestore admin document with id, normalized data, and audit metadata (`updatedAt`, `updatedBy`).
 - [`AdminRoles`](file:///c:/Users/Kerollos/church-portal/lib/data/admin_repository.dart#L17): Role definitions for `owner` and `editor`.
 - [`AdminBackend`](file:///c:/Users/Kerollos/church-portal/lib/data/admin_repository.dart#L26): Abstract interface for admin CRUD operations, reordering, and role assignments.
-- [`AdminRepository`](file:///c:/Users/Kerollos/church-portal/lib/data/admin_repository.dart#L79): Concrete Firestore implementation of `AdminBackend` with Firebase Auth management (`signIn`, `signOut`, `sendPasswordReset`, `adminRole`, `roleChanges`).
+- [`AdminRepository`](file:///c:/Users/Kerollos/church-portal/lib/data/admin_repository.dart#L79): Concrete Firestore implementation of `AdminBackend` with Firebase Auth management (`signIn`, `signOut`, `sendPasswordReset`).
 - [`ContentRepository`](file:///c:/Users/Kerollos/church-portal/lib/data/content_repository.dart#L20): Abstract contract for public content streaming and contact message submission.
 - [`SeedRepository`](file:///c:/Users/Kerollos/church-portal/lib/data/content_repository.dart#L60): Offline/unconfigured fallback content repository backed by `SeedData`.
 - [`FirestoreRepository`](file:///c:/Users/Kerollos/church-portal/lib/data/content_repository.dart#L453): Live Firestore content repository with fallback guards.
@@ -26,12 +26,11 @@ The `lib/data` layer manages all local persistence, remote networking, platform 
 - [`EncodedImage`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L21): Holds compressed image bytes, MIME type, width, and height.
 - [`MediaRepository`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L31): Abstract contract for loading, uploading, and deleting media files.
 - [`FirestoreMediaRepository`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L46): Spark-plan implementation storing base64 image data inline in Firestore `media/{id}`.
-- [`StorageMediaRepository`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L106): Blaze-plan Cloud Storage repository stub.
 - [`ReadOnlyMediaRepository`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L128): Spark-plan read-only public media loader (`upload`/`delete` throw `UnsupportedError`).
 - [`MediaCache`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L172): In-memory LRU cache of inline image bytes (default capacity 60).
 - [`decodeMediaDoc`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L83): Extracts and decodes base64 bytes from a `media/{id}` document map.
-- [`createPublicMediaRepository`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L151): Factory selecting read-only `ReadOnlyMediaRepository` (or Storage) for public startup without Firebase Auth.
-- [`createMediaRepository`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L155): Factory selecting writable Firestore inline or Storage media backend for `/admin`.
+- [`createPublicMediaRepository`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L151): Factory returning read-only `ReadOnlyMediaRepository` for public startup without Firebase Auth.
+- [`createMediaRepository`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L155): Factory returning writable `FirestoreMediaRepository` for `/admin`.
 - [`ImageTooLargeException`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L158), [`ImageDecodeException`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L164): Exceptions for image processing errors.
 - [`DecodedImage`](file:///c:/Users/Kerollos/church-portal/lib/data/image_processing.dart#L13): Abstract decoded image interface for resizing and re-encoding.
 - [`decodeImage`](file:///c:/Users/Kerollos/church-portal/lib/data/image_processing.dart#L23): Conditional decoder forwarding to the platform codec.
@@ -79,7 +78,6 @@ The `lib/data` layer manages all local persistence, remote networking, platform 
 - `[admin_repository.dart:AdminRepository]`: All document mutations automatically stamp server timestamp `updatedAt` and actor identifier `updatedBy`.
 - `[admin_repository.dart:AdminRepository._merge]`: Updates use `SetOptions(mergeFields: stamped.keys.toList())` to replace top-level maps completely instead of recursive deep merging, ensuring removed keys (e.g. headers, links) are pruned.
 - `[admin_repository.dart:AdminRepository.sendPasswordReset]`: Never reveals whether an email account exists (returns `true` even on `user-not-found`).
-- `[admin_repository.dart:AdminRepository.roleChanges]`: Discards cache-only missing snapshots so that a cold cache does not flash "not admin".
 - `[content_repository.dart:guardSeeded]`: Prevents unseeded Firestore streams from stranding empty lists; serves bundled seed fallback until `settings/church` existence is proven by `SeedGate`.
 - `[content_repository.dart:settleFirst]`: Holds back provisional cache readings for custom collections (`categories`, `entries`, `pages`) up to `customPatience` (8 seconds) to prevent false "not found" screens.
 - `[content_repository.dart:FirestoreRepository.submitContact]`: Batches public contact message submission with a write to `meta/contact_rate` containing `lastMsgId` to enforce server-side security rule rate limits.

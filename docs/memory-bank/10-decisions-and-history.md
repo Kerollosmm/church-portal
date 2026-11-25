@@ -2299,3 +2299,9 @@ supersede them.
 - **Context:** The church does not operate medical clinics, so the entire `clinics` section was removed from the public site, admin dashboard, seed data, assistant context, and tests.
 - **Decision:** Removed `ClinicsPage`, `Clinic` model, `Sections.clinics`, `DetailKind.clinic`, `BuiltInSections.clinics`, `PresetOption.hideClinics`, admin `clinics` collection/destination, and seeded clinic records (moved to `tool/retired_seed_ids.json`). `/clinics` and `/clinics/:id` now redirect to `/`.
 - **Follow-up:** `firestore.rules` and `tool/rules_test/rules.test.mjs` were intentionally left untouched in this PR and should be cleaned up in a separate rules follow-up.
+
+## ADR-082 — Phase 5 PR 5A: Pure Deletions (Dead Rules, Strings & Test-Only Code)
+
+- **Context:** Following the clinics removal (#98) and Phase 3/4 admin improvements (#83, #97), several dead rules (`clinics` collection), 11 unused UI string keys, dead/test-only helpers (`confirmDialog`, `AdminRepository.adminRole`/`roleChanges`, `appSettingsDoc`/`FieldType.intChoices`, `PendingDelete.flush`/`extendAll`, `SessionPolicy.shouldWarn`/`shouldSignOut`, unused `push.dart` helpers `topicFor`/`isReminderSourceEnabled`/`dueNow`), and the speculative `StorageMediaRepository` / `AppConfig.mediaBackend` stub (ADR-017) remained in the codebase.
+- **Decision:** Denied `/clinics/{id}` and extracted `contentCollections()` in `firestore.rules` while keeping `D1` legacy `settings/features` allow-list keys (`clinics`, `heroVideos`, `imageStyles`, `seasonPreset.previous`, `pageHeaders`) intact for live-doc safety; pinned and removed the dead UI strings and symbols; and removed `StorageMediaRepository` + `AppConfig.mediaBackend` while keeping `MediaRepository` and `MediaSource.storage` URL rendering.
+- **Consequences:** Zero behavior change, smaller dead-code surface, and `StorageMediaRepository` can be implemented directly against `MediaRepository` if/when the project moves to Blaze.

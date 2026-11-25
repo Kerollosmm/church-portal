@@ -47,7 +47,7 @@ Helpers:
 - `changedKeys(d)` (PR #11) — create: every key; update: `diff().affectedKeys()`. `validContent` computes it once and
   passes it down; **only changed keys are validated** (a stored value was validated when it was written).
 - `common(d, changed)` — ≤ 80 keys, `visible`/`sample` bool, `order` int ±100000, `image` null/absent or `validImage`,
-  `stampOk` (each only when changed). Only collections whose allow-list contains `'image'` (alerts, seasons and the 7
+  `stampOk` (each only when changed). Only collections whose allow-list contains `'image'` (alerts, seasons and the 6
   detail collections) can store one.
 - `validImage(i)` — keys ⊆ `source,url,mediaId,alt,w,h`; `source` ∈ url/inline/storage; inline → `mediaId`
   `^[A-Za-z0-9_-]{1,128}$`, otherwise `url` ≤ 500 matching `https://[^/\s]+[.][^/\s]+([/?#]\S*)?`; `alt` ≤ 300;
@@ -59,9 +59,9 @@ Helpers:
   one regex; unknown extra keys in a row are not rejected), `validDetailText` (4 toggles ∈ {true,false}; youtube /
   instagram http(s) URLs, labels ≤ 80, notes ≤ 500, details ≤ 10,000 on one joined string); `validDetailContacts`
   (`contactPhone`/`whatsapp` ≤ 20, `whatsappUrl`/`facebookUrl`/`externalUrl` `''`/null/http(s) ≤ 500; it also checks
-  the meetings' Facebook/WhatsApp URLs, the activities' `contactPhone` and the clinics' `whatsapp` whenever a write
+  the meetings' Facebook/WhatsApp URLs and the activities' `contactPhone` whenever a write
   sets them); `ownFieldsUnchanged(changed)` skips a collection's own-field checks when an update touches only
-  detail / meta keys; `ownMeeting/ownActivity/ownClinic/ownFacility/ownPriest/ownMilestone/ownSaint` check the
+  detail / meta keys; `ownMeeting/ownActivity/ownFacility/ownPriest/ownMilestone/ownSaint` check the
   collection's own fields on one joined string. Optional text fields are read inline as
   `(d.get(k, null) == null ? '' : d.k)`: absent/null is accepted, a non-string (`phone: 123`, `nameEn: true`) makes
   the string `+` fail → denied (`string()` would have turned it into text; Codex P2 on PR #11). A helper function
@@ -80,7 +80,7 @@ Match blocks:
 
 | Path | read | create / update | delete |
 |---|---|---|---|
-| `/{col}/{docId}` for `alerts, seasons, liturgies, meetings, activities, clinics, facilities, priests, milestones, saints, categories, entries` | **public** | `col in [...] && isAdmin() && validContent(col, data)` (PR 3C checks `col in [...]` before `isAdmin()` so `/settings/*` writes don't evaluate `isAdmin()` twice) → `common` + per-collection allow-lists | `col in [...] && isAdmin()` |
+| `/{col}/{docId}` for `contentCollections()` (`alerts, seasons, liturgies, meetings, activities, facilities, priests, milestones, saints, categories, entries`) | **public** | `col in contentCollections() && isAdmin() && validContent(col, data)` → `common` + per-collection allow-lists | `col in contentCollections() && isAdmin()` |
 | `/pages/{docId}` | **public** | `isAdmin() && validPageDoc(data)`: isolated from `{col}` dispatch to avoid 1,000 expression budget exhaustion on 20-block custom pages; inlines meta keys and branches `validPageBlock(b)` via `b.matches('(list|details)\\x1f[\\s\\S]*')` to inline `list` regex (identical semantics to PR 4A `validListBlock`) or `validDetailsBlock(b)` (`summaryAr` 1–200 non-blank + `\u001e` + `bodyAr` 1–3500 non-blank with 500-char RE2 chunks, optional `summaryEn` 0–200 + `\u001e` + `bodyEn` 0–3500, empty `url`/`account`/`instapay`/`wallet`) while keeping the 6 legacy block types' regexes untouched (`185` emulator checks pass, incl. 20 worst-case full AR+EN `details` blocks `setDoc`+`updateDoc`, 20 `list` blocks, and 20 legacy blocks) | `isAdmin()` |
 | `/settings/{docId}` | **public** (except `docId == 'notifications'` which is `isAdmin()` only) | `isAdmin()` and (`church` → `validChurch`, `features` → `validFeatures`, `contact` → `isOwner() && validContactSettings`, `assistant` → `isOwner() && validAssistant`, `notifications` → `validNotifications`: allows schedule ≤ 20 rows, forbids client writes to status/health/reminders, allows owner to clear sentLog); any other doc id denied | **never** |
 | `/media/{mediaId}` | **get: public** (by id); **list: `isAdmin()` only** (PR 1, SEC-02) | `isAdmin() && validMedia(data)`: keys ⊆ `dataBase64, contentType, w, h, bytes, createdAt, createdBy, refs`; required `dataBase64` (4–950,000 chars), `contentType` ∈ jpeg/webp/png, `createdAt` (== `request.time`, or unchanged), `createdBy` (token email/uid, or unchanged); `bytes` ≤ 700,000; `w/h` 1–10000; `refs` list ≤ 20 | `isAdmin()` |
@@ -98,7 +98,6 @@ Notable details:
   `meetings.facebookUrl/whatsappUrl` and `settings/church` `facebook/youtube/instagram/whatsappChannel`;
   `optUrlOrPath` (also an in-app path `/…`) on `alerts.link`. Rejects `javascript:`, `data:`, `//host`, etc.
   `mapsUrl`/`heroImageUrl` keep length-only checks.
-- `validClinic`: `days` list ≤ 7 and ⊆ [1..7].
 - `validPriest`: `rank` ∈ hegumen/priest, `status` ∈ serving/departed, dates ≤ 10 chars.
 - **Image display styles (PR #15, ADR-023):** `common()` accepts `imageStyle` only as absent/`null`/`avatar`/`card`/
   `banner` when it changes; it is on the allow-list of the 9 image collections (and `ownFieldsUnchanged`), never on
@@ -195,8 +194,7 @@ Notable details:
   of `media/*`, admin-only writes (cross-service `firestore.exists(admins/uid)`), ≤ 700 KB, jpeg/webp/png
   (`^image/(jpeg|webp|png)([;].*)?$`, so parameterised headers like `image/jpeg; charset=utf-8` pass — PR 1;
   guarded by `request.resource.contentType is string` before `.matches`, PR #10).
-- The app's `StorageMediaRepository` (`lib/data/media_repository.dart`) is a stub selected by
-  `--dart-define=MEDIA_BACKEND=storage`; switch steps are in ADR-017 (`10-decisions-and-history.md`).
+- Inline Firestore `media/{id}` images are used on Spark; switching to Cloud Storage later needs Blaze, a Storage-backed `MediaRepository`, and deploying `storage.rules` (ADR-017, ADR-082).
 - Spark quota note: each inline image costs **one Firestore document read** per visitor session (cached in memory and
   by Firestore persistence), counted in the 50K reads/day. Keep images optional and few; the admin can switch them all
   off (section `media`). Gallery photos (PR #13) cost those reads only when a visitor opens that item's detail page

@@ -1145,24 +1145,6 @@ class _InfoChip extends StatelessWidget {
       );
 }
 
-Future<bool> confirmDialog(BuildContext context, String text, {String? action}) async {
-  final ok = await showDialog<bool>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      content: Text(text),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
-        FilledButton(
-          style: FilledButton.styleFrom(backgroundColor: context.pal.alert),
-          onPressed: () => Navigator.pop(ctx, true),
-          child: Text(action ?? context.tr('delete')),
-        ),
-      ],
-    ),
-  );
-  return ok == true;
-}
-
 /// Owner-only: list, add, change role, remove admins.
 class AdminsScreen extends StatefulWidget {
   final AdminBackend repo;

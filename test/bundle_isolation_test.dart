@@ -114,6 +114,14 @@ void main() {
         'offlineReadingsError',
         'verseTab',
         'katamerosTab',
+        'allVenues',
+        'callChurchOffice',
+        'allSpecialties',
+        'availableToday',
+        'specialtyFilter',
+        'factQualification',
+        'factDays',
+        'accentDailyVerse',
       ];
       for (final dead in deadKeys) {
         expect(baseKeys.contains(dead), isFalse, reason: 'Dead key $dead should stay removed from l10n.dart');

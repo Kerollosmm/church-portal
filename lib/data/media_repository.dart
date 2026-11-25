@@ -6,15 +6,14 @@
 // createdAt, createdBy}. Content docs only hold a small `image` map, so lists
 // never download image bytes.
 //
-// Switching to Cloud Storage after a Blaze upgrade: see StorageMediaRepository
-// and docs/memory-bank/10-decisions-and-history.md (ADR-017).
+// Switching to Cloud Storage after a Blaze upgrade: see ADR-017 in
+// docs/memory-bank/10-decisions-and-history.md.
 
 import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '../config/app_config.dart';
 import '../domain/media.dart';
 
 /// A resized + compressed image ready to be stored.
@@ -91,37 +90,6 @@ Uint8List? decodeMediaDoc(Map<String, dynamic>? data) {
   }
 }
 
-/// Ready path for Cloud Storage for Firebase (needs the Blaze plan; Spark
-/// projects cannot create or access a bucket). Not wired up yet so the web
-/// bundle does not carry `firebase_storage`. To switch:
-///  1. Upgrade the project to Blaze (+ budget alert), enable Storage.
-///  2. `flutter pub add firebase_storage`; implement [upload] as
-///     `ref('media/<id>.<ext>').putData(bytes, SettableMetadata(contentType))`
-///     → `getDownloadURL()` and return
-///     `MediaImage(source: MediaSource.storage, url: downloadUrl, mediaId: '<id>.<ext>', …)`;
-///     [delete] = `ref('media/$mediaId').delete()`.
-///  3. Deploy `storage.rules` (draft in the repo root; add `"storage"` to
-///     firebase.json) and build with `--dart-define=MEDIA_BACKEND=storage`.
-///  Existing inline images keep working (both sources render).
-class StorageMediaRepository implements MediaRepository {
-  const StorageMediaRepository();
-
-  @override
-  String get source => MediaSource.storage;
-
-  /// Storage images render from their download URL, never from here.
-  @override
-  Future<Uint8List?> load(String mediaId) async => null;
-
-  @override
-  Future<MediaImage> upload(EncodedImage img, {String alt = ''}) =>
-      throw UnsupportedError('Cloud Storage needs the Blaze plan (see StorageMediaRepository).');
-
-  @override
-  Future<void> delete(String mediaId) =>
-      throw UnsupportedError('Cloud Storage needs the Blaze plan (see StorageMediaRepository).');
-}
-
 /// Read-only Spark-plan media loader for the public UI (`media/{id}`).
 /// Refuses mutations so public bootstrap never carries `FirebaseAuth` or risks
 /// writing media documents with an empty `createdBy`.
@@ -147,13 +115,12 @@ class ReadOnlyMediaRepository implements MediaRepository {
       throw UnsupportedError('ReadOnlyMediaRepository cannot delete media.');
 }
 
-/// Public read-only media backend (`--dart-define=MEDIA_BACKEND=firestore|storage`).
-MediaRepository createPublicMediaRepository(FirebaseFirestore db) =>
-    AppConfig.mediaBackend == MediaSource.storage ? const StorageMediaRepository() : ReadOnlyMediaRepository(db);
+/// Public read-only media backend.
+MediaRepository createPublicMediaRepository(FirebaseFirestore db) => ReadOnlyMediaRepository(db);
 
-/// The configured writable admin backend (`--dart-define=MEDIA_BACKEND=firestore|storage`).
+/// Writable admin media backend.
 MediaRepository createMediaRepository(FirebaseFirestore db, String Function() actor) =>
-    AppConfig.mediaBackend == MediaSource.storage ? const StorageMediaRepository() : FirestoreMediaRepository(db, actor);
+    FirestoreMediaRepository(db, actor);
 
 class ImageTooLargeException implements Exception {
   const ImageTooLargeException();

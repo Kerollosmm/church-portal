@@ -45,9 +45,6 @@ enum FieldType {
   /// Up to [FieldDef.maxRows] calendar dates stored as sorted 'YYYY-MM-DD'
   /// strings, edited as chips (ADR-051: a season's `replaceDates`).
   dateList,
-
-  /// Several integer options stored as a list of ints (e.g. reminder leads).
-  intChoices,
 }
 
 /// Where a field sits in the editor: [basic] is always open at the top; the
@@ -146,12 +143,6 @@ class FieldDef {
   /// with (match the reader's default).
   final List<String> defaultValues;
 
-  /// [FieldType.intChoices]: integer options available to select.
-  final List<int> intOptions;
-
-  /// [FieldType.intChoices]: default integer values when document has none.
-  final List<int> defaultIntValues;
-
   /// Hidden field: not rendered in forms but retained in rows/data.
   final bool hidden;
 
@@ -193,8 +184,6 @@ class FieldDef {
       this.rowNotBefore,
       this.rowUniqueKey = '',
       this.defaultValues = const [],
-      this.intOptions = const [],
-      this.defaultIntValues = const [],
       this.hidden = false,
       this.advanced = false,
       this.lang = '',
@@ -1361,46 +1350,4 @@ const appInstallDoc = DocDef(
   _installFields,
   helpAr: 'إعدادات شريط تثبيت التطبيق وروابط ملف الأندرويد (APK).',
   helpEn: 'App install banner and Android APK download links.',
-);
-
-/// /admin → "App & notifications" (ADR-057): top-level keys of settings/features
-/// (no extra document or listener). Kept with all 18 schema fields for
-/// validation/tests.
-const appSettingsDoc = DocDef(
-  'settings/features',
-  'التطبيق والإشعارات',
-  'App & notifications',
-  [
-    ..._installFields,
-
-    // Notifications (experimental)
-    FieldDef('push', 'تفعيل الإشعارات (المفتاح العام)', 'Enable notifications (master switch)', FieldType.boolean,
-        missingBool: false,
-        newBool: false,
-        hintAr: 'المفتاح الرئيسي: عند إيقافه تختفي صفحة الإشعارات وزر «ذكّرني» في كل مكان.',
-        hintEn: 'Master switch: when off, the notifications page and "Remind me" buttons disappear everywhere.'),
-    FieldDef('pushVapidKey', 'مفتاح Web Push VAPID Key', 'Web Push VAPID Key', FieldType.text,
-        maxLength: 100,
-        pattern: r'[A-Za-z0-9_-]{80,100}',
-        hintAr: 'المفتاح العام لـ Web Push من إعدادات Firebase Console. فارغ = قيد التجهيز.',
-        hintEn: 'Web Push public key from Firebase Console settings. Blank = coming soon.'),
-    FieldDef('pushTypes', 'أنواع الإشعارات المعروضة', 'Offered notification types', FieldType.choices,
-        options: ['announcements', 'verse_daily', 'katameros_daily', 'seasons', 'feasts', 'reminders'],
-        defaultValues: ['announcements', 'verse_daily', 'katameros_daily', 'seasons', 'feasts', 'reminders'],
-        hintAr: 'الأنواع التي يراها الزائر في صفحة الإشعارات. على الويب يُعرض منها: الإعلانات، المواسم، التذكيرات.',
-        hintEn: 'Types visible to visitors on the notifications page. On the web: announcements, seasons, reminders.'),
-    FieldDef('reminderLeads', 'خيارات مدد التذكير المتاحة', 'Offered reminder lead times', FieldType.intChoices,
-        intOptions: [0, 5, 10, 15, 30, 60, 120, 180, 1440],
-        defaultIntValues: [0, 15, 60, 1440],
-        maxRows: 4,
-        hintAr: 'المدد التي تظهر في قائمة التذكير (اختر حتى 4 مدد).',
-        hintEn: 'Lead times offered in the reminder sheet (choose up to 4).'),
-    FieldDef('reminderDefaultLead', 'مدة التذكير المحددة افتراضيًا', 'Default reminder lead time (minutes)', FieldType.integer,
-        min: 0,
-        max: 1440,
-        hintAr: 'المدة المختارة مسبقًا في قائمة التذكير (يجب أن تكون إحدى المدد المختارة أعلاه، الافتراضي 60 دقيقة).',
-        hintEn: 'Lead time pre-selected in the sheet (must be one of the choices selected above, default 60 min).'),
-  ],
-  helpAr: 'إعداد الإعلانات المجدولة والإشعارات وشريط التثبيت.',
-  helpEn: 'Configure scheduled announcements, notifications, and app install settings.',
 );

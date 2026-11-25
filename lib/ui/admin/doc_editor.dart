@@ -14,7 +14,6 @@ import '../../domain/custom_content.dart'
     show BlockTypes, CustomPage, ListStyles, PageBlock, PagePlacements, listBlockMaxItems;
 import '../../domain/media.dart';
 import '../../domain/models.dart';
-import '../../domain/reminders.dart' show leadLabel;
 import '../../domain/rules.dart' show normalizeDigits, toArabicDigits;
 import '../../domain/schedule.dart' show liturgiesHiddenBy;
 import '../../domain/time_format.dart';
@@ -289,11 +288,6 @@ class DocEditorState extends State<DocEditor> {
           for (final o in (v is List ? v : f.defaultValues))
             if (o is String && f.options.contains(o)) o,
         };
-      case FieldType.intChoices:
-        _values[f.key] = <int>{
-          for (final o in (v is List ? v : f.defaultIntValues))
-            if (o is int && f.intOptions.contains(o)) o,
-        };
       case FieldType.dateList:
         _values[f.key] = <String>{
           for (final o in (v is List ? v : const []))
@@ -445,8 +439,6 @@ class DocEditorState extends State<DocEditor> {
           out[f.key] = (_values[f.key] as Set<int>).toList()..sort();
         case FieldType.choices:
           out[f.key] = [for (final o in f.options) if ((_values[f.key] as Set<String>).contains(o)) o];
-        case FieldType.intChoices:
-          out[f.key] = [for (final o in f.intOptions) if ((_values[f.key] as Set<int>).contains(o)) o];
         case FieldType.dateList:
           out[f.key] = (_values[f.key] as Set<String>).toList()..sort();
         case FieldType.objectList:
@@ -1579,36 +1571,6 @@ class DocEditorState extends State<DocEditor> {
                   sel ? set.add(o) : set.remove(o);
                   _dirty = true;
                 }),
-              ),
-          ]),
-        );
-      case FieldType.intChoices:
-        final set = _values[f.key] as Set<int>;
-        return InputDecorator(
-          key: ValueKey('field-${f.key}'),
-          decoration: InputDecoration(
-            labelText: label,
-            helperText: context.pick(f.hintAr, f.hintEn).isEmpty ? null : context.pick(f.hintAr, f.hintEn),
-            helperMaxLines: 4,
-          ),
-          child: Wrap(spacing: 6, runSpacing: 6, children: [
-            for (final o in f.intOptions)
-              FilterChip(
-                key: ValueKey('choice-${f.key}-$o'),
-                label: Text(leadLabel(o, context.isAr ? 'ar' : 'en')),
-                selected: set.contains(o),
-                checkmarkColor: context.pal.onBar,
-                labelStyle: TextStyle(
-                  color: set.contains(o) ? context.pal.onBar : context.pal.primary,
-                  fontWeight: FontWeight.w600,
-                ),
-                onSelected: (sel) {
-                  if (sel && f.maxRows > 0 && set.length >= f.maxRows) return;
-                  setState(() {
-                    sel ? set.add(o) : set.remove(o);
-                    _dirty = true;
-                  });
-                },
               ),
           ]),
         );

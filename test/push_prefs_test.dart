@@ -36,44 +36,6 @@ void main() {
     });
   });
 
-  group('topicFor', () {
-    test('computes remote fixed topics for app and web', () {
-      expect(topicFor(NotifyType.announcements, 'ar', 'web'), 'web_announcements_ar');
-      expect(topicFor(NotifyType.announcements, 'en', 'web'), 'web_announcements_en');
-      expect(topicFor(NotifyType.seasons, 'ar', 'web'), 'web_seasons_ar');
-      expect(topicFor(NotifyType.seasons, 'en', 'web'), 'web_seasons_en');
-
-      expect(topicFor(NotifyType.announcements, 'ar', 'app'), 'app_announcements_ar');
-      expect(topicFor(NotifyType.seasons, 'ar', 'app'), 'app_seasons_ar');
-    });
-
-    test('refuses local-owned or unowned types on both platforms', () {
-      for (final type in [NotifyType.verse_daily, NotifyType.katameros_daily, NotifyType.feasts]) {
-        expect(() => topicFor(type, 'ar', 'app'), throwsArgumentError);
-        expect(() => topicFor(type, 'ar', 'web'), throwsArgumentError);
-      }
-    });
-
-    test('refuses reminders on APK and redirects to reminderTopic on web', () {
-      expect(() => topicFor(NotifyType.reminders, 'ar', 'app'), throwsArgumentError);
-      expect(() => topicFor(NotifyType.reminders, 'ar', 'web'), throwsArgumentError);
-    });
-
-    test('computed topic strings match FCM constraints', () {
-      final fcmPattern = RegExp(r'^[a-zA-Z0-9-_.~%]+$');
-      final topics = [
-        topicFor(NotifyType.announcements, 'ar', 'web'),
-        topicFor(NotifyType.announcements, 'en', 'web'),
-        topicFor(NotifyType.seasons, 'ar', 'web'),
-        topicFor(NotifyType.announcements, 'ar', 'app'),
-        topicFor(NotifyType.seasons, 'ar', 'app'),
-      ];
-      for (final t in topics) {
-        expect(fcmPattern.hasMatch(t), isTrue, reason: '$t must be a valid FCM topic');
-      }
-    });
-  });
-
   group('reminderTopic', () {
     test('formats single occurrence reminder topic', () {
       final topic = reminderTopic(

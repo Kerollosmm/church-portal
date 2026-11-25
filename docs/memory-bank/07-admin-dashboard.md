@@ -25,18 +25,18 @@ flowchart TD
   A[AdminPage] -->|adminRepositoryProvider == null| U[adminUnavailable: Firebase not configured]
   A -->|authStateChanges: no user| L[_LoginForm]
   A -->|user| C[_AdminCheck]
-  C -->|adminRole uid: server read, 15 s timeout| E{error?}
+  C -->|adminAccess uid: server read, 15 s timeout| E{error?}
   E -- yes --> R[adminCheckFailed + Retry / Sign out]
-  E -- no --> S[StreamBuilder roleChanges]
-  S -->|null| N[notAdmin + Sign out]
-  S -->|owner / editor| D[AdminDashboard]
+  E -- no --> S[StreamBuilder accessChanges]
+  S -->|isAllowed == false| N[notAdmin / stopped / expired + Sign out]
+  S -->|isAllowed == true| D[AdminDashboard]
 ```
 
-- `adminRole(uid)` reads `admins/{uid}` **from the server** (`Source.server`) so a cold cache never shows "not admin";
+- `adminAccess(uid)` (`lib/ui/admin/admin_access.dart`) reads `admins/{uid}` **from the server** (`Source.server`) so a cold cache never shows "not admin";
   network errors show Retry instead of a misleading denial. The login form `AdminLoginForm` localizes the email field
   label via `context.tr('emailLabel')` («البريد الإلكتروني» / "Email").
-- `roleChanges(uid)` then streams the role live: a demoted owner loses the Admins screen, a removed admin loses the
-  dashboard immediately. Cache-only "missing" snapshots are skipped.
+- `accessChanges(uid)` then streams the `AdminAccess` status live: a demoted owner loses the Admins screen, and a paused,
+  expired, or removed admin loses the dashboard immediately. Cache-only "missing" snapshots are skipped.
 
 ## Roles
 
@@ -202,7 +202,7 @@ budget in one write).
 ### App & notifications («التطبيق والإشعارات», `AppAndNotificationsScreen`, `lib/ui/admin/notifications_admin.dart`) → `settings/features` & `settings/notifications` (ADR-057, ADR-059; UX rework PR #55)
 
 Two tabs: «الإشعارات» (`NotificationsAdminSection`, kept alive across tab switches) and «تثبيت التطبيق»
-(`ChurchInfoScreen` over `appSettingsDoc`). The notifications tab is one list of cards, Arabic first:
+(`ChurchInfoScreen` over `appInstallDoc`). The notifications tab is one list of cards, Arabic first:
 1. **Status** — master switch (`push`) with on/off explanation and a «متوقفة» banner; sender health from
    `health.lastRunAt` in plain words: ok (≤ 1 h, «آخر فحص منذ …» in Cairo time), late (> 1 h), stopped (> 3 h or
    `status: error`), never run (no stamp — neutral, not red). Since ADR-060: web push subscriber stats from
@@ -293,8 +293,8 @@ For each `CollectionDef`:
   Liturgies and meetings use the numeric **Order** field instead.
 - `DocEditor.save`: when `onSave` fails with a **`TimeoutException`** the images uploaded for the document are
   **kept** — Firestore may still commit the queued write pointing at them; any other error deletes them (BUG-13).
-  Note: `AdminRepository.save`/`saveDoc` set no timeout of their own today (the only 15 s timeout is the role read
-  in `adminRole`), so this path applies to a timeout raised by a caller/backend wrapper.
+  Note: `AdminRepository.save`/`saveDoc` set no timeout of their own today (the only 15 s timeout is the role/access read
+  in `adminAccess`), so this path applies to a timeout raised by a caller/backend wrapper.
 - **Add** (FAB) / tap to **edit** → full-screen `DocEditor`; **delete** in `collection_list.dart` uses a 10-second
   reversible soft-delete buffer (`PendingDelete`, `pending_delete.dart`). Non-category items register synchronously into
   `_pendingDelete` / `_pendingEntries` and immediately write Firestore

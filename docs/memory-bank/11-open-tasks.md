@@ -5,7 +5,7 @@ Status as of 6 Nov 2026 (ADR-056 Phase 2 plan; ADR-055 / PR #49; ADR-054 / PR #4
 
 ## Top open items (owner's list, 4 Nov 2026 — details in the sections below)
 
-0. **Follow-up: `firestore.rules` cleanup (`clinics`)** — Remove `clinics` rules (`validClinic`, `match /clinics/{id}`, `sections.clinics`, `pageHeaders.clinics`, `seasonPreset.previous.clinics`, `imageStyles.clinics`) and `tool/rules_test/rules.test.mjs` clinics tests in a dedicated rules PR (left untouched per owner request when removing the clinics feature).
+0. ~~**Follow-up: `firestore.rules` cleanup (`clinics` collection)**~~ — `/clinics/{id}`, `validClinic`, `ownClinic`, and `rules.test.mjs` collection tests removed in PR 5A (`chore/p5a-pure-deletions`, ADR-082); legacy `settings/features` allow-list keys (`sections.clinics`, `pageHeaders.clinics`, `seasonPreset.previous.clinics`, `imageStyles.clinics`) intentionally kept (`D1`) until live `settings/features` is checked.
 
 1. ~~Footer note «تعرض البيانات المحفوظة مع التطبيق» shows on the live site while Firestore works~~ — fixed in PR #30 (ADR-038) → *Live data follow-ups*.
 2. Sentry web source maps + Android symbols need a Sentry auth token → *Error tracking — Sentry*.
@@ -158,8 +158,8 @@ Progress tracked in [`docs/plans/phase3/STATUS.md`](../plans/phase3/STATUS.md). 
 - [ ] Bootstrap at least **two owners** in `admins` (avoid single-person dependency); Firebase project ownership by a
       church Google account with 2-step verification.
 - [ ] Firestore backups/exports schedule (needs Blaze) before any `--force` seeding.
-- [ ] **Optional: move uploaded images to Cloud Storage** once on Blaze — implement `StorageMediaRepository`, deploy
-      `storage.rules`, build with `MEDIA_BACKEND=storage` (steps in ADR-017). Until then images are inline in
+- [ ] **Optional: move uploaded images to Cloud Storage** once on Blaze — add a Cloud Storage implementation of `MediaRepository` and deploy
+      `storage.rules` (steps in ADR-017 / ADR-082). Until then images are inline in
       Firestore `media/` (fine at parish scale; watch the 50K reads/day).
 - [ ] **Orphaned `media` docs:** deletes are best effort; add a small owner-only "clean up unused images" action or a
       script (list `media` ids not referenced by any `image.mediaId`) if they accumulate.

@@ -159,9 +159,9 @@ service cloud.firestore {
       return ['visible', 'sample', 'order', 'deletedAt', 'updatedAt', 'updatedBy'];
     }
 
-    // ---- optional item detail page (meetings, activities, clinics,
+    // ---- optional item detail page (meetings, activities,
     // facilities, priests, milestones, saints; never liturgies, seasons or
-    // alerts). detailKeys() are shared by the 7 collections; each collection
+    // alerts). detailKeys() are shared by the 6 collections; each collection
     // also allows the phone / link / image keys it lacks itself (contactPhone,
     // whatsapp, whatsappUrl, facebookUrl, externalUrl, image).
     //
@@ -264,7 +264,6 @@ service cloud.firestore {
       return common(d, changed) && (
         (col == 'meetings' && validMeeting(d, changed))
         || (col == 'activities' && validActivity(d, changed))
-        || (col == 'clinics' && validClinic(d, changed))
         || (col == 'facilities' && validFacility(d, changed))
         || (col == 'priests' && validPriest(d, changed))
         || (col == 'milestones' && validMilestone(d, changed))
@@ -480,16 +479,6 @@ service cloud.firestore {
         && (ownFieldsUnchanged(changed) || ownActivity(d));
     }
 
-    function validClinic(d, changed) {
-      // = keysAllowed(...), reusing the changed keys.
-      return changed.hasOnly(['specialty', 'specialtyAr', 'specialtyEn', 'doctorName', 'degreeAr', 'degreeEn', 'days',
-                          'start', 'end', 'bookingPhone', 'whatsapp', 'active', 'image', 'imageStyle',
-                          'externalUrl'].concat(meta()).concat(detailKeys()))
-        && validDetailCommon(d, changed)
-        && (!changed.hasAny(['contactPhone', 'whatsapp', 'whatsappUrl', 'facebookUrl', 'externalUrl']) || validDetailContacts(d))
-        && (ownFieldsUnchanged(changed) || ownClinic(d));
-    }
-
     function validFacility(d, changed) {
       // = keysAllowed(...), reusing the changed keys.
       return changed.hasOnly(['type', 'nameAr', 'nameEn', 'descAr', 'descEn', 'phone', 'hoursAr', 'hoursEn', 'image', 'imageStyle',
@@ -532,7 +521,7 @@ service cloud.firestore {
     // helpers (absent / null reads '', non-strings are rejected); required
     // fields must be non-empty strings. Phone / link keys shared with
     // validDetailContacts (meetings' facebookUrl / whatsappUrl, activities'
-    // contactPhone, clinics' whatsapp) are checked there whenever a write
+    // contactPhone) are checked there whenever a write
     // creates or changes them. Numbers (weekday, year) are read with string()
     // ('null' when absent) after a string such as '5' is rejected.
     function ownMeeting(d) {
@@ -551,14 +540,6 @@ service cloud.firestore {
         + '\u001f' + (d.get('link', null) == null ? '' : d.link);
       return o.matches('[^\\x1f]{0,40}\\x1f[^\\x1f]{1,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,60}\\x1f(|[Hh][Tt][Tt][Pp][Ss]?://[^/ \\x1f]+[.][^/ \\x1f]+([/?#][^ \\x1f]*)?)')
         && o.matches('[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]{0,500}');
-    }
-    function ownClinic(d) {
-      let o = d.specialty + '\u001f' + d.specialtyAr + '\u001f' + (d.get('specialtyEn', null) == null ? '' : d.specialtyEn)
-        + '\u001f' + d.doctorName + '\u001f' + (d.get('degreeAr', null) == null ? '' : d.degreeAr)
-        + '\u001f' + (d.get('degreeEn', null) == null ? '' : d.degreeEn) + '\u001f' + (d.get('start', null) == null ? '' : d.start)
-        + '\u001f' + (d.get('end', null) == null ? '' : d.end) + '\u001f' + (d.get('bookingPhone', null) == null ? '' : d.bookingPhone);
-      return o.matches('[^\\x1f]{1,40}\\x1f[^\\x1f]{1,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{1,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f(|([01][0-9]|2[0-3]):[0-5][0-9])\\x1f(|([01][0-9]|2[0-3]):[0-5][0-9])\\x1f[^\\x1f]{0,20}')
-        && optList(d, 'days', 7) && d.get('days', []).hasOnly([1, 2, 3, 4, 5, 6, 7]) && optBool(d, 'active');
     }
     function ownFacility(d) {
       let o = (d.get('type', null) == null ? '' : d.type) + '\u001f' + d.nameAr + '\u001f' + (d.get('nameEn', null) == null ? '' : d.nameEn)
@@ -590,18 +571,15 @@ service cloud.firestore {
       return o.matches('[^\\x1f]{1,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}');
     }
 
+    function contentCollections() {
+      return ['alerts', 'seasons', 'liturgies', 'meetings', 'activities', 'facilities', 'priests', 'milestones',
+              'saints', 'categories', 'entries'];
+    }
+
     match /{col}/{docId} {
-      allow read: if col in ['alerts', 'seasons', 'liturgies', 'meetings', 'activities',
-                             'clinics', 'facilities', 'priests', 'milestones', 'saints',
-                             'categories', 'entries'];
-      allow create, update: if col in ['alerts', 'seasons', 'liturgies', 'meetings', 'activities',
-                                       'clinics', 'facilities', 'priests', 'milestones', 'saints',
-                                       'categories', 'entries']
-        && isAdmin() && validContent(col, request.resource.data);
-      allow delete: if col in ['alerts', 'seasons', 'liturgies', 'meetings', 'activities',
-                               'clinics', 'facilities', 'priests', 'milestones', 'saints',
-                               'categories', 'entries']
-        && isAdmin();
+      allow read: if col in contentCollections();
+      allow create, update: if col in contentCollections() && isAdmin() && validContent(col, request.resource.data);
+      allow delete: if col in contentCollections() && isAdmin();
     }
 
     match /pages/{docId} {

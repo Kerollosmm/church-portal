@@ -20,8 +20,7 @@ python3 tool/fingerprint_icon_fonts.py build/web   # content-hashed icon font na
   `debug`); release builds report to the project DSN unless `--dart-define=SENTRY_DSN=` (empty) switches it off.
   CI adds `SENTRY_ENVIRONMENT` (`production` / `preview` / `ci`), `GIT_SHA` and `APP_VERSION` (from `pubspec.yaml`).
 - Useful `--dart-define`s: `RECAPTCHA_SITE_KEY=…`, `GEMINI_MODEL=…`, `APPCHECK_DEBUG=true`,
-  `APPCHECK_DEBUG_TOKEN=<uuid>` (debug builds use the App Check debug provider automatically),
-  `MEDIA_BACKEND=firestore|storage` (where uploaded images go; `storage` needs Blaze + the steps in ADR-017).
+  `APPCHECK_DEBUG_TOKEN=<uuid>` (debug builds use the App Check debug provider automatically).
 - Android: `flutter run -d <device>`. A published tag (`apk-v*`) must be signed with the release
   keystore (`ANDROID_REQUIRE_RELEASE_SIGNING=true`); Gradle refuses the debug key when that flag or a keystore
   path is set. Local and PR release builds with no keystore still use the debug key and must not be published.

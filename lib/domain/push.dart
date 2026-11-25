@@ -157,23 +157,6 @@ PlatformOwnerChannel channelOf(NotifyType type, String platform) {
 bool isLocalOwned(NotifyType type, String platform) =>
     channelOf(type, platform) == PlatformOwnerChannel.local;
 
-/// Computes the fixed FCM topic name for remote topic subscriptions.
-///
-/// Throws [ArgumentError] for local-owned types, unowned types, or dynamic types
-/// such as [NotifyType.reminders] which require [reminderTopic].
-String topicFor(NotifyType type, String lang, String platform) {
-  final channel = channelOf(type, platform);
-  if (channel == PlatformOwnerChannel.local || channel == PlatformOwnerChannel.none) {
-    throw ArgumentError('Local-owned or unowned type has no fixed FCM topic: $type on $platform');
-  }
-  if (type == NotifyType.reminders) {
-    throw ArgumentError('Reminders use dynamic per-event topics via reminderTopic(); not a fixed topic');
-  }
-  final prefix = platform == 'app' ? 'app' : 'web';
-  final normalizedLang = lang.trim().toLowerCase() == 'en' ? 'en' : 'ar';
-  return '${prefix}_${type.name}_$normalizedLang';
-}
-
 /// Canonical topic key for an event key (ADR-060).
 ///
 /// Lowercases [rawEventKey], replaces characters outside `[a-z0-9-]` with `-`,
@@ -768,17 +751,6 @@ class NotifyConfig {
       reminderSources: sources.isEmpty && rawSources.isEmpty ? <String>{} : (sources.isEmpty ? PushSettings.allReminderSources : sources),
     );
   }
-
-  bool isReminderSourceEnabled(String eventKey) {
-    final prefix = eventKey.split('-').first;
-    final source = switch (prefix) {
-      'meeting' || 'mtg' => 'mtg',
-      'season' || 'lit' => 'lit',
-      'day' => 'day',
-      _ => prefix,
-    };
-    return reminderSources.contains(source);
-  }
 }
 
 /// Renders a template string by replacing `{key}` with values from [vars].
@@ -1238,18 +1210,6 @@ class NotifySchedule {
     final rowStatus = status[id]?.state;
     if (rowStatus == 'ok') return false;
     return nowUtc.difference(row.atUtc) > const Duration(hours: 24);
-  }
-
-  List<ScheduledNotification> dueNow(DateTime nowUtc) {
-    final list = <ScheduledNotification>[];
-    for (final r in schedule) {
-      if (r.atUtc.isAfter(nowUtc)) continue;
-      if (isExpiredAt(r.id, nowUtc)) continue;
-      final st = status[r.id]?.state;
-      if (st == 'ok' || st == 'sending') continue;
-      list.add(r);
-    }
-    return list;
   }
 
   /// What the admin sees for a row (PR #55): `scheduled` (future, untouched),
