@@ -5722,6 +5722,101 @@ void main() {
         }
       },
     );
+
+    testWidgets(
+      'P5D-1: collapsed and expanded block rows support moveUp, moveDown, and remove with correct expanded tracking',
+      (tester) async {
+        registerAdminStrings();
+        tester.view.physicalSize = const Size(1200, 1600);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+
+        Map<String, dynamic>? saved;
+        final pagesDef = adminCollections.firstWhere((c) => c.name == 'pages');
+        await tester.pumpWidget(
+          _admin(
+            DocEditor(
+              title: 'Edit',
+              fields: pagesDef.fields,
+              def: pagesDef,
+              popOnSave: false,
+              data: {
+                'slug': 'reorder-test',
+                'titleAr': 'صفحة ترتيب',
+                'blocks': const [
+                  {'type': BlockTypes.heading, 'textAr': 'عنوان أول', 'textEn': 'H1'},
+                  {'type': BlockTypes.paragraph, 'textAr': 'فقرة ثانية', 'textEn': 'P2'},
+                  {'type': BlockTypes.paragraph, 'textAr': 'فقرة ثالثة', 'textEn': 'P3'},
+                ],
+              },
+              onSave: (data) async => saved = data,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final blocksBox = find
+            .ancestor(of: find.byIcon(Icons.arrow_upward).first, matching: find.byType(InputDecorator))
+            .first;
+
+        // Initially row 0 is expanded; rows 1 and 2 are collapsed.
+        expect(find.descendant(of: blocksBox, matching: find.byIcon(Icons.expand_more)), findsNWidgets(2));
+        expect(find.descendant(of: blocksBox, matching: find.byIcon(Icons.expand_less)), findsOneWidget);
+
+        // Move collapsed row 2 (P3) up -> swaps with collapsed row 1 (P2); row 0 stays expanded.
+        final moveUpAll = find.descendant(of: blocksBox, matching: find.byIcon(Icons.arrow_upward));
+        expect(moveUpAll, findsNWidgets(3));
+        await tester.ensureVisible(moveUpAll.at(2));
+        await tester.tap(moveUpAll.at(2));
+        await tester.pumpAndSettle();
+
+        // Move expanded row 0 (H1) down -> swaps with row 1 (P3) and follows expansion to index 1.
+        final moveDownAll = find.descendant(of: blocksBox, matching: find.byIcon(Icons.arrow_downward));
+        await tester.ensureVisible(moveDownAll.at(0));
+        await tester.tap(moveDownAll.at(0));
+        await tester.pumpAndSettle();
+        expect(find.descendant(of: blocksBox, matching: find.byIcon(Icons.expand_more)), findsNWidgets(2));
+        expect(find.descendant(of: blocksBox, matching: find.byIcon(Icons.expand_less)), findsOneWidget);
+
+        // Move collapsed row 0 (P3) down onto expanded row 1 (H1) -> expanded tracks to index 0; P3 moves to index 1.
+        await tester.ensureVisible(find.descendant(of: blocksBox, matching: find.byIcon(Icons.arrow_downward)).at(0));
+        await tester.tap(find.descendant(of: blocksBox, matching: find.byIcon(Icons.arrow_downward)).at(0));
+        await tester.pumpAndSettle();
+        expect(find.descendant(of: blocksBox, matching: find.byIcon(Icons.expand_less)), findsOneWidget);
+
+        // Move expanded row 0 (H1) back down -> order is [P3 (idx 0, collapsed), H1 (idx 1, expanded), P2 (idx 2, collapsed)].
+        await tester.ensureVisible(find.descendant(of: blocksBox, matching: find.byIcon(Icons.arrow_downward)).at(0));
+        await tester.tap(find.descendant(of: blocksBox, matching: find.byIcon(Icons.arrow_downward)).at(0));
+        await tester.pumpAndSettle();
+
+        // Remove collapsed row 0 (P3) before expanded row 1 (H1) -> expanded decrements from 1 to 0.
+        final deletes3 = find.descendant(of: blocksBox, matching: find.byIcon(Icons.delete_outline));
+        expect(deletes3, findsNWidgets(3));
+        await tester.ensureVisible(deletes3.at(0));
+        await tester.tap(deletes3.at(0));
+        await tester.pumpAndSettle();
+        expect(find.descendant(of: blocksBox, matching: find.byIcon(Icons.expand_less)), findsOneWidget);
+        expect(find.descendant(of: blocksBox, matching: find.byIcon(Icons.expand_more)), findsOneWidget);
+
+        // Order is now [H1 (idx 0, expanded), P2 (idx 1, collapsed)]. Remove expanded row 0 (H1) -> collapsed row P2 stays collapsed.
+        final deletes2 = find.descendant(of: blocksBox, matching: find.byIcon(Icons.delete_outline));
+        expect(deletes2, findsNWidgets(2));
+        await tester.ensureVisible(deletes2.at(0));
+        await tester.tap(deletes2.at(0));
+        await tester.pumpAndSettle();
+
+        expect(find.descendant(of: blocksBox, matching: find.byIcon(Icons.expand_more)), findsOneWidget);
+        expect(find.descendant(of: blocksBox, matching: find.byIcon(Icons.expand_less)), findsNothing);
+
+        await tester.ensureVisible(find.byKey(const Key('editor-save')));
+        await tester.tap(find.byKey(const Key('editor-save')));
+        await tester.pumpAndSettle();
+
+        expect(saved, isNotNull);
+        final blocks = (saved!['blocks'] as List).map((b) => PageBlock.fromStored(b)?.textAr).toList();
+        expect(blocks, ['فقرة ثانية']);
+      },
+    );
   });
 }
 

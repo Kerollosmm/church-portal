@@ -226,8 +226,8 @@ Two tabs: «الإشعارات» (`NotificationsAdminSection`, kept alive across
    `nm_errFull`) stay in the form-level `draft-error` banner.
    Rows grouped «القادمة» / «السابقة» with icon status chips and a one-line explanation per state; «تعديل» while
    the row has no `status` entry, «أعد الإرسال» (copy, targets narrowed) for partial / error / unconfirmed /
-   expired, «حذف» with a confirmation dialog. Saving an announcement that targets everyone (`_draftTargets == 'all'`)
-   or is sent soon (`_draftSoon == true`) triggers a named confirmation dialog (`confirmNamedAction`, `confirm_named.dart`)
+   expired, «حذف» with a confirmation dialog. Saving an announcement that targets everyone (`_draft.targets == 'all'`)
+   or is sent soon (`_draft.soon == true`) triggers a named confirmation dialog (`confirmNamedAction`, `confirm_named.dart`)
    matching recipients and timing: send-all soon («هيتبعت لكل المشتركين دلوقتي: {t}», `nm_confirmSendAllSummary`, `nm_sendToAllBtn`),
    targeted soon («هيتبعت ({target}) دلوقتي: {t}», `nm_confirmSendTargetSoonSummary`, `nm_sendNowBtn`), scheduled all
    («هيتبعت لكل المشتركين {when}: {t}», `nm_confirmScheduleAllSummary`, `nm_confirmScheduleBtn`), or scheduled targeted
@@ -509,7 +509,7 @@ Implemented in Stage 1 of the admin panel simplification (PR 3A, items 6, 7, 8, 
 
 ### Named confirmation dialog (`confirmNamedAction`, `confirm_named.dart`)
 Standard modal dialog replacing vague confirmation prompts by explicitly naming the target action or item in its summary text:
-- **Push broadcast:** sending a draft announcement to «الجميع» (`_draftTargets == 'all'`) or «في أقرب وقت» (`_draftSoon == true`) in `notifications_admin.dart` prompts with summary «هيتبعت لكل المشتركين دلوقتي: {t}» (`nm_confirmSendAllSummary`) and confirm action «ابعت للكل» (`nm_sendToAllBtn`).
+- **Push broadcast:** sending a draft announcement to «الجميع» (`_draft.targets == 'all'`) or «في أقرب وقت» (`_draft.soon == true`) in `notifications_admin.dart` prompts with summary «هيتبعت لكل المشتركين دلوقتي: {t}» (`nm_confirmSendAllSummary`) and confirm action «ابعت للكل» (`nm_sendToAllBtn`).
 - **Messages delete:** deleting a visitor message in `MessagesScreen` names the sender (or «مُرسِل مجهول») with alert-styled «حذف» button (`destructive: true`).
 - **Admins remove:** removing an administrator in `AdminsScreen` names the admin's email with alert-styled «إزالة المشرف».
 
