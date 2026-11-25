@@ -5778,19 +5778,31 @@ void main() {
         expect(find.descendant(of: blocksBox, matching: find.byIcon(Icons.expand_more)), findsNWidgets(2));
         expect(find.descendant(of: blocksBox, matching: find.byIcon(Icons.expand_less)), findsOneWidget);
 
-        // Now order is [P3 (idx 0, collapsed), H1 (idx 1, expanded), P2 (idx 2, collapsed)].
-        // Remove collapsed row 2 (P2); expanded row 1 (H1) stays expanded.
-        final deletes3 = find.descendant(of: blocksBox, matching: find.byIcon(Icons.delete_outline));
-        expect(deletes3, findsNWidgets(3));
-        await tester.ensureVisible(deletes3.at(2));
-        await tester.tap(deletes3.at(2));
+        // Move collapsed row 0 (P3) down onto expanded row 1 (H1) -> expanded tracks to index 0; P3 moves to index 1.
+        await tester.ensureVisible(find.descendant(of: blocksBox, matching: find.byIcon(Icons.arrow_downward)).at(0));
+        await tester.tap(find.descendant(of: blocksBox, matching: find.byIcon(Icons.arrow_downward)).at(0));
+        await tester.pumpAndSettle();
+        expect(find.descendant(of: blocksBox, matching: find.byIcon(Icons.expand_less)), findsOneWidget);
+
+        // Move expanded row 0 (H1) back down -> order is [P3 (idx 0, collapsed), H1 (idx 1, expanded), P2 (idx 2, collapsed)].
+        await tester.ensureVisible(find.descendant(of: blocksBox, matching: find.byIcon(Icons.arrow_downward)).at(0));
+        await tester.tap(find.descendant(of: blocksBox, matching: find.byIcon(Icons.arrow_downward)).at(0));
         await tester.pumpAndSettle();
 
-        // Remove expanded row 1 (H1); only collapsed row 0 (P3) remains.
+        // Remove collapsed row 0 (P3) before expanded row 1 (H1) -> expanded decrements from 1 to 0.
+        final deletes3 = find.descendant(of: blocksBox, matching: find.byIcon(Icons.delete_outline));
+        expect(deletes3, findsNWidgets(3));
+        await tester.ensureVisible(deletes3.at(0));
+        await tester.tap(deletes3.at(0));
+        await tester.pumpAndSettle();
+        expect(find.descendant(of: blocksBox, matching: find.byIcon(Icons.expand_less)), findsOneWidget);
+        expect(find.descendant(of: blocksBox, matching: find.byIcon(Icons.expand_more)), findsOneWidget);
+
+        // Order is now [H1 (idx 0, expanded), P2 (idx 1, collapsed)]. Remove expanded row 0 (H1) -> collapsed row P2 stays collapsed.
         final deletes2 = find.descendant(of: blocksBox, matching: find.byIcon(Icons.delete_outline));
         expect(deletes2, findsNWidgets(2));
-        await tester.ensureVisible(deletes2.at(1));
-        await tester.tap(deletes2.at(1));
+        await tester.ensureVisible(deletes2.at(0));
+        await tester.tap(deletes2.at(0));
         await tester.pumpAndSettle();
 
         expect(find.descendant(of: blocksBox, matching: find.byIcon(Icons.expand_more)), findsOneWidget);
@@ -5802,7 +5814,7 @@ void main() {
 
         expect(saved, isNotNull);
         final blocks = (saved!['blocks'] as List).map((b) => PageBlock.fromStored(b)?.textAr).toList();
-        expect(blocks, ['فقرة ثالثة']);
+        expect(blocks, ['فقرة ثانية']);
       },
     );
   });

@@ -582,7 +582,7 @@ void main() {
       await tester.tap(saveBtn);
       await tester.pumpAndSettle();
 
-      // Since _draftTargets == 'all' and _draftSoon == true, dialog shows nm_sendToAllBtn («ابعت للكل»)
+      // Since _draft.targets == 'all' and _draft.soon == true, dialog shows nm_sendToAllBtn («ابعت للكل»)
       expect(find.text('ابعت للكل'), findsOneWidget);
     });
   });
