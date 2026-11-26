@@ -95,7 +95,7 @@ void main() {
       }
     }
 
-    // 3. Bare NextMassCard() inside GoRouter at /mass-schedule also hides the link via GoRouterState.maybeOf.
+    // 3. Bare NextMassCard() inside GoRouter at /mass-schedule also hides the link via GoRouter.maybeOf.
     final directRouter = GoRouter(
       initialLocation: '/mass-schedule',
       routes: [

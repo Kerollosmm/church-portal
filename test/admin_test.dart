@@ -2450,6 +2450,48 @@ void main() {
       expect(isSoftDeleted(repo.collections['saints']!.single.data), isFalse);
       expect(find.text('مارمرقس'), findsOneWidget);
     });
+
+    testWidgets('CollectionListScreen custom-category sub-entry (_entryRow) requires named delete confirmation with 10s undo',
+        (tester) async {
+      final repo = _TestAdminBackend(initialCollections: {
+        'categories': [
+          AdminDoc('cat1', {'nameAr': 'قسم الشباب', 'slug': 'youth', 'visible': true, 'order': 10}),
+        ],
+        'entries': [
+          AdminDoc('e1', {'categoryId': 'cat1', 'titleAr': 'اجتماع الخدام', 'visible': true, 'order': 10}),
+        ],
+      });
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('categories')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('deleteEntry-e1')));
+      await tester.pumpAndSettle();
+      final dialog = find.byType(AlertDialog);
+      expect(dialog, findsOneWidget);
+      expect(find.descendant(of: dialog, matching: find.text('اجتماع الخدام')), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('confirm-cancel')));
+      await tester.pumpAndSettle();
+      expect(repo.updates, isEmpty);
+      expect(repo.deletedIds, isEmpty);
+      expect(find.byType(SnackBar), findsNothing);
+      expect(find.text('اجتماع الخدام'), findsOneWidget);
+
+      await _confirmDeleteTap(tester, find.byKey(const ValueKey('deleteEntry-e1')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(isSoftDeleted(repo.collections['entries']!.single.data), isTrue);
+      expect(find.byType(SnackBar), findsOneWidget);
+      expect(find.text('تراجع'), findsOneWidget);
+
+      await tester.tap(find.text('تراجع'));
+      await tester.pumpAndSettle();
+      expect(isSoftDeleted(repo.collections['entries']!.single.data), isFalse);
+      expect(find.text('اجتماع الخدام'), findsOneWidget);
+    });
   });
 
   group('UnsavedBar', () {
@@ -2485,19 +2527,25 @@ void main() {
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
 
       for (final locale in const [Locale('ar'), Locale('en')]) {
-        await tester.pumpWidget(_app(
-          Scaffold(
-            bottomNavigationBar: UnsavedBar(
-              dirty: true,
-              onSave: () {},
-              onCancel: () {},
+        for (final saving in const [false, true]) {
+          await tester.pumpWidget(_app(
+            Scaffold(
+              bottomNavigationBar: UnsavedBar(
+                dirty: true,
+                saving: saving,
+                onSave: () {},
+                onCancel: () {},
+              ),
             ),
-          ),
-          locale: locale,
-        ));
-        await tester.pumpAndSettle();
-        expect(tester.takeException(), isNull);
-        expect(find.byKey(const ValueKey('unsaved-bar')), findsOneWidget);
+            locale: locale,
+          ));
+          await tester.pump();
+          expect(tester.takeException(), isNull);
+          expect(find.byKey(const ValueKey('unsaved-bar')), findsOneWidget);
+          if (saving) {
+            expect(find.text(locale.languageCode == 'ar' ? 'جارٍ الحفظ…' : 'Saving…'), findsOneWidget);
+          }
+        }
       }
     });
 

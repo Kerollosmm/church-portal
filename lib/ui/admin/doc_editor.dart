@@ -1355,8 +1355,14 @@ class DocEditorState extends State<DocEditor> {
   }
 
   Widget _replacesDayPreview(BuildContext context) {
-    final rawDate = _text['date']?.text.trim();
-    final parsedDate = (rawDate != null && rawDate.isNotEmpty) ? parseDate(rawDate) : null;
+    final normDate = normalizeDigits((_text['date']?.text ?? '').trim());
+    final dateParts = isValidDate(normDate) ? parseFieldDateTime(normDate) : null;
+    final parsedDate = dateParts == null ? null : CairoTime.at(dateParts.$1, dateParts.$2, dateParts.$3).toUtc();
+    String normalizeTime(String? raw) {
+      final v = (raw ?? '').trim();
+      final t = v.isEmpty ? null : parseFieldTime(v);
+      return t == null ? v : formatPickedTime(t.$1, t.$2);
+    }
     final rawWeekday = _values['weekday'];
     final weekday = rawWeekday is int ? rawWeekday : null;
 
@@ -1372,8 +1378,8 @@ class DocEditorState extends State<DocEditor> {
       nameEn: _text['nameEn']?.text.trim() ?? '',
       weekday: weekday,
       date: parsedDate,
-      start: _text['start']?.text.trim() ?? '',
-      end: _text['end']?.text.trim() ?? '',
+      start: normalizeTime(_text['start']?.text),
+      end: normalizeTime(_text['end']?.text),
       seasonKey: seasonKey,
       replacesDay: true,
       visible: _values['visible'] != false,

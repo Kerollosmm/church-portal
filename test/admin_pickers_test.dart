@@ -6,6 +6,7 @@
 import 'dart:async';
 
 import 'package:church_portal/domain/cairo_time.dart';
+import 'package:church_portal/data/admin_repository.dart';
 import 'package:church_portal/ui/admin/admin_schema.dart';
 import 'package:church_portal/ui/admin/admin_strings.dart';
 import 'package:church_portal/ui/admin/admin_validators.dart';
@@ -476,6 +477,89 @@ void main() {
       await tester.pumpAndSettle();
       final row = (saved?['dayEvents'] as List).single as String;
       expect(row.split('\u001f').take(4).toList(), ['2027-04-30', '', '09:00', '']);
+    });
+
+    testWidgets('DocEditor dateTime preview + UTC serialization and invalid typed date/time block save',
+        (tester) async {
+      final def = collectionById('seasons')!;
+      Map<String, dynamic>? saved;
+      await _pump(
+        tester,
+        DocEditor(
+          title: 'موسم',
+          fields: def.fields,
+          def: def,
+          popOnSave: false,
+          data: const {'key': 'nativity', 'nameAr': 'صوم الميلاد'},
+          onSave: (d) async => saved = {...?saved, ...d},
+        ),
+        locale: const Locale('ar'),
+      );
+
+      // Invalid typed date (Feb 30) & invalid time (25:00) block save.
+      await tester.enterText(find.byKey(const ValueKey('field-startsAt')), '2027-02-30 10:00');
+      await tester.enterText(find.byKey(const ValueKey('field-endsAt')), '2027-01-06 25:00');
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(saved, isNull);
+
+      // Valid typed Arabic-Indic dateTime updates 12h preview & saves Cairo UTC DateTime.
+      await tester.enterText(find.byKey(const ValueKey('field-startsAt')), '٢٠٢٧-٠١-٠٦ ٢٠:٠٠');
+      await tester.enterText(find.byKey(const ValueKey('field-endsAt')), '٢٠٢٧-٠١-٠٧ ٢٠:٠٠');
+      await tester.pump();
+      expect(find.textContaining('٠٨:٠٠ م'), findsWidgets);
+
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(saved?['startsAt'], DateTime.utc(2027, 1, 6, 18, 0));
+      expect(saved?['endsAt'], DateTime.utc(2027, 1, 7, 18, 0));
+    });
+
+    testWidgets('DocEditor replacesDayPreview parses typed Arabic-Indic date and times and ignores rolled invalid dates',
+        (tester) async {
+      final def = collectionById('liturgies')!;
+      await _pump(
+        tester,
+        DocEditor(
+          title: 'قداس عيد',
+          fields: def.fields,
+          def: def,
+          popOnSave: false,
+          existingDocs: const [
+            AdminDoc('reg-sun', {
+              'type': 'mass',
+              'nameAr': 'قداس الأحد المعتاد',
+              'weekday': 7,
+              'start': '07:00',
+              'end': '09:30',
+              'visible': true,
+            }),
+          ],
+          data: const {
+            'type': 'mass',
+            'nameAr': 'قداس أحد الشعانين',
+            'replacesDay': true,
+          },
+          onSave: (_) async {},
+        ),
+        locale: const Locale('ar'),
+      );
+
+      // Invalid calendar date 2027-02-30 must NOT silently roll over to March 2.
+      await tester.enterText(find.byKey(const ValueKey('field-date')), '2027-02-30');
+      await tester.enterText(find.byKey(const ValueKey('field-start')), '٠٩:٠٠');
+      await tester.enterText(find.byKey(const ValueKey('field-end')), '١١:٠٠');
+      await tester.pump();
+      expect(find.textContaining('مارس'), findsNothing);
+
+      // Typed Arabic-Indic Sunday 2027-04-25 previews Sunday's superseded mass.
+      await tester.enterText(find.byKey(const ValueKey('field-date')), '٢٠٢٧-٠٤-٢٥');
+      await tester.pump();
+      final preview = find.byKey(const ValueKey('replacesDayPreview'));
+      expect(preview, findsOneWidget);
+      expect(find.descendant(of: preview, matching: find.textContaining('الأحد ٢٥ أبريل ٢٠٢٧')), findsOneWidget);
+      expect(find.descendant(of: preview, matching: find.textContaining('قداس الأحد المعتاد')), findsOneWidget);
     });
   });
 }

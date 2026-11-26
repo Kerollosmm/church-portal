@@ -95,7 +95,12 @@ class UnsavedBar extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              Text(context.tr('saving')),
+                              Flexible(
+                                child: Text(
+                                  context.tr('saving'),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
                             ],
                           )
                         : Text(saveLabel ?? context.tr('save')),

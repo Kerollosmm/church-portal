@@ -503,6 +503,7 @@ Implemented in Stage 1 of the admin panel simplification (PR 3A, items 6, 7, 8, 
 
 ### Named confirmation dialog (`confirmNamedAction`, `confirm_named.dart`)
 Standard modal dialog replacing vague confirmation prompts by explicitly naming the target action or item in its summary text:
+- **Collection items & custom-category sub-entries:** deleting any non-category item in `CollectionListScreen` (`_tile` and `_entryRow`) names the item via `deleteItemConfirm` («حذف «{n}»؟ يمكنك التراجع خلال ١٠ ثوانٍ.») with alert-styled «حذف» button (`destructive: true`) before triggering the 10-second `SoftDeleteUndo` flow; cancelling performs 0 writes.
 - **Push broadcast:** sending a draft announcement to «الجميع» (`_draft.targets == 'all'`) or «في أقرب وقت» (`_draft.soon == true`) in `notifications_admin.dart` prompts with summary «هيتبعت لكل المشتركين دلوقتي: {t}» (`nm_confirmSendAllSummary`) and confirm action «ابعت للكل» (`nm_sendToAllBtn`).
 - **Messages delete:** deleting a visitor message in `MessagesScreen` names the sender (or «مُرسِل مجهول») with alert-styled «حذف» button (`destructive: true`).
 - **Admins remove:** removing an administrator in `AdminsScreen` names the admin's email with alert-styled «إزالة المشرف».
@@ -516,7 +517,7 @@ Guards uncommitted edits across all administrative exit vectors:
 
 ### 10-second undo deletion (`PendingDelete` & `SoftDeleteUndo`, `pending_delete.dart`)
 Shared reversible soft-delete buffer for collection items (`collection_list.dart`) and the inbox (`MessagesScreen` in `admin_screens.dart`):
-- When an item (liturgy, meeting, activity, priest, saint, milestone, custom entry, custom page, etc.) or confirmed contact message is deleted, it is registered immediately in `PendingDelete`, writes `deletedAt: Timestamp` to Firestore (renewed across consecutive deletes in the same batch with serialized per-ID write guards and `holdAll` / `releaseHold` alignment), and is hidden immediately from the admin list (`SoftDeleteUndo.isVisible`) and filtered out of all public collections (`FirestoreRepository._docs` and `_col`) and sitemaps.
+- After `confirmNamedAction` confirms deleting a collection item, custom-category sub-entry, or contact message, it is registered immediately in `PendingDelete`, writes `deletedAt: Timestamp` to Firestore (renewed across consecutive deletes in the same batch with serialized per-ID write guards and `holdAll` / `releaseHold` alignment), and is hidden immediately from the admin list (`SoftDeleteUndo.isVisible`) and filtered out of all public collections (`FirestoreRepository._docs` and `_col`) and sitemaps.
 - A 10-second `SnackBar` appears: «تم مسح «{n}»» (`deletedItemUndo`) with action «تراجع» (`undo`), upgrading in-place to «تم مسح {n} عناصر (آخرهم «{last}»)» (`deletedItemMultiUndo`) with «تراجع عن الكل» (`undoAll`) when multiple deletions overlap (preserving any queued non-undo SnackBars).
 - The SnackBar (`persist: true`, managed by `_controller` and `_barTimer` in `SoftDeleteUndo`) stays open through rapid deletes across the normal 10-second grace window (or until any in-flight `PendingDelete` write hold finishes), after which deferred non-undo error SnackBars flush once the Undo bar closes. FAB elevation (`_UndoClearFabLocation`), 48 px clearance, and 650 ms post-close cooldown (`_fabCooldownTimer`, `undo-vacated-tap-shield`) remain local to `CollectionListScreen`.
 - Tapping «تراجع» / «تراجع عن الكل» cancels the batch atomically, restores all rows in UI immediately, records undone `deletedAt` cutoffs (`_undoneCutoffs`) so stale pre-undo lazy-purge snapshots never delete restored docs, and clears `deletedAt: null` in Firestore cleanly (`_restoringIds` + `_inFlightWrites`).
@@ -526,7 +527,7 @@ Shared reversible soft-delete buffer for collection items (`collection_list.dart
 
 ### Sticky unsaved changes bar (`UnsavedBar`, `unsaved_bar.dart`)
 Bottom bar anchored to the bottom of the viewport whenever an editor is dirty:
-- Shows message (`unsavedBarText`: «فيه تعديلات مش محفوظة» or custom label such as `nm_unsaved`: «لديك تعديلات لم تُحفظ») and action buttons «حفظ» / `save` and «تراجع» / `cancel`.
+- Shows message (`unsavedBarText`: «فيه تعديلات مش محفوظة» or custom label such as `nm_unsaved`: «لديك تعديلات لم تُحفظ») and action buttons «حفظ» / `save` (switching to spinner + `'جارٍ الحفظ…'` / `'Saving…'` via `saving` while in flight) and «تراجع» / `cancel`.
 - Responsive layout via `Wrap` prevents overflow at 320 px viewport width and 200% text scaling.
 - Integrated across `DocEditor` (standalone bottom navigation bar), `FeaturesEditor`, `ContactCategoriesScreen`, and `NotificationsAdminSection`.
 
