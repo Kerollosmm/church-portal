@@ -83,13 +83,20 @@ class UnsavedBar extends StatelessWidget {
                     key: saveKey ?? const ValueKey('unsaved-bar-save'),
                     onPressed: saving ? null : onSave,
                     child: saving
-                        ? SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: context.pal.onPrimary,
-                            ),
+                        ? Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: context.pal.onPrimary,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(context.tr('saving')),
+                            ],
                           )
                         : Text(saveLabel ?? context.tr('save')),
                   ),

@@ -368,11 +368,17 @@ void main() {
 
     test('time, dates and loose dates', () {
       expect(validateFieldValue(_f(FieldType.time), '06:30'), isNull);
-      expect(validateFieldValue(_f(FieldType.time), '6:30'), 'invalidTime');
+      expect(validateFieldValue(_f(FieldType.time), '6:30'), isNull);
+      expect(parseFieldValue(_f(FieldType.time), '6:30'), '06:30');
+      expect(validateFieldValue(_f(FieldType.time), '٠٩:٣٠'), isNull);
+      expect(parseFieldValue(_f(FieldType.time), '٠٩:٣٠'), '09:30');
       expect(validateFieldValue(_f(FieldType.time), '24:00'), 'invalidTime');
+      expect(validateFieldValue(_f(FieldType.time), '25:00'), 'invalidTime');
       expect(validateFieldValue(_f(FieldType.date), '2027-02-30'), 'invalidDate');
       expect(validateFieldValue(_f(FieldType.date), '2027-01-06'), isNull);
+      expect(validateFieldValue(_f(FieldType.date), '٢٠٢٧-٠١-٠٦'), isNull);
       expect(validateFieldValue(_f(FieldType.dateTime), '2027-01-06 20:00'), isNull);
+      expect(validateFieldValue(_f(FieldType.dateTime), '٢٠٢٧-٠١-٠٦ ٢٠:٠٠'), isNull);
       expect(validateFieldValue(_f(FieldType.dateTime), '2027-01-06 25:00'), 'invalidDate');
       for (final ok in ['1998', '1998-03', '1998-03-21']) {
         expect(validateFieldValue(_f(FieldType.looseDate), ok), isNull, reason: ok);

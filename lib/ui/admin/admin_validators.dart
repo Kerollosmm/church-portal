@@ -271,7 +271,7 @@ String? validateFieldValue(FieldDef f, String? raw) {
   if (f.pattern.isNotEmpty && !RegExp('^(?:${f.pattern})\$').hasMatch(v)) return 'invalid';
   switch (f.type) {
     case FieldType.time:
-      return timeRe.hasMatch(v) ? null : 'invalidTime';
+      return parseFieldTime(v) != null ? null : 'invalidTime';
     case FieldType.integer:
       final n = int.tryParse(normalizeDigits(v));
       if (n == null) return 'invalid';
@@ -281,9 +281,9 @@ String? validateFieldValue(FieldDef f, String? raw) {
       if (n == null || n.isNaN || n.isInfinite) return 'invalid';
       return _inRange(f, n) ? null : 'outOfRange';
     case FieldType.dateTime:
-      return isValidDateTime(v) ? null : 'invalidDate';
+      return isValidDateTime(normalizeDigits(v)) ? null : 'invalidDate';
     case FieldType.date:
-      return isValidDate(v) ? null : 'invalidDate';
+      return isValidDate(normalizeDigits(v)) ? null : 'invalidDate';
     case FieldType.looseDate:
       return isValidLooseDate(v) ? null : 'invalidDate';
     case FieldType.url:
@@ -301,19 +301,26 @@ bool _inRange(FieldDef f, num n) => (f.min == null || n >= f.min!) && (f.max == 
 Object? parseFieldValue(FieldDef f, String raw) {
   final v = raw.trim();
   switch (f.type) {
+    case FieldType.time:
+      if (v.isEmpty) return '';
+      final t = parseFieldTime(v);
+      return t == null ? v : formatPickedTime(t.$1, t.$2);
     case FieldType.integer:
       return v.isEmpty ? null : int.tryParse(normalizeDigits(v));
     case FieldType.decimal:
       return v.isEmpty ? null : double.tryParse(normalizeDigits(v));
     case FieldType.dateTime:
-      final m = dateTimeRe.firstMatch(v);
-      return m == null
+      final norm = normalizeDigits(v);
+      final m = dateTimeRe.firstMatch(norm);
+      return (m == null || !isValidDateTime(norm))
           ? null
-          : CairoTime.at(int.parse(m[1]!), int.parse(m[2]!), int.parse(m[3]!), int.parse(m[4]!) * 60 + int.parse(m[5]!))
+          : CairoTime.at(
+                  int.parse(m[1]!), int.parse(m[2]!), int.parse(m[3]!), int.parse(m[4]!) * 60 + int.parse(m[5]!))
               .toUtc();
     case FieldType.date:
-      final m = dateRe.firstMatch(v);
-      return m == null ? null : CairoTime.at(int.parse(m[1]!), int.parse(m[2]!), int.parse(m[3]!)).toUtc();
+      final norm = normalizeDigits(v);
+      final m = dateRe.firstMatch(norm);
+      return (m == null || !isValidDate(norm)) ? null : CairoTime.at(int.parse(m[1]!), int.parse(m[2]!), int.parse(m[3]!)).toUtc();
     case FieldType.phone:
       return normalizePhoneInput(v);
     default:
@@ -346,7 +353,8 @@ String? validateRowAnyOf(FieldDef list, Map<String, String> row) {
 String? validateRowOrder(FieldDef list, Map<String, String> row) {
   final o = list.rowNotBefore;
   if (o == null) return null;
-  final end = (row[o.key] ?? '').trim(), start = (row[o.value] ?? '').trim();
+  final end = normalizeDigits((row[o.key] ?? '').trim());
+  final start = normalizeDigits((row[o.value] ?? '').trim());
   if (end.isEmpty || start.isEmpty) return null;
   return end.compareTo(start) < 0 ? 'endDateBeforeStart' : null;
 }
