@@ -60,9 +60,14 @@ class ArtAssets {
       };
 }
 
-/// OS reduced-motion or a screen reader. On the web, Flutter sets
-/// [MediaQueryData.disableAnimations] from `prefers-reduced-motion`.
-bool reducedMotionRequested(MediaQueryData mq) => mq.disableAnimations || mq.accessibleNavigation;
+/// OS reduced-motion or (off-web) a screen reader. On the web, Flutter sets
+/// [MediaQueryData.disableAnimations] from `prefers-reduced-motion`, whereas
+/// activating the semantics tree (`ensureSemantics()`) flips
+/// [MediaQueryData.accessibleNavigation] to `true` for all visitors, so web
+/// ignores [MediaQueryData.accessibleNavigation] here to keep desktop hero
+/// motion alive (ADR-084).
+bool reducedMotionRequested(MediaQueryData mq, {bool isWeb = kIsWeb}) =>
+    mq.disableAnimations || (!isWeb && mq.accessibleNavigation);
 
 /// Whether ambient (looping) motion may run here: not under `flutter test`,
 /// not when the OS asks for reduced motion or a screen reader, and only when

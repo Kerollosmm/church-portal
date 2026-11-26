@@ -138,7 +138,7 @@ flowchart TD
    `--dart-define=SENTRY_DSN=…`) `SentryFlutter.init` wraps the whole start-up (it installs `FlutterError.onError`,
    `PlatformDispatcher.onError` on Android, `runZonedGuarded` on web, and the Sentry JS / Android SDKs); without
    one `_start()` simply runs. Never throws because of Sentry.
-1. `WidgetsFlutterBinding.ensureInitialized()`, `usePathUrlStrategy()`, `CairoTime.ensureInitialized()`.
+1. `WidgetsFlutterBinding.ensureInitialized()`, `ensureWebSemantics()` (calls `SemanticsBinding.instance.ensureSemantics()` when `kIsWeb` and retains `_webSemanticsHandle` — ADR-084), `usePathUrlStrategy()`, `CairoTime.ensureInitialized()`.
 2. `Future.wait([SeedData.load(), bootstrapFirebase(), initLanguageStore(), initInstallStore(), initPushStore()])` — never throw;
    `bootstrapFirebase()` configures Firestore offline persistence via `firestoreSettings(isWeb: kIsWeb)` (40 MB cache; `WebPersistentMultipleTabManager` on web so concurrent tabs share the IndexedDB lease without `failed-precondition`/`b815` assertions — ADR-078; native settings unchanged);
    on native IO platforms `initPushStore()` preloads `SharedPreferences` and queries the OS notification permission state.

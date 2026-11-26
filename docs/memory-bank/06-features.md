@@ -69,7 +69,7 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   (muted, looping, no controls) over its poster. Phones, the Android/iOS app, and mobile browsers do not build the
   video widget, so the mp4 is not downloaded; they show the existing poster (`hero_poster_tall.webp` below 600 px,
   `hero_poster.webp` otherwise). The painting shows when video is not allowed and there is no poster (page headers).
-  Never for reduced motion (`disableAnimations`, `accessibleNavigation`, web `prefers-reduced-motion`), data saver,
+  Never for reduced motion (`disableAnimations`, web `prefers-reduced-motion`, or off-web `accessibleNavigation` — ADR-084 keeps desktop web motion active when `ensureSemantics()` sets `accessibleNavigation`), data saver,
   `heroMotion` off or under `flutter test`. The YouTube hero video library of PR #17 (ADR-026) was **removed in PR #25
   (ADR-036, owner request 4 Nov 2026)**; a `heroVideos` map already stored in `settings/features` is ignored.
 - **Hero ambient motion on web (ADR-037, PR #29; phones ADR-068):** the haze drift and light-ray shimmer look exactly as before but
