@@ -404,6 +404,7 @@ export async function runPushQueueDrain(env, options = {}) {
   cronQueue.queueFailedCount = queueFailedCount;
   cronQueue.lastIidError = lastIidError;
 
+  let metaWriteError = null;
   try {
     await setDocRest(
       projectId,
@@ -418,10 +419,12 @@ export async function runPushQueueDrain(env, options = {}) {
     );
   } catch (err) {
     console.error('Failed to update meta/push_topics:', err);
-    throw err;
+    metaWriteError = err;
   }
 
   // 9. Batch delete completed/evicted queue docs in 1 commitWrites subrequest
+  // Always delete before propagating any meta write error so processed/evicted
+  // queue items are not re-applied on the next cron run.
   const deleteList = Array.from(docsToDelete);
   if (deleteList.length > 0) {
     const writes = deleteList.map((id) => ({
@@ -430,6 +433,10 @@ export async function runPushQueueDrain(env, options = {}) {
     await commitWrites(projectId, token, writes, fetchImpl).catch((err) => {
       console.error('Failed to batch-delete push_queue docs:', err);
     });
+  }
+
+  if (metaWriteError) {
+    throw metaWriteError;
   }
 
   return {

@@ -73,6 +73,7 @@ export default {
     let section = 'push_worker';
 
     if (cron === '7,22,37,52 * * * *') {
+      // Pass {} options; Workers ExecutionContext (ctx) is not the runner options bag.
       runner = runPushQueueDrain(env, {});
       section = 'push_queue_drain';
     } else if (cron === '3 2,8,14,20 * * *') {

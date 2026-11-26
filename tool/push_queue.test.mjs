@@ -152,11 +152,12 @@ describe('runPushQueueDrain workflow', () => {
     );
   });
 
-  test('rethrows write failure when setDocRest on meta/push_topics returns HTTP 500', async () => {
+  test('deletes processed/evicted queue docs before rethrowing setDocRest HTTP 500 on meta/push_topics', async () => {
     const now = new Date('2026-11-15T12:00:00Z');
     const oldCreated = new Date('2026-11-01T12:00:00Z').toISOString();
+    let committedWrites = [];
 
-    const fakeFetch = async (url) => {
+    const fakeFetch = async (url, options = {}) => {
       if (url.includes(':runQuery')) {
         return new Response(
           JSON.stringify([
@@ -179,6 +180,10 @@ describe('runPushQueueDrain workflow', () => {
       if (url.includes('meta/push_topics')) {
         return new Response('Internal Error', { status: 500 });
       }
+      if (url.includes(':commit')) {
+        committedWrites = JSON.parse(options.body).writes;
+        return new Response(JSON.stringify({ writeResults: [{}] }), { status: 200 });
+      }
       return new Response('{}', { status: 200 });
     };
 
@@ -195,6 +200,8 @@ describe('runPushQueueDrain workflow', () => {
         ),
       /500/,
     );
+    assert.equal(committedWrites.length, 1);
+    assert.ok(committedWrites[0].delete.endsWith('/docOld'));
   });
 
   test('evicts poison docs older than 7 days and retried >= 30 times', async () => {
