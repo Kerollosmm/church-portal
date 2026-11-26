@@ -2492,6 +2492,45 @@ void main() {
       expect(isSoftDeleted(repo.collections['entries']!.single.data), isFalse);
       expect(find.text('اجتماع الخدام'), findsOneWidget);
     });
+
+    testWidgets('CollectionListScreen aborts delete if repository changes while confirmation dialog is open',
+        (tester) async {
+      final repo1 = _TestAdminBackend(initialCollections: {
+        'saints': [
+          AdminDoc('s1', {'nameAr': 'مارمرقس', 'visible': true, 'order': 10}),
+        ],
+      });
+      final repo2 = _TestAdminBackend(initialCollections: {
+        'saints': [
+          AdminDoc('s1', {'nameAr': 'مارجرجس', 'visible': true, 'order': 10}),
+        ],
+      });
+      final def = collectionById('saints')!;
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo1, def: def),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('delete-s1')));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsOneWidget);
+
+      // Swap underlying repo while dialog is open, then confirm.
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo2, def: def),
+        locale: const Locale('ar'),
+      ));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+      await tester.pumpAndSettle();
+
+      expect(repo1.updates, isEmpty);
+      expect(repo1.deletedIds, isEmpty);
+      expect(repo2.updates, isEmpty);
+      expect(repo2.deletedIds, isEmpty);
+    });
   });
 
   group('UnsavedBar', () {

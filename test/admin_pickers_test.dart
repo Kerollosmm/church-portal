@@ -561,5 +561,33 @@ void main() {
       expect(find.descendant(of: preview, matching: find.textContaining('الأحد ٢٥ أبريل ٢٠٢٧')), findsOneWidget);
       expect(find.descendant(of: preview, matching: find.textContaining('قداس الأحد المعتاد')), findsOneWidget);
     });
+
+    testWidgets('DocEditor leaves untouched legacy unpadded time out of save payload when another field changes',
+        (tester) async {
+      final def = collectionById('liturgies')!;
+      Map<String, dynamic>? saved;
+      await _pump(
+        tester,
+        DocEditor(
+          title: 'قداس',
+          fields: def.fields,
+          def: def,
+          popOnSave: false,
+          data: const {'type': 'mass', 'nameAr': 'قداس أول', 'weekday': 7, 'start': '9:00', 'end': '11:00'},
+          onSave: (d) async => saved = {...?saved, ...d},
+        ),
+        locale: const Locale('ar'),
+      );
+
+      // Edit only nameAr without touching legacy start='9:00'.
+      await tester.enterText(find.byKey(const ValueKey('field-nameAr')), 'قداس ثاني');
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+
+      expect(saved, isNotNull);
+      expect(saved!.containsKey('nameAr'), isTrue);
+      expect(saved!.containsKey('start'), isFalse, reason: 'untouched legacy time must not be sent in changedFields');
+    });
   });
 }

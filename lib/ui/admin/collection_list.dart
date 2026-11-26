@@ -1406,6 +1406,8 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       await _deleteCategory(d);
       return;
     }
+    final repo = widget.repo;
+    final epoch = _screenEpoch;
     final title = _title(d, activeDef);
     final ok = await confirmNamedAction(
       context,
@@ -1414,7 +1416,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       actionLabel: context.tr('delete'),
       destructive: true,
     );
-    if (ok && mounted) {
+    if (ok && mounted && epoch == _screenEpoch && identical(widget.repo, repo)) {
       await _deleteItem(d, targetDef: activeDef);
     }
   }

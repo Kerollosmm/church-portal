@@ -154,6 +154,7 @@ class DocEditorState extends State<DocEditor> {
 
   /// Values as loaded: only fields that differ from these are saved.
   late Map<String, dynamic> _initialValues;
+  final Map<String, String> _rawInitialTimeText = {};
   bool _hasInitialValues = false;
 
   /// The values before the first attempt of a save that has not completed
@@ -219,7 +220,9 @@ class DocEditorState extends State<DocEditor> {
       if (!isNew) {
         for (final f in widget.fields) {
           if (f.type == FieldType.time && data[f.key] is String) {
-            _initialValues[f.key] = (data[f.key] as String).trim();
+            final raw = (data[f.key] as String).trim();
+            _initialValues[f.key] = raw;
+            _rawInitialTimeText[f.key] = raw;
           }
         }
       }
@@ -459,6 +462,12 @@ class DocEditorState extends State<DocEditor> {
         case FieldType.looseDate:
         case FieldType.url:
           out[f.key] = _text[f.key]!.text.trim();
+        case FieldType.time:
+          final cur = _text[f.key]!.text.trim();
+          final rawInitial = _rawInitialTimeText[f.key];
+          out[f.key] = (_hasInitialValues && !isNew && rawInitial != null && cur == rawInitial)
+              ? rawInitial
+              : parseFieldValue(f, cur);
         default:
           out[f.key] = parseFieldValue(f, _text[f.key]!.text);
       }
@@ -980,6 +989,11 @@ class DocEditorState extends State<DocEditor> {
         _initialValues = {..._initialValues, ...chunk};
       }
       _initialValues = data;
+      for (final f in widget.fields) {
+        if (f.type == FieldType.time && data[f.key] is String) {
+          _rawInitialTimeText[f.key] = (data[f.key] as String).trim();
+        }
+      }
       // Best effort: drop inline images this edit replaced or removed (an
       // image moved between the cover and the gallery is still referenced).
       // Measured from the first attempt's baseline too, so a cover replaced

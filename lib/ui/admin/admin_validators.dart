@@ -476,7 +476,12 @@ String? validateDocument(CollectionDef? def, Map<String, dynamic> data) {
   final start = data['start'], end = data['end'];
   if (start is String && end is String && start.isNotEmpty && end.isNotEmpty && def?.name != 'liturgies') {
     // Liturgies may cross midnight (e.g. midnight praise); others may not.
-    if (end.compareTo(start) <= 0) return 'endBeforeStart';
+    final st = parseFieldTime(start);
+    final et = parseFieldTime(end);
+    final invalidOrder = (st != null && et != null)
+        ? (et.$1 * 60 + et.$2) <= (st.$1 * 60 + st.$2)
+        : end.compareTo(start) <= 0;
+    if (invalidOrder) return 'endBeforeStart';
   }
   final s = data['startsAt'], e = data['endsAt'];
   if (s is DateTime && e is DateTime && !e.isAfter(s)) return 'endBeforeStart';
