@@ -18,6 +18,7 @@ import '../../domain/models.dart';
 import 'admin_schema.dart';
 import 'admin_strings.dart';
 import 'admin_validators.dart';
+import 'confirm_named.dart';
 import 'doc_editor.dart';
 import 'pending_delete.dart';
 import 'screen_header.dart';
@@ -1182,7 +1183,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           child: _namedDeleteButton(
             context,
             key: ValueKey('deleteEntry-${e.id}'),
-            onPressed: () => _deleteItem(e, targetDef: entriesDef),
+            onPressed: () => _confirmDelete(e, targetDef: entriesDef),
           ),
         ),
       ),
@@ -1399,13 +1400,23 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     }
   }
 
-  void _confirmDelete(AdminDoc d) {
-    final def = widget.def;
-    if (def.name == 'categories') {
-      _deleteCategory(d);
+  Future<void> _confirmDelete(AdminDoc d, {CollectionDef? targetDef}) async {
+    final activeDef = targetDef ?? widget.def;
+    if (targetDef == null && activeDef.name == 'categories') {
+      await _deleteCategory(d);
       return;
     }
-    _deleteItem(d);
+    final title = _title(d, activeDef);
+    final ok = await confirmNamedAction(
+      context,
+      title: title,
+      summary: context.tr('deleteItemConfirm', {'n': title}),
+      actionLabel: context.tr('delete'),
+      destructive: true,
+    );
+    if (ok && mounted) {
+      await _deleteItem(d, targetDef: activeDef);
+    }
   }
 
   Future<void> _deleteItem(AdminDoc d, {CollectionDef? targetDef}) {

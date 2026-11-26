@@ -346,6 +346,7 @@ const Map<String, List<String>> adminStrings = {
   'save': ['حفظ', 'Save'],
   'cancel': ['إلغاء', 'Cancel'],
   'confirmDelete': ['حذف هذا العنصر نهائيًا؟', 'Delete this item permanently?'],
+  'deleteItemConfirm': ['حذف «{n}»؟ يمكنك التراجع خلال ١٠ ثوانٍ.', 'Delete "{n}"? You can undo for 10 seconds.'],
   'saved': ['تم الحفظ', 'Saved'],
   'saveFailed': ['تعذّر الحفظ: {e}', 'Save failed: {e}'],
   'required': ['مطلوب', 'Required'],
