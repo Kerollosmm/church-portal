@@ -8,7 +8,7 @@
 
 Line numbers shift as soon as earlier PRs merge. Always locate targets with `git grep -n "<symbol>" <file>` and read a focused window around the match instead of reading whole giant files.
 
-Read [`docs/memory-bank/`](../../memory-bank/00-README.md) first (per `AGENTS.md`), then read **only**:
+Read [`docs/memory-bank/`](../../../memory-bank/00-README.md) first (per `AGENTS.md`), then read **only**:
 1. This guide (`SMALL-MODEL-GUIDE.md`)
 2. The active packet in `PR-5<X>`
 3. The exact symbol blocks named in that packet.
