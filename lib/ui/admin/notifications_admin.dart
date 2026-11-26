@@ -5,7 +5,6 @@
 // stored keys, Cairo times, confirmations and inline validation.
 library;
 
-import 'dart:async';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
@@ -28,6 +27,7 @@ import 'screen_header.dart';
 import 'state_switch.dart';
 import 'unsaved_bar.dart';
 import 'unsaved_guard.dart';
+import 'web_push_health.dart';
 
 const Map<String, List<String>> _notificationsAdminStrings = {
   'nm_statusSubtitle': [
@@ -197,29 +197,6 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
   final Set<String> _reminderSources = {'lit', 'mtg', 'day'};
   final Map<NotifyType, Map<String, TextEditingController>> _typeCtrls = {};
 
-  Map<String, dynamic>? _topicsMeta;
-  Map<String, dynamic>? _planMeta;
-
-  Future<void> _loadWebHealth() async {
-    try {
-      final tDoc = await widget.repo.watchDoc('meta/push_topics').first.timeout(const Duration(seconds: 4));
-      final pDoc = await widget.repo.watchDoc('meta/push_plan').first.timeout(const Duration(seconds: 4));
-      if (mounted) {
-        setState(() {
-          _topicsMeta = tDoc?.data;
-          _planMeta = pDoc?.data;
-        });
-      }
-    } catch (_) {}
-  }
-
-  DateTime? _asDateTime(dynamic v) {
-    if (v is DateTime) return v;
-    if (v is String) return DateTime.tryParse(v);
-    if (v is int) return DateTime.fromMillisecondsSinceEpoch(v, isUtc: true);
-    return null;
-  }
-
   bool _englishEnabled = true;
   final ExpansibleController _englishTileCtrl = ExpansibleController();
 
@@ -274,14 +251,6 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
   }
 
   @override
-  void didUpdateWidget(covariant NotificationsAdminSection oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!oldWidget.showTechnical && widget.showTechnical) {
-      _loadWebHealth();
-    }
-  }
-
-  @override
   void initState() {
     super.initState();
     for (final type in NotifyType.values) {
@@ -302,7 +271,6 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
     _bindDraftFieldListener('titleEn', _draftTitleEn);
     _bindDraftFieldListener('bodyAr', _draftBodyAr);
     _bindDraftFieldListener('bodyEn', _draftBodyEn);
-    if (widget.showTechnical) _loadWebHealth();
   }
 
   void _bindDraftFieldListener(String field, TextEditingController ctrl) {
@@ -1136,49 +1104,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
           const Divider(height: 24),
           Text(context.tr('nm_webHealthTitle'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: context.pal.primaryDeep)),
           const SizedBox(height: 8),
-          Builder(builder: (context) {
-            final cronQueue = _topicsMeta?['cronQueue'] as Map?;
-            final drainAt = _asDateTime(cronQueue?['lastDrainAt'] ?? _topicsMeta?['lastDrainAt']);
-            final drainError = (cronQueue?['lastIidError'] ?? _topicsMeta?['lastIidError']) as String?;
-            final drainAge = drainAt == null ? null : DateTime.now().toUtc().difference(drainAt);
-            final (Color drainColor, String drainText) = switch (drainAge) {
-              null => (context.pal.muted, context.tr('nm_webHealthDrainNever')),
-              final a when a > const Duration(minutes: 45) || (drainError != null && drainError.isNotEmpty) =>
-                (context.pal.goldText, context.tr('nm_webHealthDrainLate')),
-              _ => (context.pal.success, context.tr('nm_webHealthDrainOk')),
-            };
-
-            final planAt = _asDateTime(_planMeta?['lastPlanAt']);
-            final capReached = (cronQueue?['capReached'] ?? _planMeta?['capReached']) == true;
-            final planAge = planAt == null ? null : DateTime.now().toUtc().difference(planAt);
-            final (Color planColor, String planText) = switch (planAge) {
-              null => (context.pal.muted, context.tr('nm_webHealthPlanNever')),
-              final a when a > const Duration(hours: 7) =>
-                (context.pal.goldText, context.tr('nm_webHealthPlanLate')),
-              _ => (context.pal.success, context.tr('nm_webHealthPlanOk')),
-            };
-
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(children: [
-                  Icon(drainColor == context.pal.success ? Icons.check_circle_outline : Icons.warning_amber_outlined, color: drainColor, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(drainText, style: TextStyle(color: drainColor, fontSize: 13))),
-                ]),
-                const SizedBox(height: 6),
-                Row(children: [
-                  Icon(planColor == context.pal.success ? Icons.check_circle_outline : Icons.warning_amber_outlined, color: planColor, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(planText, style: TextStyle(color: planColor, fontSize: 13))),
-                ]),
-                if (capReached) ...[
-                  const SizedBox(height: 8),
-                  _banner(context, icon: Icons.warning_amber_rounded, color: context.pal.alert, text: context.tr('nm_webHealthCapBanner')),
-                ],
-              ],
-            );
-          }),
+          WebPushHealthRows(repo: widget.repo),
         ],
       ],
     );

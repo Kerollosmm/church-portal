@@ -11,6 +11,7 @@ import 'admin_validators.dart';
 import 'screen_header.dart';
 import 'state_switch.dart';
 import 'unsaved_guard.dart';
+import 'web_push_health.dart';
 
 /// Owner-only «متقدم» screen (P2-21): Sentry error reporting switch & test,
 /// App Check status, VAPID push key + Web Push queue drain health, and
@@ -43,15 +44,6 @@ class _AdvancedOwnerScreenState extends State<AdvancedOwnerScreen> with SingleTi
   bool _savingVapid = false;
   String? _vapidError;
 
-  Map<String, dynamic>? _topicsMeta;
-  Map<String, dynamic>? _planMeta;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadWebHealth();
-  }
-
   @override
   void didUpdateWidget(covariant AdvancedOwnerScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -61,9 +53,6 @@ class _AdvancedOwnerScreenState extends State<AdvancedOwnerScreen> with SingleTi
       _vapidInitialized = false;
       _vapidDirty = false;
       _vapidError = null;
-      _topicsMeta = null;
-      _planMeta = null;
-      _loadWebHealth();
     }
   }
 
@@ -72,19 +61,6 @@ class _AdvancedOwnerScreenState extends State<AdvancedOwnerScreen> with SingleTi
     _tabs.dispose();
     _vapidCtrl.dispose();
     super.dispose();
-  }
-
-  Future<void> _loadWebHealth() async {
-    try {
-      final tDoc = await widget.repo.watchDoc('meta/push_topics').first.timeout(const Duration(seconds: 4));
-      final pDoc = await widget.repo.watchDoc('meta/push_plan').first.timeout(const Duration(seconds: 4));
-      if (mounted) {
-        setState(() {
-          _topicsMeta = tDoc?.data;
-          _planMeta = pDoc?.data;
-        });
-      }
-    } catch (_) {}
   }
 
   Future<void> _toggleErrorReporting(bool value) async {
@@ -158,13 +134,6 @@ class _AdvancedOwnerScreenState extends State<AdvancedOwnerScreen> with SingleTi
     } finally {
       if (mounted) setState(() => _savingVapid = false);
     }
-  }
-
-  DateTime? _asDateTime(dynamic v) {
-    if (v is DateTime) return v;
-    if (v is String) return DateTime.tryParse(v);
-    if (v is int) return DateTime.fromMillisecondsSinceEpoch(v, isUtc: true);
-    return null;
   }
 
   Widget _card(BuildContext context, IconData icon, String title, List<Widget> children) => Card(
@@ -274,26 +243,6 @@ class _AdvancedOwnerScreenState extends State<AdvancedOwnerScreen> with SingleTi
           if (_vapidCtrl.text != storedVapid) _vapidCtrl.text = storedVapid;
           _vapidInitialized = true;
         }
-
-        final cronQueue = _topicsMeta?['cronQueue'] as Map?;
-        final drainAt = _asDateTime(cronQueue?['lastDrainAt'] ?? cronQueue?['lastIdleAt'] ?? _topicsMeta?['lastDrainAt']);
-        final drainError = (cronQueue?['lastIidError'] ?? _topicsMeta?['lastIidError']) as String?;
-        final drainAge = drainAt == null ? null : DateTime.now().toUtc().difference(drainAt);
-        final (Color drainColor, String drainText) = switch (drainAge) {
-          null => (context.pal.muted, context.tr('nm_webHealthDrainNever')),
-          final a when a > const Duration(minutes: 45) || (drainError != null && drainError.isNotEmpty) =>
-            (context.pal.goldText, context.tr('nm_webHealthDrainLate')),
-          _ => (context.pal.success, context.tr('nm_webHealthDrainOk')),
-        };
-
-        final planAt = _asDateTime(_planMeta?['lastPlanAt']);
-        final capReached = (cronQueue?['capReached'] ?? _planMeta?['capReached']) == true;
-        final planAge = planAt == null ? null : DateTime.now().toUtc().difference(planAt);
-        final (Color planColor, String planText) = switch (planAge) {
-          null => (context.pal.muted, context.tr('nm_webHealthPlanNever')),
-          final a when a > const Duration(hours: 7) => (context.pal.goldText, context.tr('nm_webHealthPlanLate')),
-          _ => (context.pal.success, context.tr('nm_webHealthPlanOk')),
-        };
 
         return Center(
           child: ConstrainedBox(
@@ -408,46 +357,7 @@ class _AdvancedOwnerScreenState extends State<AdvancedOwnerScreen> with SingleTi
                           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: context.pal.primaryDeep),
                         ),
                         const SizedBox(height: 8),
-                        Row(children: [
-                          Icon(
-                            drainColor == context.pal.success ? Icons.check_circle_outline : Icons.warning_amber_outlined,
-                            color: drainColor,
-                            size: 18,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(child: Text(drainText, style: TextStyle(color: drainColor, fontSize: 13))),
-                        ]),
-                        const SizedBox(height: 6),
-                        Row(children: [
-                          Icon(
-                            planColor == context.pal.success ? Icons.check_circle_outline : Icons.warning_amber_outlined,
-                            color: planColor,
-                            size: 18,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(child: Text(planText, style: TextStyle(color: planColor, fontSize: 13))),
-                        ]),
-                        if (capReached) ...[
-                          const SizedBox(height: 8),
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: context.pal.alert.withValues(alpha: 0.10),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: context.pal.alert.withValues(alpha: 0.35)),
-                            ),
-                            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                              Icon(Icons.warning_amber_rounded, color: context.pal.alert, size: 20),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  context.tr('nm_webHealthCapBanner'),
-                                  style: TextStyle(color: context.pal.ink, height: 1.45),
-                                ),
-                              ),
-                            ]),
-                          ),
-                        ],
+                        WebPushHealthRows(repo: widget.repo),
                       ],
                     ),
                   ),

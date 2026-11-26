@@ -92,6 +92,8 @@ The `admin` package implements the authenticated back-office management console 
   - `UnsavedGuardScope`: Inherited notifier exposing `UnsavedGuardRegistry` down the widget tree.
   - `UnsavedGuard`: Widget wrapping form views with `PopScope` and synchronizing with web `beforeunload`.
   - `addDirtyToken()`, `removeDirtyToken()`, `addBeforeUnloadFlush(VoidCallback callback)`: Cross-platform web hooks for browser unload protection.
+- `web_push_health.dart`:
+  - `WebPushHealthRows`: Shared live-subscribed status rows (`meta/push_topics` queue drain and `meta/push_plan` reminder planner) plus daily cap banner used by both `AdvancedOwnerScreen` and `NotificationsAdminSection` (`showTechnical: true`), replacing one-shot `.first.timeout(4s)` reads with `watchDoc` stream subscriptions and a 1-minute periodic age refresh timer.
 - Subdirectories: None
 
 ## Invariants
