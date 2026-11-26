@@ -1077,6 +1077,8 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Delete').first);
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+      await tester.pumpAndSettle();
       expect(find.text('St A'), findsNothing);
       expect(repo.deletedIds, isEmpty);
       await tester.pump(const Duration(seconds: 10));
@@ -1777,6 +1779,8 @@ void main() {
           await tester.pumpAndSettle();
           await tester.tap(del1);
           await tester.pumpAndSettle();
+          await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+          await tester.pumpAndSettle();
           expect(tester.takeException(), isNull);
 
           final snackFinder = find.byType(SnackBar);
@@ -1808,10 +1812,14 @@ void main() {
           await tester.pumpAndSettle();
           await tester.tap(del1);
           await tester.pumpAndSettle();
+          await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+          await tester.pumpAndSettle();
           final del2 = find.byKey(const ValueKey('delete-s2'));
           await Scrollable.ensureVisible(tester.element(del2), alignment: 0.0);
           await tester.pumpAndSettle();
           await tester.tap(del2);
+          await tester.pumpAndSettle();
+          await tester.tap(find.byKey(const ValueKey('confirm-ok')));
           await tester.pumpAndSettle();
           expect(tester.takeException(), isNull);
           expect(find.text(lang == 'ar' ? 'تراجع عن الكل' : 'Undo all'), findsOneWidget);
@@ -1884,6 +1892,8 @@ void main() {
 
           // Tapping the last card's delete button works directly and keeps FAB above SnackBar.
           await tester.tap(lastDelete);
+          await tester.pumpAndSettle();
+          await tester.tap(find.byKey(const ValueKey('confirm-ok')));
           await tester.pumpAndSettle();
           final snackRect = tester.getRect(find.byType(SnackBar));
           final elevatedFabRect = tester.getRect(fab);

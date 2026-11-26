@@ -1,9 +1,12 @@
 // ADR-049 item 5: admin time / date pickers. Every FieldType.time / date /
-// dateTime field (top-level and inside rows) is read-only and filled from
-// showTimePicker (12-hour AM/PM, ص/م in Arabic) / showDatePicker; stored
+// dateTime field (top-level and inside rows) can be typed directly or filled
+// from showTimePicker (12-hour AM/PM, ص/م in Arabic) / showDatePicker; stored
 // strictly as 24-hour "HH:mm", "YYYY-MM-DD" or the unchanged date-time
 // instant. The field shows the friendly 12-hour reading under it.
+import 'dart:async';
+
 import 'package:church_portal/domain/cairo_time.dart';
+import 'package:church_portal/data/admin_repository.dart';
 import 'package:church_portal/ui/admin/admin_schema.dart';
 import 'package:church_portal/ui/admin/admin_strings.dart';
 import 'package:church_portal/ui/admin/admin_validators.dart';
@@ -75,7 +78,7 @@ void main() {
   group('liturgy form', () {
     final def = collectionById('liturgies')!;
 
-    testWidgets('time fields are read-only; the clock opens a 12-hour AM/PM picker; saved 24h HH:mm', (tester) async {
+    testWidgets('time and date fields remain directly editable; the clock opens a 12-hour AM/PM picker; saved 24h HH:mm', (tester) async {
       Map<String, dynamic>? saved;
       await _pump(
           tester,
@@ -88,7 +91,7 @@ void main() {
               onSave: (d) async => saved = {...?saved, ...d}));
       for (final k in ['start', 'end', 'date']) {
         final tf = tester.widget<TextField>(find.descendant(of: find.byKey(ValueKey('field-$k')), matching: find.byType(TextField)));
-        expect(tf.readOnly, isTrue, reason: k);
+        expect(tf.readOnly, isFalse, reason: k);
       }
       expect(find.byKey(const ValueKey('pick-start')), findsOneWidget);
       expect(find.descendant(of: find.byKey(const ValueKey('pick-start')), matching: find.byIcon(Icons.access_time_rounded)),
@@ -107,8 +110,8 @@ void main() {
       expect(_text(tester, 'start'), '06:05');
       expect(find.text('06:05 AM'), findsOneWidget, reason: '12-hour reading under the field');
 
-      // Tapping the field itself opens the picker too.
-      await tester.tap(find.byKey(const ValueKey('field-end')));
+      // The picker button opens the time picker for end without blocking direct field focus/typing.
+      await tester.tap(find.byKey(const ValueKey('pick-end')));
       await tester.pumpAndSettle();
       await enterTimeInOpenPicker(tester, 23, 59); // 11:59 PM
       expect(_text(tester, 'end'), '23:59');
@@ -319,7 +322,7 @@ void main() {
         locale: const Locale('ar'),
       );
 
-      // looseDate remains directly editable (not readOnly), unlike strict time/date fields.
+      // looseDate remains directly editable alongside time/date fields.
       final ordField = tester.widget<TextField>(
           find.descendant(of: find.byKey(const ValueKey('field-ordinationDate')), matching: find.byType(TextField)));
       expect(ordField.readOnly, isFalse);
@@ -371,6 +374,220 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('looseDate-ok')));
       await tester.pumpAndSettle();
       expect(_text(tester, 'ordinationDate'), '2004-02-29');
+    });
+  });
+
+  group('PR 6C (P6C-2 & P6C-3): typed date/time, saving progress, hide docId', () {
+    FieldDef field(FieldType type) => FieldDef('f', 'حقل', 'Field', type);
+
+    test('validateFieldValue & parseFieldValue normalize Arabic-Indic digits and unpadded hours, and reject invalid dates/times', () {
+      expect(validateFieldValue(field(FieldType.time), '٠٦:٣٠'), isNull);
+      expect(parseFieldValue(field(FieldType.time), '٠٦:٣٠'), '06:30');
+      expect(validateFieldValue(field(FieldType.time), '9:00'), isNull);
+      expect(parseFieldValue(field(FieldType.time), '9:00'), '09:00');
+      expect(validateFieldValue(field(FieldType.time), '25:00'), 'invalidTime');
+
+      expect(validateFieldValue(field(FieldType.date), '٢٠٢٧-٠١-٠٦'), isNull);
+      expect(parseFieldValue(field(FieldType.date), '٢٠٢٧-٠١-٠٦'), CairoTime.at(2027, 1, 6).toUtc());
+      expect(validateFieldValue(field(FieldType.date), '2027-02-30'), 'invalidDate');
+
+      expect(validateFieldValue(field(FieldType.dateTime), '٢٠٢٧-٠١-٠٦ ٢٠:٠٠'), isNull);
+      expect(parseFieldValue(field(FieldType.dateTime), '٢٠٢٧-٠١-٠٦ ٢٠:٠٠'), DateTime.utc(2027, 1, 6, 18, 0));
+      expect(validateFieldValue(field(FieldType.dateTime), '2027-01-06 25:00'), 'invalidDate');
+    });
+
+    testWidgets('DocEditor allows typing Arabic-Indic time without modal, shows saving label while pending, and hides docId',
+        (tester) async {
+      final def = collectionById('liturgies')!;
+      final completer = Completer<void>();
+      Map<String, dynamic>? saved;
+
+      await _pump(
+        tester,
+        DocEditor(
+          title: 'تعديل قداس',
+          docId: 'lit-42',
+          fields: def.fields,
+          def: def,
+          popOnSave: false,
+          data: const {'type': 'mass', 'nameAr': 'قداس', 'weekday': 4, 'start': '07:00'},
+          onSave: (d) async {
+            saved = {...?saved, ...d};
+            return completer.future;
+          },
+        ),
+        locale: const Locale('ar'),
+      );
+
+      expect(find.textContaining('ID: lit-42'), findsNothing);
+
+      final startField = tester.widget<TextField>(
+          find.descendant(of: find.byKey(const ValueKey('field-start')), matching: find.byType(TextField)));
+      expect(startField.readOnly, isFalse);
+
+      await tester.enterText(find.byKey(const ValueKey('field-start')), '٠٩:٣٠');
+      await tester.pump();
+      expect(find.byType(TimePickerDialog), findsNothing);
+      expect(find.text('٠٩:٣٠ ص'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pump();
+      // Both DocEditor saveButton and UnsavedBar show the Arabic saving progress text.
+      expect(find.text('جارٍ الحفظ…'), findsNWidgets(2));
+
+      completer.complete();
+      await tester.pumpAndSettle();
+      expect(saved?['start'], '09:30');
+    });
+
+    testWidgets('DocEditor top-bar save shows Saving… while pending and object-list rows canonicalize Arabic digits',
+        (tester) async {
+      final completer = Completer<void>();
+      Map<String, dynamic>? saved;
+
+      await _pump(
+        tester,
+        DocEditor(
+          title: 'Today',
+          docId: 'features',
+          fields: todaySettingsDoc.fields,
+          popOnSave: true,
+          data: const {
+            'dayEvents': ['2027-04-29\u001f\u001f18:00\u001f\u001fبصخة\u001f'],
+          },
+          onSave: (d) async {
+            saved = {...?saved, ...d};
+            return completer.future;
+          },
+        ),
+        locale: const Locale('en'),
+      );
+
+      expect(find.textContaining('ID: features'), findsNothing);
+      await tester.enterText(find.byKey(const ValueKey('field-date')).first, '٢٠٢٧-٠٤-٣٠');
+      await tester.enterText(find.byKey(const ValueKey('field-start')).first, '٩:٠٠');
+      await tester.pump();
+
+      await tester.tap(find.byKey(const Key('editor-save-top')));
+      await tester.pump();
+      // Top bar Action + UnsavedBar + saveButton all reflect Saving… while in flight.
+      expect(find.text('Saving…'), findsNWidgets(3));
+
+      completer.complete();
+      await tester.pumpAndSettle();
+      final row = (saved?['dayEvents'] as List).single as String;
+      expect(row.split('\u001f').take(4).toList(), ['2027-04-30', '', '09:00', '']);
+    });
+
+    testWidgets('DocEditor dateTime preview + UTC serialization and invalid typed date/time block save',
+        (tester) async {
+      final def = collectionById('seasons')!;
+      Map<String, dynamic>? saved;
+      await _pump(
+        tester,
+        DocEditor(
+          title: 'موسم',
+          fields: def.fields,
+          def: def,
+          popOnSave: false,
+          data: const {'key': 'nativity', 'nameAr': 'صوم الميلاد'},
+          onSave: (d) async => saved = {...?saved, ...d},
+        ),
+        locale: const Locale('ar'),
+      );
+
+      // Invalid typed date (Feb 30) & invalid time (25:00) block save.
+      await tester.enterText(find.byKey(const ValueKey('field-startsAt')), '2027-02-30 10:00');
+      await tester.enterText(find.byKey(const ValueKey('field-endsAt')), '2027-01-06 25:00');
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(saved, isNull);
+
+      // Valid typed Arabic-Indic dateTime updates 12h preview & saves Cairo UTC DateTime.
+      await tester.enterText(find.byKey(const ValueKey('field-startsAt')), '٢٠٢٧-٠١-٠٦ ٢٠:٠٠');
+      await tester.enterText(find.byKey(const ValueKey('field-endsAt')), '٢٠٢٧-٠١-٠٧ ٢٠:٠٠');
+      await tester.pump();
+      expect(find.textContaining('٠٨:٠٠ م'), findsWidgets);
+
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(saved?['startsAt'], DateTime.utc(2027, 1, 6, 18, 0));
+      expect(saved?['endsAt'], DateTime.utc(2027, 1, 7, 18, 0));
+    });
+
+    testWidgets('DocEditor replacesDayPreview parses typed Arabic-Indic date and times and ignores rolled invalid dates',
+        (tester) async {
+      final def = collectionById('liturgies')!;
+      await _pump(
+        tester,
+        DocEditor(
+          title: 'قداس عيد',
+          fields: def.fields,
+          def: def,
+          popOnSave: false,
+          existingDocs: const [
+            AdminDoc('reg-sun', {
+              'type': 'mass',
+              'nameAr': 'قداس الأحد المعتاد',
+              'weekday': 7,
+              'start': '07:00',
+              'end': '09:30',
+              'visible': true,
+            }),
+          ],
+          data: const {
+            'type': 'mass',
+            'nameAr': 'قداس أحد الشعانين',
+            'replacesDay': true,
+          },
+          onSave: (_) async {},
+        ),
+        locale: const Locale('ar'),
+      );
+
+      // Invalid calendar date 2027-02-30 must NOT silently roll over to March 2.
+      await tester.enterText(find.byKey(const ValueKey('field-date')), '2027-02-30');
+      await tester.enterText(find.byKey(const ValueKey('field-start')), '٠٩:٠٠');
+      await tester.enterText(find.byKey(const ValueKey('field-end')), '١١:٠٠');
+      await tester.pump();
+      expect(find.textContaining('مارس'), findsNothing);
+
+      // Typed Arabic-Indic Sunday 2027-04-25 previews Sunday's superseded mass.
+      await tester.enterText(find.byKey(const ValueKey('field-date')), '٢٠٢٧-٠٤-٢٥');
+      await tester.pump();
+      final preview = find.byKey(const ValueKey('replacesDayPreview'));
+      expect(preview, findsOneWidget);
+      expect(find.descendant(of: preview, matching: find.textContaining('الأحد ٢٥ أبريل ٢٠٢٧')), findsOneWidget);
+      expect(find.descendant(of: preview, matching: find.textContaining('قداس الأحد المعتاد')), findsOneWidget);
+    });
+
+    testWidgets('DocEditor leaves untouched legacy unpadded time out of save payload when another field changes',
+        (tester) async {
+      final def = collectionById('liturgies')!;
+      Map<String, dynamic>? saved;
+      await _pump(
+        tester,
+        DocEditor(
+          title: 'قداس',
+          fields: def.fields,
+          def: def,
+          popOnSave: false,
+          data: const {'type': 'mass', 'nameAr': 'قداس أول', 'weekday': 7, 'start': '9:00', 'end': '11:00'},
+          onSave: (d) async => saved = {...?saved, ...d},
+        ),
+        locale: const Locale('ar'),
+      );
+
+      // Edit only nameAr without touching legacy start='9:00'.
+      await tester.enterText(find.byKey(const ValueKey('field-nameAr')), 'قداس ثاني');
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+
+      expect(saved, isNotNull);
+      expect(saved!.containsKey('nameAr'), isTrue);
+      expect(saved!.containsKey('start'), isFalse, reason: 'untouched legacy time must not be sent in changedFields');
     });
   });
 }

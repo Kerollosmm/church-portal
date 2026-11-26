@@ -75,7 +75,7 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
         const PageIntro(pageKey: CustomizablePages.schedule),
         const AlertBanner(),
         if (!suppressEmpty && !waitingForPages) ...[
-          const NextMassCard(),
+          const NextMassCard(showFullScheduleLink: false),
           const SizedBox(height: 16),
           Card(
             child: SwitchListTile(

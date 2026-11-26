@@ -706,11 +706,9 @@ class NotifyTypeSpec {
 /// Admin configuration parsed from settings/features.
 class NotifyConfig {
   final Map<NotifyType, NotifyTypeSpec> specs;
-  final Set<String> reminderSources;
 
   const NotifyConfig({
     required this.specs,
-    this.reminderSources = PushSettings.allReminderSources,
   });
 
   NotifyTypeSpec specFor(NotifyType type) => specs[type] ?? NotifyTypeSpec.builtInDefaults[type]!;
@@ -745,15 +743,7 @@ class NotifyConfig {
       );
     }
 
-    final rawSources = f.reminderSources.trim();
-    final sources = rawSources.isEmpty
-        ? <String>{}
-        : rawSources.split(',').map((s) => s.trim()).where(PushSettings.allReminderSources.contains).toSet();
-
-    return NotifyConfig(
-      specs: parsedSpecs,
-      reminderSources: sources.isEmpty && rawSources.isEmpty ? <String>{} : (sources.isEmpty ? PushSettings.allReminderSources : sources),
-    );
+    return NotifyConfig(specs: parsedSpecs);
   }
 }
 

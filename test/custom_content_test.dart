@@ -3872,6 +3872,8 @@ void main() {
         // Soft-delete p2-pending so it sits in _pendingDelete with an active undo timer & SnackBar.
         await tester.ensureVisible(find.byKey(const ValueKey('delete-p2-pending')));
         await tester.tap(find.byKey(const ValueKey('delete-p2-pending')));
+        await tester.pump();
+        await tester.tap(find.byKey(const ValueKey('confirm-ok')));
         await tester.pumpAndSettle();
         expect(find.byKey(const ValueKey('p2-pending')), findsNothing);
         expect(find.byType(SnackBar), findsOneWidget);
@@ -4285,6 +4287,8 @@ void main() {
         // 1. Delete page B -> Undo SnackBar active with 10s timer.
         await tester.ensureVisible(find.byKey(const ValueKey('delete-p-b')));
         await tester.tap(find.byKey(const ValueKey('delete-p-b')));
+        await tester.pump();
+        await tester.tap(find.byKey(const ValueKey('confirm-ok')));
         await tester.pumpAndSettle();
         expect(find.byKey(const ValueKey('p-b')), findsNothing);
         expect(find.byType(SnackBarAction), findsOneWidget);

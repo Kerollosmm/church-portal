@@ -159,10 +159,14 @@ class LiturgyCard extends StatelessWidget {
 
 /// "Next liturgy" smart card (top of Home).
 class NextMassCard extends ConsumerWidget {
-  const NextMassCard({super.key});
+  final bool showFullScheduleLink;
+
+  const NextMassCard({super.key, this.showFullScheduleLink = true});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final routePath = GoRouter.maybeOf(context)?.routerDelegate.currentConfiguration.uri.path;
+    final showScheduleLink = showFullScheduleLink && routePath != '/mass-schedule';
     final lits = ref.watch(liturgiesProvider);
     final seasons = ref.watch(seasonsProvider);
     final now = ref.watch(nowProvider).value ?? DateTime.now();
@@ -264,11 +268,12 @@ class NextMassCard extends ConsumerWidget {
                       style: displayStyle(context, size: 18, color: pal.onBar, height: 1.4)),
                 ),
               ]),
-              TextButton(
-                onPressed: () => context.go('/mass-schedule'),
-                style: TextButton.styleFrom(foregroundColor: pal.onBarAccent),
-                child: Text(context.tr('fullSchedule')),
-              ),
+              if (showScheduleLink)
+                TextButton(
+                  onPressed: () => context.go('/mass-schedule'),
+                  style: TextButton.styleFrom(foregroundColor: pal.onBarAccent),
+                  child: Text(context.tr('fullSchedule')),
+                ),
             ],
           ),
         ),

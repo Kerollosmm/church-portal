@@ -295,8 +295,7 @@ For each `CollectionDef`:
   **kept** — Firestore may still commit the queued write pointing at them; any other error deletes them (BUG-13).
   Note: `AdminRepository.save`/`saveDoc` set no timeout of their own today (the only 15 s timeout is the role/access read
   in `adminAccess`), so this path applies to a timeout raised by a caller/backend wrapper.
-- **Add** (FAB) / tap to **edit** → full-screen `DocEditor`; **delete** in `collection_list.dart` uses the shared 10-second
-  reversible soft-delete coordinator (`SoftDeleteUndo` + `PendingDelete`, `pending_delete.dart`). Non-category items register synchronously into
+- **Add** (FAB) / tap to **edit** → full-screen `DocEditor`; **delete** in `collection_list.dart` prompts `confirmNamedAction` naming the item (`deleteItemConfirm`: «حذف «{n}»؟ يمكنك التراجع خلال ١٠ ثوانٍ.») across both `_tile` and `_entryRow` (cancelling leaves the item untouched with zero writes) before passing to the shared 10-second reversible soft-delete coordinator (`SoftDeleteUndo` + `PendingDelete`, `pending_delete.dart`). Non-category items register synchronously into
   `SoftDeleteUndo` and immediately write Firestore
   `deletedAt: DateTime.now().toUtc()` (allowed by `meta()` and `optTimestamp(d, 'deletedAt')` in `firestore.rules`,
   serialized per doc via `_inFlightWrites` with monotonic `_gen` guards so rapid consecutive deletes never
@@ -344,12 +343,7 @@ For each `CollectionDef`:
 ### Generic form (`DocEditor`, `doc_editor.dart`)
 - Field widgets by `FieldType`: text, multiline, integer, decimal, boolean, time (stored 24h `"HH:mm"`, UI labels free of `HH:mm`), weekday, weekdays (chips),
   dateTime / date (Cairo), looseDate, choice (labels via `choiceLabel`/`opt_*`), url, phone, objectList, **image**.
-- **Pickers (ADR-049, P2-26):** time / date / dateTime fields (also inside rows) are read-only with a clock / calendar
-  suffix (`pick-<key>`; optional fields also `clear-<key>`); time = `showTimePicker` in 12-hour AM/PM mode (ص/م in Arabic,
-  `alwaysUse24HourFormat: false`), stored strictly 24-hour `HH:mm`, the field's helper shows the 12-hour reading
-  (`formatTimeArabic/Latin`, «٠٦:٣٠ م» / "06:30 PM"; date-times also the date);
-  date = `showDatePicker` (2000–2100), `YYYY-MM-DD`; dateTime = date then time, `YYYY-MM-DD HH:mm` Cairo; **`looseDate`** (priests' `ordinationDate`, `hegumenDate`, `departedDate`) stays manually editable (accepting year alone like `1995`, `YYYY-MM`, or `YYYY-MM-DD`) AND provides a calendar picker (`_LooseDatePickerDialog` using `monthNamesAr` / `fullMonthNamesEn`, `daysInMonth`, `parseLooseDate`, `formatLooseDateValue`). Formatters
-  `formatPickedTime/Date/DateTime`, prefill `parseFieldTime/DateTime` in `admin_validators.dart`. Stored types unchanged.
+- **Pickers & direct typing (ADR-049, P2-26, PR 6C):** time / date / dateTime fields (top-level and inside rows) allow **direct typing** (`readOnly: false`, `onTap: null`) alongside the clock / calendar suffix (`pick-<key>`; optional fields also `clear-<key>`). `validateFieldValue` and `parseFieldValue` normalize Arabic-Indic digits (`٠٦:٣٠`, `٢٠٢٧-٠١-٠٦ ٢٠:٠٠`) and unpadded hours (`9:00`) via `normalizeDigits` + `parseFieldTime`, reject invalid calendar dates/times (`2027-02-30`, `25:00`), and store canonical 24-hour ASCII `"HH:mm"`, `"YYYY-MM-DD"`, or Cairo-wall-time UTC `DateTime` (`_Row.collect` also canonicalizes encoded row dates/times). `time` = `showTimePicker` in 12-hour AM/PM mode (ص/م in Arabic, `alwaysUse24HourFormat: false`); the field's helper shows the live 12-hour reading (`formatTimeArabic/Latin`, «٠٦:٣٠ م» / "06:30 PM"; date-times also the date); `date` = `showDatePicker` (2000–2100); `dateTime` = date then time. **`looseDate`** (priests' `ordinationDate`, `hegumenDate`, `departedDate`) remains directly editable (`1995`, `YYYY-MM`, `YYYY-MM-DD`) AND provides `_LooseDatePickerDialog`. `DocEditor` hides raw `ID: <docId>` text and shows `'جارٍ الحفظ…'` / `'Saving…'` (`saving`) on `saveButton`, `editor-save-top`, and `UnsavedBar` while a save is pending. Formatters `formatPickedTime/Date/DateTime`, prefill `parseFieldTime/DateTime` in `admin_validators.dart`.
 - Validation (`admin_validators.dart` `validateFieldValue`): required, max length (`effectiveMaxLength`), 24h time validation,
   real calendar dates (rejects 2027-02-30), loose dates, numeric ranges (Arabic digits accepted), URLs (`https://…`
   or in-app path where `allowPath`), phones (`^\+?[0-9]{5,15}$` after normalising). Cross-field
@@ -509,6 +503,7 @@ Implemented in Stage 1 of the admin panel simplification (PR 3A, items 6, 7, 8, 
 
 ### Named confirmation dialog (`confirmNamedAction`, `confirm_named.dart`)
 Standard modal dialog replacing vague confirmation prompts by explicitly naming the target action or item in its summary text:
+- **Collection items & custom-category sub-entries:** deleting any non-category item in `CollectionListScreen` (`_tile` and `_entryRow`) names the item via `deleteItemConfirm` («حذف «{n}»؟ يمكنك التراجع خلال ١٠ ثوانٍ.») with alert-styled «حذف» button (`destructive: true`) before triggering the 10-second `SoftDeleteUndo` flow; cancelling performs 0 writes.
 - **Push broadcast:** sending a draft announcement to «الجميع» (`_draft.targets == 'all'`) or «في أقرب وقت» (`_draft.soon == true`) in `notifications_admin.dart` prompts with summary «هيتبعت لكل المشتركين دلوقتي: {t}» (`nm_confirmSendAllSummary`) and confirm action «ابعت للكل» (`nm_sendToAllBtn`).
 - **Messages delete:** deleting a visitor message in `MessagesScreen` names the sender (or «مُرسِل مجهول») with alert-styled «حذف» button (`destructive: true`).
 - **Admins remove:** removing an administrator in `AdminsScreen` names the admin's email with alert-styled «إزالة المشرف».
@@ -522,7 +517,7 @@ Guards uncommitted edits across all administrative exit vectors:
 
 ### 10-second undo deletion (`PendingDelete` & `SoftDeleteUndo`, `pending_delete.dart`)
 Shared reversible soft-delete buffer for collection items (`collection_list.dart`) and the inbox (`MessagesScreen` in `admin_screens.dart`):
-- When an item (liturgy, meeting, activity, priest, saint, milestone, custom entry, custom page, etc.) or confirmed contact message is deleted, it is registered immediately in `PendingDelete`, writes `deletedAt: Timestamp` to Firestore (renewed across consecutive deletes in the same batch with serialized per-ID write guards and `holdAll` / `releaseHold` alignment), and is hidden immediately from the admin list (`SoftDeleteUndo.isVisible`) and filtered out of all public collections (`FirestoreRepository._docs` and `_col`) and sitemaps.
+- After `confirmNamedAction` confirms deleting a collection item, custom-category sub-entry, or contact message, it is registered immediately in `PendingDelete`, writes `deletedAt: Timestamp` to Firestore (renewed across consecutive deletes in the same batch with serialized per-ID write guards and `holdAll` / `releaseHold` alignment), and is hidden immediately from the admin list (`SoftDeleteUndo.isVisible`) and filtered out of all public collections (`FirestoreRepository._docs` and `_col`) and sitemaps.
 - A 10-second `SnackBar` appears: «تم مسح «{n}»» (`deletedItemUndo`) with action «تراجع» (`undo`), upgrading in-place to «تم مسح {n} عناصر (آخرهم «{last}»)» (`deletedItemMultiUndo`) with «تراجع عن الكل» (`undoAll`) when multiple deletions overlap (preserving any queued non-undo SnackBars).
 - The SnackBar (`persist: true`, managed by `_controller` and `_barTimer` in `SoftDeleteUndo`) stays open through rapid deletes across the normal 10-second grace window (or until any in-flight `PendingDelete` write hold finishes), after which deferred non-undo error SnackBars flush once the Undo bar closes. FAB elevation (`_UndoClearFabLocation`), 48 px clearance, and 650 ms post-close cooldown (`_fabCooldownTimer`, `undo-vacated-tap-shield`) remain local to `CollectionListScreen`.
 - Tapping «تراجع» / «تراجع عن الكل» cancels the batch atomically, restores all rows in UI immediately, records undone `deletedAt` cutoffs (`_undoneCutoffs`) so stale pre-undo lazy-purge snapshots never delete restored docs, and clears `deletedAt: null` in Firestore cleanly (`_restoringIds` + `_inFlightWrites`).
@@ -532,7 +527,7 @@ Shared reversible soft-delete buffer for collection items (`collection_list.dart
 
 ### Sticky unsaved changes bar (`UnsavedBar`, `unsaved_bar.dart`)
 Bottom bar anchored to the bottom of the viewport whenever an editor is dirty:
-- Shows message (`unsavedBarText`: «فيه تعديلات مش محفوظة» or custom label such as `nm_unsaved`: «لديك تعديلات لم تُحفظ») and action buttons «حفظ» / `save` and «تراجع» / `cancel`.
+- Shows message (`unsavedBarText`: «فيه تعديلات مش محفوظة» or custom label such as `nm_unsaved`: «لديك تعديلات لم تُحفظ») and action buttons «حفظ» / `save` (switching to spinner + `'جارٍ الحفظ…'` / `'Saving…'` via `saving` while in flight) and «تراجع» / `cancel`.
 - Responsive layout via `Wrap` prevents overflow at 320 px viewport width and 200% text scaling.
 - Integrated across `DocEditor` (standalone bottom navigation bar), `FeaturesEditor`, `ContactCategoriesScreen`, and `NotificationsAdminSection`.
 

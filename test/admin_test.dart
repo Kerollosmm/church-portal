@@ -56,6 +56,12 @@ Widget _app(Widget child, {Locale locale = const Locale('en')}) => MaterialApp(
       home: child,
     );
 
+Future<void> _confirmDeleteTap(WidgetTester tester, Finder finder) async {
+  await tester.tap(finder);
+  await tester.pump();
+  await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+}
+
 void main() {
   setUpAll(CairoTime.ensureInitialized);
 
@@ -362,11 +368,17 @@ void main() {
 
     test('time, dates and loose dates', () {
       expect(validateFieldValue(_f(FieldType.time), '06:30'), isNull);
-      expect(validateFieldValue(_f(FieldType.time), '6:30'), 'invalidTime');
+      expect(validateFieldValue(_f(FieldType.time), '6:30'), isNull);
+      expect(parseFieldValue(_f(FieldType.time), '6:30'), '06:30');
+      expect(validateFieldValue(_f(FieldType.time), '٠٩:٣٠'), isNull);
+      expect(parseFieldValue(_f(FieldType.time), '٠٩:٣٠'), '09:30');
       expect(validateFieldValue(_f(FieldType.time), '24:00'), 'invalidTime');
+      expect(validateFieldValue(_f(FieldType.time), '25:00'), 'invalidTime');
       expect(validateFieldValue(_f(FieldType.date), '2027-02-30'), 'invalidDate');
       expect(validateFieldValue(_f(FieldType.date), '2027-01-06'), isNull);
+      expect(validateFieldValue(_f(FieldType.date), '٢٠٢٧-٠١-٠٦'), isNull);
       expect(validateFieldValue(_f(FieldType.dateTime), '2027-01-06 20:00'), isNull);
+      expect(validateFieldValue(_f(FieldType.dateTime), '٢٠٢٧-٠١-٠٦ ٢٠:٠٠'), isNull);
       expect(validateFieldValue(_f(FieldType.dateTime), '2027-01-06 25:00'), 'invalidDate');
       for (final ok in ['1998', '1998-03', '1998-03-21']) {
         expect(validateFieldValue(_f(FieldType.looseDate), ok), isNull, reason: ok);
@@ -1534,7 +1546,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final delHold = repo.holdDelete('saints', 's1');
-      await tester.tap(find.byKey(const ValueKey('delete-s1')));
+      await _confirmDeleteTap(tester, find.byKey(const ValueKey('delete-s1')));
       await tester.pump();
       expect(find.text('تراجع'), findsOneWidget);
 
@@ -1554,7 +1566,7 @@ void main() {
 
       // Failed commit also syncs the Undo bar state cleanly before surfacing the error SnackBar.
       final failHold = repo.holdDelete('saints', 's2');
-      await tester.tap(find.byKey(const ValueKey('delete-s2')));
+      await _confirmDeleteTap(tester, find.byKey(const ValueKey('delete-s2')));
       await tester.pump();
       expect(find.text('تراجع'), findsOneWidget);
       await tester.pump(const Duration(seconds: 10));
@@ -1586,12 +1598,12 @@ void main() {
       await tester.pumpAndSettle();
 
       // Delete s1 at t=0, advance 2s, then delete s2 at t=2s while holding s1's renewal.
-      await tester.tap(find.byKey(const ValueKey('delete-s1')));
+      await _confirmDeleteTap(tester, find.byKey(const ValueKey('delete-s1')));
       await tester.pump();
       await tester.pump(const Duration(seconds: 2));
 
       final s1Renew = repo.hold('saints', 's1');
-      await tester.tap(find.byKey(const ValueKey('delete-s2')));
+      await _confirmDeleteTap(tester, find.byKey(const ValueKey('delete-s2')));
       await tester.pump();
 
       // Fail a visibility toggle on s3 while Undo bar is active -> deferred error survives bar refresh.
@@ -1634,7 +1646,7 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const ValueKey('delete-s1')));
+      await _confirmDeleteTap(tester, find.byKey(const ValueKey('delete-s1')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
       expect(find.text('تراجع'), findsOneWidget);
@@ -1678,13 +1690,13 @@ void main() {
 
       // Delete s1 at t=0, then delete s2 at t=5s with s1's renewal held & failing so s1 expires at t=10s
       // (calling _syncUndoBarAfterExpiry -> _presentUndoSnackBar(clearQueue: false)) while s2 stays until t=15s.
-      await tester.tap(find.byKey(const ValueKey('delete-s1')));
+      await _confirmDeleteTap(tester, find.byKey(const ValueKey('delete-s1')));
       await tester.pump();
       await tester.pump(const Duration(seconds: 5));
 
       final s1Renew = repo.hold('saints', 's1');
       final s1DelHold = repo.holdDelete('saints', 's1');
-      await tester.tap(find.byKey(const ValueKey('delete-s2')));
+      await _confirmDeleteTap(tester, find.byKey(const ValueKey('delete-s2')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
       s1Renew.completeError(FirebaseException(plugin: 'cloud_firestore', code: 'unavailable', message: 'Offline'));
@@ -1731,13 +1743,13 @@ void main() {
       await tester.pumpAndSettle();
 
       // Delete s1 at t = 0
-      await tester.tap(find.byKey(const ValueKey('delete-s1')));
+      await _confirmDeleteTap(tester, find.byKey(const ValueKey('delete-s1')));
       await tester.pump();
       expect(find.text('مارمرقس'), findsNothing);
 
       // Advance 6s, then delete s2
       await tester.pump(const Duration(seconds: 6));
-      await tester.tap(find.byKey(const ValueKey('delete-s2')));
+      await _confirmDeleteTap(tester, find.byKey(const ValueKey('delete-s2')));
       await tester.pump();
       expect(find.text('تراجع عن الكل'), findsOneWidget);
 
@@ -1780,7 +1792,7 @@ void main() {
       expect(find.text('مارمرقس'), findsOneWidget);
 
       // Delete s1: immediately marked with deletedAt, hidden from UI
-      await tester.tap(find.byIcon(Icons.delete_outline).first);
+      await _confirmDeleteTap(tester, find.byIcon(Icons.delete_outline).first);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
 
@@ -1799,7 +1811,7 @@ void main() {
       expect(repo.deletedIds, isEmpty);
 
       // Delete s1 again and wait 10s -> commits hard delete
-      await tester.tap(find.byIcon(Icons.delete_outline).first);
+      await _confirmDeleteTap(tester, find.byIcon(Icons.delete_outline).first);
       await tester.pump();
       expect(find.text('مارمرقس'), findsNothing);
       await tester.pump(const Duration(seconds: 10));
@@ -1807,7 +1819,7 @@ void main() {
       expect(repo.deletedIds, contains('saints/s1'));
 
       // Delete s2 and unmount/dispose -> cancels local timers, doc remains soft-deleted, lazy purge purges it
-      await tester.tap(find.byIcon(Icons.delete_outline).first);
+      await _confirmDeleteTap(tester, find.byIcon(Icons.delete_outline).first);
       await tester.pump();
       expect(repo.deletedIds.contains('saints/s2'), isFalse);
       expect(isSoftDeleted(repo.collections['saints']!.firstWhere((d) => d.id == 's2').data), isTrue);
@@ -1851,7 +1863,7 @@ void main() {
       expect(find.text('عن الكنيسة'), findsOneWidget);
 
       // Delete p1 (starts 10s undo window)
-      await tester.tap(find.byIcon(Icons.delete_outline).first);
+      await _confirmDeleteTap(tester, find.byIcon(Icons.delete_outline).first);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
       expect(find.text('عن الكنيسة'), findsNothing);
@@ -1894,7 +1906,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Delete s1
-      await tester.tap(find.byIcon(Icons.delete_outline).first);
+      await _confirmDeleteTap(tester, find.byIcon(Icons.delete_outline).first);
       await tester.pump();
 
       // Swap widget to repo2 / defPriests before commit
@@ -1958,13 +1970,13 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const ValueKey('delete-s1')));
+      await _confirmDeleteTap(tester, find.byKey(const ValueKey('delete-s1')));
       await tester.pump();
       final t0 = repo.updates.firstWhere((u) => u.id == 's1').data['deletedAt'] as DateTime;
 
       await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 25)));
 
-      await tester.tap(find.byKey(const ValueKey('delete-s2')));
+      await _confirmDeleteTap(tester, find.byKey(const ValueKey('delete-s2')));
       await tester.pump();
       final s1Updates = repo.updates.where((u) => u.id == 's1' && u.data['deletedAt'] != null).toList();
       expect(s1Updates.length, greaterThanOrEqualTo(2));
@@ -2002,7 +2014,7 @@ void main() {
       await tester.pump();
       expect(find.text('أصبح العنصر مخفيًا'), findsOneWidget);
 
-      await tester.tap(find.byKey(const ValueKey('delete-s1')));
+      await _confirmDeleteTap(tester, find.byKey(const ValueKey('delete-s1')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
       expect(find.text('تراجع'), findsOneWidget);
@@ -2011,7 +2023,7 @@ void main() {
       await tester.pump(const Duration(seconds: 8));
 
       final refreshHold = repo.hold('saints', 's1');
-      await tester.tap(find.byKey(const ValueKey('delete-s2')));
+      await _confirmDeleteTap(tester, find.byKey(const ValueKey('delete-s2')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
       // Undo action for s2 is shown immediately without waiting for s1's renewal.
@@ -2033,7 +2045,7 @@ void main() {
       // remain recoverable, and shrinks back to single-item "تراجع" once s2 expires at t=10s.
       await tester.pump(const Duration(seconds: 2));
       final s2Fail = repo.hold('saints', 's2');
-      await tester.tap(find.byKey(const ValueKey('delete-s3')));
+      await _confirmDeleteTap(tester, find.byKey(const ValueKey('delete-s3')));
       await tester.pump();
       s2Fail.completeError(FirebaseException(plugin: 'cloud_firestore', code: 'unavailable', message: 'Offline'));
       await tester.pumpAndSettle();
@@ -2110,19 +2122,19 @@ void main() {
       await tester.pumpAndSettle();
 
       // Hold the 3rd delete write & prior renewal to simulate real Firestore network latency (~2s burst).
-      await tester.tap(find.byKey(const ValueKey('delete-l1')));
+      await _confirmDeleteTap(tester, find.byKey(const ValueKey('delete-l1')));
       await tester.pump(const Duration(milliseconds: 600));
       expect(find.text('قداس أول'), findsNothing);
       expect(find.text('تراجع'), findsOneWidget);
 
-      await tester.tap(find.byKey(const ValueKey('delete-l2')));
+      await _confirmDeleteTap(tester, find.byKey(const ValueKey('delete-l2')));
       await tester.pump(const Duration(milliseconds: 600));
       expect(find.text('قداس ثاني'), findsNothing);
       expect(find.text('تراجع عن الكل'), findsOneWidget);
 
       final l3WriteHold = repo.hold('liturgies', 'l3');
       final l1RenewHold = repo.hold('liturgies', 'l1');
-      await tester.tap(find.byKey(const ValueKey('delete-l3')));
+      await _confirmDeleteTap(tester, find.byKey(const ValueKey('delete-l3')));
       await tester.pump(const Duration(milliseconds: 400));
       expect(find.text('عشية'), findsNothing);
       expect(find.textContaining('تم مسح 3 عناصر'), findsOneWidget);
@@ -2176,10 +2188,10 @@ void main() {
       await tester.pumpAndSettle();
 
       // Delete l1 at t = 0s, then delete l2 at t = 2s.
-      await tester.tap(find.byKey(const ValueKey('delete-l1')));
+      await _confirmDeleteTap(tester, find.byKey(const ValueKey('delete-l1')));
       await tester.pump();
       await tester.pump(const Duration(seconds: 2));
-      await tester.tap(find.byKey(const ValueKey('delete-l2')));
+      await _confirmDeleteTap(tester, find.byKey(const ValueKey('delete-l2')));
       await tester.pump();
       expect(find.text('تراجع عن الكل'), findsOneWidget);
 
@@ -2230,9 +2242,9 @@ void main() {
         final restingFabRect = tester.getRect(fabFinder);
 
         // Delete 2 items -> FAB must sit clearly above Undo SnackBar (>= 48 px gap).
-        await tester.tap(find.byKey(const ValueKey('delete-l1')));
+        await _confirmDeleteTap(tester, find.byKey(const ValueKey('delete-l1')));
         await tester.pumpAndSettle();
-        await tester.tap(find.byKey(const ValueKey('delete-l2')));
+        await _confirmDeleteTap(tester, find.byKey(const ValueKey('delete-l2')));
         await tester.pumpAndSettle();
 
         final snackRect = tester.getRect(find.byType(SnackBar));
@@ -2295,7 +2307,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // t = 0s: soft-delete writes deletedAt via update, zero repo.delete calls.
-      await tester.tap(find.byKey(const ValueKey('delete-l1')));
+      await _confirmDeleteTap(tester, find.byKey(const ValueKey('delete-l1')));
       await tester.pump();
       expect(repo.deletedIds, isEmpty);
       expect(isSoftDeleted(repo.collections['liturgies']!.first.data), isTrue);
@@ -2351,7 +2363,7 @@ void main() {
 
       // Hold the soft-delete write so Undo must await it while _restoringIds is active.
       final holdSoft = repo.hold('liturgies', 'l1');
-      await tester.tap(find.byKey(const ValueKey('delete-l1')));
+      await _confirmDeleteTap(tester, find.byKey(const ValueKey('delete-l1')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 
@@ -2389,6 +2401,136 @@ void main() {
       expect(find.text('قداس الأحد'), findsOneWidget);
       expect(repo.collections['liturgies']!.first.data['deletedAt'], isNull);
     });
+
+    testWidgets('CollectionListScreen confirms named delete: cancel leaves untouched, confirm soft-deletes with 10s undo',
+        (tester) async {
+      final repo = _TestAdminBackend(initialCollections: {
+        'saints': [
+          AdminDoc('s1', {'nameAr': 'مارمرقس', 'visible': true, 'order': 10}),
+        ],
+      });
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('saints')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('delete-s1')));
+      await tester.pumpAndSettle();
+
+      // Dialog shows the item title and destructive confirmation action.
+      final dialog = find.byType(AlertDialog);
+      expect(dialog, findsOneWidget);
+      expect(find.descendant(of: dialog, matching: find.text('مارمرقس')), findsOneWidget);
+
+      // Cancel closes the dialog with zero writes and zero Undo SnackBars.
+      await tester.tap(find.byKey(const ValueKey('confirm-cancel')));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(repo.updates, isEmpty);
+      expect(repo.deletedIds, isEmpty);
+      expect(find.byType(SnackBar), findsNothing);
+      expect(find.text('مارمرقس'), findsOneWidget);
+
+      // Tap delete again and confirm -> soft-deletes and shows 10s Undo SnackBar.
+      await tester.tap(find.byKey(const ValueKey('delete-s1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(isSoftDeleted(repo.collections['saints']!.single.data), isTrue);
+      expect(repo.deletedIds, isEmpty);
+      expect(find.byType(SnackBar), findsOneWidget);
+      expect(find.text('تراجع'), findsOneWidget);
+
+      // Tapping Undo restores the item cleanly.
+      await tester.tap(find.text('تراجع'));
+      await tester.pumpAndSettle();
+      expect(isSoftDeleted(repo.collections['saints']!.single.data), isFalse);
+      expect(find.text('مارمرقس'), findsOneWidget);
+    });
+
+    testWidgets('CollectionListScreen custom-category sub-entry (_entryRow) requires named delete confirmation with 10s undo',
+        (tester) async {
+      final repo = _TestAdminBackend(initialCollections: {
+        'categories': [
+          AdminDoc('cat1', {'nameAr': 'قسم الشباب', 'slug': 'youth', 'visible': true, 'order': 10}),
+        ],
+        'entries': [
+          AdminDoc('e1', {'categoryId': 'cat1', 'titleAr': 'اجتماع الخدام', 'visible': true, 'order': 10}),
+        ],
+      });
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('categories')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('deleteEntry-e1')));
+      await tester.pumpAndSettle();
+      final dialog = find.byType(AlertDialog);
+      expect(dialog, findsOneWidget);
+      expect(find.descendant(of: dialog, matching: find.text('اجتماع الخدام')), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('confirm-cancel')));
+      await tester.pumpAndSettle();
+      expect(repo.updates, isEmpty);
+      expect(repo.deletedIds, isEmpty);
+      expect(find.byType(SnackBar), findsNothing);
+      expect(find.text('اجتماع الخدام'), findsOneWidget);
+
+      await _confirmDeleteTap(tester, find.byKey(const ValueKey('deleteEntry-e1')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(isSoftDeleted(repo.collections['entries']!.single.data), isTrue);
+      expect(find.byType(SnackBar), findsOneWidget);
+      expect(find.text('تراجع'), findsOneWidget);
+
+      await tester.tap(find.text('تراجع'));
+      await tester.pumpAndSettle();
+      expect(isSoftDeleted(repo.collections['entries']!.single.data), isFalse);
+      expect(find.text('اجتماع الخدام'), findsOneWidget);
+    });
+
+    testWidgets('CollectionListScreen aborts delete if repository changes while confirmation dialog is open',
+        (tester) async {
+      final repo1 = _TestAdminBackend(initialCollections: {
+        'saints': [
+          AdminDoc('s1', {'nameAr': 'مارمرقس', 'visible': true, 'order': 10}),
+        ],
+      });
+      final repo2 = _TestAdminBackend(initialCollections: {
+        'saints': [
+          AdminDoc('s1', {'nameAr': 'مارجرجس', 'visible': true, 'order': 10}),
+        ],
+      });
+      final def = collectionById('saints')!;
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo1, def: def),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('delete-s1')));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsOneWidget);
+
+      // Swap underlying repo while dialog is open, then confirm.
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo2, def: def),
+        locale: const Locale('ar'),
+      ));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+      await tester.pumpAndSettle();
+
+      expect(repo1.updates, isEmpty);
+      expect(repo1.deletedIds, isEmpty);
+      expect(repo2.updates, isEmpty);
+      expect(repo2.deletedIds, isEmpty);
+    });
   });
 
   group('UnsavedBar', () {
@@ -2424,19 +2566,25 @@ void main() {
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
 
       for (final locale in const [Locale('ar'), Locale('en')]) {
-        await tester.pumpWidget(_app(
-          Scaffold(
-            bottomNavigationBar: UnsavedBar(
-              dirty: true,
-              onSave: () {},
-              onCancel: () {},
+        for (final saving in const [false, true]) {
+          await tester.pumpWidget(_app(
+            Scaffold(
+              bottomNavigationBar: UnsavedBar(
+                dirty: true,
+                saving: saving,
+                onSave: () {},
+                onCancel: () {},
+              ),
             ),
-          ),
-          locale: locale,
-        ));
-        await tester.pumpAndSettle();
-        expect(tester.takeException(), isNull);
-        expect(find.byKey(const ValueKey('unsaved-bar')), findsOneWidget);
+            locale: locale,
+          ));
+          await tester.pump();
+          expect(tester.takeException(), isNull);
+          expect(find.byKey(const ValueKey('unsaved-bar')), findsOneWidget);
+          if (saving) {
+            expect(find.text(locale.languageCode == 'ar' ? 'جارٍ الحفظ…' : 'Saving…'), findsOneWidget);
+          }
+        }
       }
     });
 
@@ -2540,10 +2688,10 @@ void main() {
       await tester.pumpAndSettle();
 
       // Delete first, then second -> combined "Undo all" action
-      await tester.tap(find.byIcon(Icons.delete_outline).first);
+      await _confirmDeleteTap(tester, find.byIcon(Icons.delete_outline).first);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
-      await tester.tap(find.byIcon(Icons.delete_outline).first);
+      await _confirmDeleteTap(tester, find.byIcon(Icons.delete_outline).first);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
 
@@ -2559,7 +2707,7 @@ void main() {
 
       // Failed hard-delete restores row visibility cleanly
       repo.failDelete = true;
-      await tester.tap(find.byIcon(Icons.delete_outline).first);
+      await _confirmDeleteTap(tester, find.byIcon(Icons.delete_outline).first);
       await tester.pump();
       expect(find.text('مارمرقس'), findsNothing);
       await tester.pump(const Duration(seconds: 10));
@@ -7453,7 +7601,7 @@ void main() {
 
       final deleteBtn = find.byKey(const ValueKey('delete-lit-1'));
       expect(deleteBtn, findsOneWidget);
-      await tester.tap(deleteBtn);
+      await _confirmDeleteTap(tester, deleteBtn);
       await tester.pumpAndSettle();
 
       expect(find.byType(SnackBar), findsOneWidget);

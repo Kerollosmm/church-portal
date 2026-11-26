@@ -154,6 +154,7 @@ class DocEditorState extends State<DocEditor> {
 
   /// Values as loaded: only fields that differ from these are saved.
   late Map<String, dynamic> _initialValues;
+  final Map<String, String> _rawInitialTimeText = {};
   bool _hasInitialValues = false;
 
   /// The values before the first attempt of a save that has not completed
@@ -216,6 +217,15 @@ class DocEditorState extends State<DocEditor> {
       }
       _setupAutoSlug();
       _initialValues = collect();
+      if (!isNew) {
+        for (final f in widget.fields) {
+          if (f.type == FieldType.time && data[f.key] is String) {
+            final raw = (data[f.key] as String).trim();
+            _initialValues[f.key] = raw;
+            _rawInitialTimeText[f.key] = raw;
+          }
+        }
+      }
       _hasInitialValues = true;
     } finally {
       _initializing = false;
@@ -449,10 +459,15 @@ class DocEditorState extends State<DocEditor> {
           out[f.key] = [for (final g in _gallery[f.key]!) g.collect()];
         case FieldType.text:
         case FieldType.multiline:
-        case FieldType.time:
         case FieldType.looseDate:
         case FieldType.url:
           out[f.key] = _text[f.key]!.text.trim();
+        case FieldType.time:
+          final cur = _text[f.key]!.text.trim();
+          final rawInitial = _rawInitialTimeText[f.key];
+          out[f.key] = (_hasInitialValues && !isNew && rawInitial != null && cur == rawInitial)
+              ? rawInitial
+              : parseFieldValue(f, cur);
         default:
           out[f.key] = parseFieldValue(f, _text[f.key]!.text);
       }
@@ -974,6 +989,11 @@ class DocEditorState extends State<DocEditor> {
         _initialValues = {..._initialValues, ...chunk};
       }
       _initialValues = data;
+      for (final f in widget.fields) {
+        if (f.type == FieldType.time && data[f.key] is String) {
+          _rawInitialTimeText[f.key] = (data[f.key] as String).trim();
+        }
+      }
       // Best effort: drop inline images this edit replaced or removed (an
       // image moved between the cover and the gallery is still referenced).
       // Measured from the first attempt's baseline too, so a cover replaced
@@ -1102,12 +1122,12 @@ class DocEditorState extends State<DocEditor> {
 
   String _label(FieldDef f) => context.pick(f.labelAr, f.labelEn) + (f.required ? ' *' : '');
 
-  /// Time / date / date-time fields are read-only and filled from the
-  /// pickers (ADR-049): a clock or calendar icon (and a tap on the field)
-  /// opens [showTimePicker] as a 12-hour AM/PM picker (ص/م in Arabic) /
-  /// [showDatePicker]. Storage stays 24-hour: the text is strictly "HH:mm",
-  /// "YYYY-MM-DD" or "YYYY-MM-DD HH:mm" (Cairo wall time, parsed to the same
-  /// stored instant as before); [_pickedReading] shows the 12-hour reading.
+  /// Time / date / date-time fields remain directly editable and also offer
+  /// the pickers via their trailing button: a clock or calendar icon opens
+  /// [showTimePicker] as a 12-hour AM/PM picker (ص/م in Arabic) /
+  /// [showDatePicker]. Storage stays 24-hour ASCII: strictly "HH:mm",
+  /// "YYYY-MM-DD" or "YYYY-MM-DD HH:mm" (Cairo wall time); [_pickedReading]
+  /// shows the 12-hour reading.
   static bool _picked(FieldType t) => t == FieldType.time || t == FieldType.date || t == FieldType.dateTime;
 
   Future<void> _pick(FieldDef f, TextEditingController c) async {
@@ -1235,7 +1255,6 @@ class DocEditorState extends State<DocEditor> {
 
   Widget _textFieldBody(
       FieldDef f, TextEditingController c, String? Function()? rowError, String? reading, FocusNode? focusNode) {
-    final picked = _picked(f.type);
     final ltr = switch (f.type) {
       FieldType.text || FieldType.multiline => false,
       _ => true,
@@ -1247,8 +1266,8 @@ class DocEditorState extends State<DocEditor> {
       key: ValueKey('field-${f.key}'),
       controller: c,
       focusNode: focusNode,
-      readOnly: picked,
-      onTap: picked ? () => _pick(f, c) : null,
+      readOnly: false,
+      onTap: null,
       minLines: f.type == FieldType.multiline ? 3 : 1,
       maxLines: f.type == FieldType.multiline ? 12 : 1,
       textDirection: ltr ? TextDirection.ltr : null,
@@ -1350,8 +1369,14 @@ class DocEditorState extends State<DocEditor> {
   }
 
   Widget _replacesDayPreview(BuildContext context) {
-    final rawDate = _text['date']?.text.trim();
-    final parsedDate = (rawDate != null && rawDate.isNotEmpty) ? parseDate(rawDate) : null;
+    final normDate = normalizeDigits((_text['date']?.text ?? '').trim());
+    final dateParts = isValidDate(normDate) ? parseFieldDateTime(normDate) : null;
+    final parsedDate = dateParts == null ? null : CairoTime.at(dateParts.$1, dateParts.$2, dateParts.$3).toUtc();
+    String normalizeTime(String? raw) {
+      final v = (raw ?? '').trim();
+      final t = v.isEmpty ? null : parseFieldTime(v);
+      return t == null ? v : formatPickedTime(t.$1, t.$2);
+    }
     final rawWeekday = _values['weekday'];
     final weekday = rawWeekday is int ? rawWeekday : null;
 
@@ -1367,8 +1392,8 @@ class DocEditorState extends State<DocEditor> {
       nameEn: _text['nameEn']?.text.trim() ?? '',
       weekday: weekday,
       date: parsedDate,
-      start: _text['start']?.text.trim() ?? '',
-      end: _text['end']?.text.trim() ?? '',
+      start: normalizeTime(_text['start']?.text),
+      end: normalizeTime(_text['end']?.text),
       seasonKey: seasonKey,
       replacesDay: true,
       visible: _values['visible'] != false,
@@ -2632,7 +2657,7 @@ class DocEditorState extends State<DocEditor> {
           ? SizedBox.square(
               dimension: 18, child: CircularProgressIndicator(strokeWidth: 2, color: context.pal.onBar))
           : const Icon(Icons.save),
-      label: Text(context.tr('save')),
+      label: Text(context.tr(_saving ? 'saving' : 'save')),
     );
     return UnsavedGuard(
       dirty: _dirty,
@@ -2665,7 +2690,7 @@ class DocEditorState extends State<DocEditor> {
                   TextButton(
                     key: const Key('editor-save-top'),
                     onPressed: _saving ? null : save,
-                    child: Text(context.tr('save'),
+                    child: Text(context.tr(_saving ? 'saving' : 'save'),
                         style: TextStyle(color: context.pal.onPrimaryAccent, fontWeight: FontWeight.w800)),
                   ),
                 ],
@@ -2710,11 +2735,6 @@ class DocEditorState extends State<DocEditor> {
                           title: widget.title,
                           help: widget.help,
                           padding: const EdgeInsets.only(bottom: 12),
-                        ),
-                      if (widget.docId != null)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: SelectableText('ID: ${widget.docId}', style: TextStyle(color: context.pal.muted)),
                         ),
                       if (_notice != null && _notice!.isNotEmpty) _noticeBanner(context, _notice!),
                       if (_saveError != null) _saveErrorBanner(context, _saveError!),
@@ -2961,6 +2981,19 @@ class _Row {
             : switch (f.type) {
                 FieldType.boolean || FieldType.choice => values[f.key],
                 FieldType.phone => normalizePhoneInput(text[f.key]!.text.trim()),
+                FieldType.time => parseFieldValue(f, text[f.key]!.text),
+                FieldType.date => () {
+                    final raw = normalizeDigits(text[f.key]!.text.trim());
+                    final d = parseFieldDateTime(raw);
+                    return d == null ? raw : formatPickedDate(d.$1, d.$2, d.$3);
+                  }(),
+                FieldType.dateTime => () {
+                    final raw = normalizeDigits(text[f.key]!.text.trim());
+                    final d = parseFieldDateTime(raw);
+                    return d == null || dateTimeRe.firstMatch(raw) == null
+                        ? raw
+                        : formatPickedDateTime(d.$1, d.$2, d.$3, d.$4, d.$5);
+                  }(),
                 _ => text[f.key]!.text.trim(),
               },
     };
