@@ -443,6 +443,102 @@ Stream<T> settleFirst<T>({
   return out.stream;
 }
 
+/// Time-sensitive collection guard (`liturgies`, `seasons`, PR 6D / ADR-089).
+///
+/// Holds back provisional empty cache snapshots (`isFromCache && value.isEmpty`)
+/// so a cold empty persistence cache lets the [watchWithFallback] timer fire
+/// rather than clearing it with `[]`. On timeout + cache miss, emits
+/// [onMissError] while keeping [raw] subscribed for recovery. Empty server
+/// snapshots on an uncertain [gate] wait on [SeedGate.whenSeeded] (ADR-038),
+/// while an explicitly unseeded database (`gate.markerAbsent == true`) still
+/// serves [unseededFallback].
+@visibleForTesting
+Stream<List<T>> guardTimeSensitive<T>({
+  required Stream<({List<T> value, bool isFromCache})> raw,
+  required SeedGate gate,
+  required Duration timeout,
+  required Future<List<T>?> Function() readCache,
+  required List<T> unseededFallback,
+  required void Function(bool onSeed) onSeed,
+  required Object Function() onMissError,
+  void Function(Object e, StackTrace st)? onStreamError,
+}) {
+  late final StreamController<List<T>> filtered;
+  StreamSubscription<({List<T> value, bool isFromCache})>? sub;
+  var cancelled = false;
+  var onSeedNow = false;
+  var holdingEmptyServer = false;
+
+  void setSeedMark(bool v) {
+    if (onSeedNow == v) return;
+    onSeedNow = v;
+    onSeed(v);
+  }
+
+  filtered = StreamController<List<T>>(
+    onListen: () {
+      unawaited(gate.whenSeeded.then((_) {
+        if (!holdingEmptyServer || cancelled || filtered.isClosed) return;
+        holdingEmptyServer = false;
+        setSeedMark(false);
+        filtered.add(const []);
+      }));
+      sub = raw.listen(
+        (snap) async {
+          if (snap.value.isNotEmpty) {
+            holdingEmptyServer = false;
+            setSeedMark(false);
+            if (!filtered.isClosed) filtered.add(snap.value);
+            return;
+          }
+          if (snap.isFromCache) return;
+          sub?.pause();
+          var seeded = gate.isSeeded;
+          try {
+            if (!seeded) seeded = await gate.check();
+          } finally {
+            if (!cancelled) sub?.resume();
+          }
+          if (cancelled || filtered.isClosed) return;
+          if (seeded || gate.isSeeded) {
+            holdingEmptyServer = false;
+            setSeedMark(false);
+            filtered.add(const []);
+          } else if (gate.markerAbsent) {
+            holdingEmptyServer = false;
+            setSeedMark(true);
+            filtered.add(unseededFallback);
+          } else {
+            holdingEmptyServer = true;
+          }
+        },
+        onError: (Object e, StackTrace st) {
+          onStreamError?.call(e, st);
+          if (!filtered.isClosed) filtered.addError(e, st);
+        },
+        onDone: () {
+          if (!filtered.isClosed) filtered.close();
+        },
+      );
+    },
+    onPause: () => sub?.pause(),
+    onResume: () => sub?.resume(),
+    onCancel: () async {
+      cancelled = true;
+      holdingEmptyServer = false;
+      setSeedMark(false);
+      await sub?.cancel();
+    },
+  );
+
+  return watchWithFallback<List<T>>(
+    live: filtered.stream,
+    timeout: timeout,
+    readCache: readCache,
+    onMissError: onMissError,
+  );
+}
+
 /// Live Firestore implementation (offline persistence is enabled at startup).
 ///
 /// Fallback rules: if `settings/church` does not exist (database not seeded
@@ -550,87 +646,29 @@ class FirestoreRepository implements ContentRepository {
         });
       }, fallback, confirms: (list) => list.isNotEmpty);
 
-  /// Time-sensitive collection stream (`liturgies`, `seasons`): uses [watchWithFallback]
-  /// so a stalled listener checks `Source.cache`, falls back to [TimeoutException]
-  /// on a cache miss (showing `'—'` + retry instead of fake live seed times), and
-  /// holds back provisional empty `isFromCache` snapshots so a cold offline empty
-  /// cache triggers the watchdog rather than emitting `[]`. An explicitly unseeded
-  /// database (`_gate.markerAbsent == true` on an empty server snapshot) still
-  /// serves [unseededFallback].
   Stream<List<T>> _watchTimeSensitiveCol<T>(
     String name,
     T Function(String, Map<String, dynamic>) f,
     List<T> unseededFallback,
-  ) {
-    late final StreamController<List<T>> filtered;
-    StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? sub;
-    var cancelled = false;
-    var onSeedNow = false;
-
-    void setSeedMark(bool onSeed) {
-      if (onSeedNow == onSeed) return;
-      onSeedNow = onSeed;
-      _markFallback(name, onSeed);
-    }
-
-    filtered = StreamController<List<T>>(
-      onListen: () {
-        sub = db.collection(name).snapshots(includeMetadataChanges: true).listen(
-          (snap) async {
-            final list = _docs(snap, f);
-            if (list.isNotEmpty) {
-              setSeedMark(false);
-              if (!filtered.isClosed) filtered.add(list);
-              return;
-            }
-            // Empty cache-only snapshot proves nothing: keep waiting for the
-            // server snapshot or let the watchdog emit cache/error.
-            if (snap.metadata.isFromCache) return;
-            sub?.pause();
-            var seeded = _gate.isSeeded;
-            try {
-              if (!seeded) seeded = await _gate.check();
-            } finally {
-              if (!cancelled) sub?.resume();
-            }
-            if (cancelled || filtered.isClosed) return;
-            if (seeded) {
-              setSeedMark(false);
-              filtered.add(const []);
-            } else if (_gate.markerAbsent) {
-              setSeedMark(true);
-              filtered.add(unseededFallback);
-            }
-          },
-          onError: (Object e, StackTrace st) {
-            ErrorReporting.capture(e, st, section: 'content:$name');
-            if (!filtered.isClosed) filtered.addError(e, st);
-          },
-          onDone: () {
-            if (!filtered.isClosed) filtered.close();
-          },
-        );
-      },
-      onPause: () => sub?.pause(),
-      onResume: () => sub?.resume(),
-      onCancel: () async {
-        cancelled = true;
-        setSeedMark(false);
-        await sub?.cancel();
-      },
-    );
-
-    return watchWithFallback<List<T>>(
-      live: filtered.stream,
-      timeout: streamWatchdogTimeout,
-      readCache: () async {
-        final snap = await db.collection(name).get(const GetOptions(source: Source.cache)).timeout(customCacheRead);
-        final list = _docs(snap, f);
-        return list.isEmpty ? null : list;
-      },
-      onMissError: () => TimeoutException('Firestore stream $name timed out', streamWatchdogTimeout),
-    );
-  }
+  ) =>
+      guardTimeSensitive<T>(
+        raw: db.collection(name).snapshots(includeMetadataChanges: true).map((snap) => (
+              value: _docs(snap, f),
+              isFromCache: snap.metadata.isFromCache,
+            )),
+        gate: _gate,
+        timeout: streamWatchdogTimeout,
+        readCache: () async {
+          final snap =
+              await db.collection(name).get(const GetOptions(source: Source.cache)).timeout(customCacheRead);
+          final list = _docs(snap, f);
+          return list.isEmpty ? null : list;
+        },
+        unseededFallback: unseededFallback,
+        onSeed: (onSeed) => _markFallback(name, onSeed),
+        onMissError: () => TimeoutException('Firestore stream $name timed out', streamWatchdogTimeout),
+        onStreamError: (e, st) => ErrorReporting.capture(e, st, section: 'content:$name'),
+      );
 
   @override
   Stream<ChurchSettings> settings() => _guard(
