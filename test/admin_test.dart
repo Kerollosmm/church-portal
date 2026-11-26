@@ -4497,6 +4497,99 @@ void main() {
       expect(find.byKey(const ValueKey('attention-expiringAlerts')), findsNothing);
       expect(find.byKey(const ValueKey('attention-all-clear')), findsOneWidget);
     });
+
+    testWidgets('OverviewScreen shows dash and retry after 10s when features stream stalls, without hiding loaded alerts',
+        (tester) async {
+      tester.view.physicalSize = const Size(320, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      var featuresWatches = 0;
+      final featuresCtl = StreamController<AdminDoc?>.broadcast();
+      addTearDown(featuresCtl.close);
+      final repo = _SilentOverviewBackend(
+        initialCollections: {
+          'contact_messages': [
+            AdminDoc('m1', {'status': 'new', 'message': 'hi'}),
+          ],
+        },
+        onWatchDoc: (path) {
+          if (path == 'settings/features') {
+            featuresWatches++;
+            return featuresCtl.stream;
+          }
+          return null;
+        },
+      );
+
+      await tester.pumpWidget(_app(
+        OverviewScreen(repo: repo, role: AdminRoles.owner, onOpen: (_) {}),
+        locale: const Locale('ar'),
+      ));
+      await tester.pump();
+
+      expect(featuresWatches, 1);
+      // Loaded sections still render while settings/features is pending.
+      expect(find.byKey(const ValueKey('attention-newMessages')), findsOneWidget);
+      final summaryBefore = find.byKey(const ValueKey('sections-summary'));
+      expect(find.descendant(of: summaryBefore, matching: find.text('…')), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 10));
+
+      expect(find.descendant(of: summaryBefore, matching: find.text('—')), findsOneWidget);
+      expect(find.descendant(of: summaryBefore, matching: find.text('…')), findsNothing);
+      expect(find.byKey(const ValueKey('attention-newMessages')), findsOneWidget);
+      expect(find.byKey(const ValueKey('attention-error')), findsOneWidget);
+      expect(find.byKey(const ValueKey('attention-retry')), findsOneWidget);
+      expect(find.byKey(const ValueKey('sections-retry')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      // Tapping Retry re-subscribes and recovers once settings/features emits.
+      await tester.ensureVisible(find.byKey(const ValueKey('sections-retry')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('sections-retry')));
+      await tester.pump();
+      expect(featuresWatches, 2);
+
+      featuresCtl.add(AdminDoc('features', const {'liveEnabled': false, 'liveUrl': ''}));
+      await tester.pump();
+      expect(find.descendant(of: summaryBefore, matching: find.textContaining('${Sections.all.length}/${Sections.all.length}')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('attention-error')), findsNothing);
+      expect(find.byKey(const ValueKey('sections-retry')), findsNothing);
+    });
+
+    testWidgets('OverviewScreen partial collection stall marks attention error after 10s and cancels timers on dispose',
+        (tester) async {
+      final messagesCtl = StreamController<List<AdminDoc>>.broadcast();
+      addTearDown(messagesCtl.close);
+      final repo = _SilentOverviewBackend(
+        initialDocs: {
+          'settings/features': {'liveEnabled': false, 'liveUrl': ''},
+        },
+        onWatchCollection: (name) => name == 'contact_messages' ? messagesCtl.stream : null,
+      );
+
+      await tester.pumpWidget(_app(
+        OverviewScreen(repo: repo, role: AdminRoles.owner, onOpen: (_) {}),
+        locale: const Locale('en'),
+      ));
+      await tester.pump();
+
+      await tester.pump(const Duration(seconds: 10));
+      expect(find.byKey(const ValueKey('attention-error')), findsOneWidget);
+      expect(find.byKey(const ValueKey('attention-retry')), findsOneWidget);
+      expect(
+        find.descendant(of: find.byKey(const ValueKey('sections-summary')), matching: find.text('—')),
+        findsNothing,
+      );
+
+      // Dispose before retry timer fires leaves no leaked active timers.
+      await tester.tap(find.byKey(const ValueKey('attention-retry')));
+      await tester.pump();
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(seconds: 15));
+    });
   });
 
   group('PR 3F: P2-20, P2-22, P2-24 — priests merge, row actions & top-of-form layout', () {
@@ -7883,6 +7976,25 @@ class _MediaTestAdminBackend extends _TestAdminBackend {
 
   @override
   MediaRepository? get media => _media;
+}
+
+class _SilentOverviewBackend extends _TestAdminBackend {
+  final Stream<List<AdminDoc>>? Function(String collection)? onWatchCollection;
+  final Stream<AdminDoc?>? Function(String path)? onWatchDoc;
+
+  _SilentOverviewBackend({
+    super.initialCollections,
+    super.initialDocs,
+    this.onWatchCollection,
+    this.onWatchDoc,
+  });
+
+  @override
+  Stream<List<AdminDoc>> watch(String collection) =>
+      onWatchCollection?.call(collection) ?? super.watch(collection);
+
+  @override
+  Stream<AdminDoc?> watchDoc(String path) => onWatchDoc?.call(path) ?? super.watchDoc(path);
 }
 
 class _TestAdminBackend extends AdminBackend {
