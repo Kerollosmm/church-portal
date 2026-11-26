@@ -48,6 +48,16 @@ class _FakeAdminRepo extends AdminBackend {
     _controllers[path]?.add(AdminDoc(path.split('/').last, docs[path]!));
   }
 
+  void emitDoc(String path, Map<String, dynamic>? data) {
+    if (data == null) {
+      docs.remove(path);
+      _controllers[path]?.add(null);
+      return;
+    }
+    docs[path] = data;
+    _controllers[path]?.add(AdminDoc(path.split('/').last, data));
+  }
+
   Map<String, dynamic>? lastSave(String path) => saves[path]?.last;
 
   @override
@@ -670,5 +680,60 @@ void main() {
     await tapKey(tester, 'confirm-ok');
     expect(find.byKey(const ValueKey('draft-error')), findsOneWidget);
     expect(find.textContaining('حُذف هذا الإعلان'), findsOneWidget);
+  });
+
+  testWidgets('NotificationsAdminSection (showTechnical) updates web-push drain & plan rows live after stale cache',
+      (tester) async {
+    final seeded = seed()
+      ..['meta/push_topics'] = {
+        'cronQueue': {
+          'lastDrainAt': _iso(now.subtract(const Duration(days: 10))),
+        },
+      }
+      ..['meta/push_plan'] = {
+        'lastPlanAt': _iso(now.subtract(const Duration(days: 10))),
+      };
+    repo = _FakeAdminRepo(seeded);
+
+    tester.view.physicalSize = const Size(1000, 4000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(_app(
+      NotificationsAdminSection(
+        repo: repo,
+        role: 'owner',
+        showTechnical: true,
+        pushEnv: _FakePushEnv(),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    // First (stale cache) snapshot renders late status for both rows.
+    expect(find.text('تأخر تفريغ طابور الاشتراكات (أكثر من ٤٥ دقيقة)'), findsOneWidget);
+    expect(find.text('تأخر مجدول التذكيرات (أكثر من ٧ ساعات)'), findsOneWidget);
+    expect(find.text('تفريغ طابور الاشتراكات يعمل بانتظام'), findsNothing);
+    expect(find.text('مجدول التذكيرات يعمل بانتظام'), findsNothing);
+
+    // Fresh meta/push_topics (also exercising lastIdleAt fallback) flips drain row to OK.
+    repo.emitDoc('meta/push_topics', {
+      'cronQueue': {
+        'lastIdleAt': _iso(now.subtract(const Duration(minutes: 2))),
+      },
+    });
+    await tester.pumpAndSettle();
+
+    expect(find.text('تفريغ طابور الاشتراكات يعمل بانتظام'), findsOneWidget);
+    expect(find.text('تأخر تفريغ طابور الاشتراكات (أكثر من ٤٥ دقيقة)'), findsNothing);
+    expect(find.text('تأخر مجدول التذكيرات (أكثر من ٧ ساعات)'), findsOneWidget);
+
+    // Fresh meta/push_plan flips plan row to OK.
+    repo.emitDoc('meta/push_plan', {
+      'lastPlanAt': _iso(now.subtract(const Duration(hours: 1))),
+    });
+    await tester.pumpAndSettle();
+
+    expect(find.text('مجدول التذكيرات يعمل بانتظام'), findsOneWidget);
+    expect(find.text('تأخر مجدول التذكيرات (أكثر من ٧ ساعات)'), findsNothing);
   });
 }

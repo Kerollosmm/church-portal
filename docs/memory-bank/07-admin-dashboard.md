@@ -129,7 +129,7 @@ Starts with `AdminScreenHeader`, then **«محتاج انتباهك» (`attentio
   **"Show address in hero"** switch (`ValueKey('features-heroShowAddress')`, `heroShowAddress`, default off): the
   address ribbon under the hero title when no subtitle is set.
 
-- **Error reports (`settings/features.errorReporting`):** Moved in PR 3E (P2-21) to the owner-only **«متقدم» (`AdvancedOwnerScreen`, `lib/ui/admin/advanced_owner_screen.dart`)** screen (alongside App Check status, Web Push VAPID key + queue health, and the **App install & APK** tab `appInstallDoc`). `FeaturesEditor` no longer shows Sentry controls or the duplicated assistant switch. Each `AdminScreenHeader` renders `Key('screen-title')` + `Key('screen-help')` (`lib/ui/admin/screen_header.dart`) across all 14 `adminCollections`, single docs, and custom admin screens.
+- **Error reports (`settings/features.errorReporting`):** Moved in PR 3E (P2-21) to the owner-only **«متقدم» (`AdvancedOwnerScreen`, `lib/ui/admin/advanced_owner_screen.dart`)** screen (alongside App Check status, Web Push VAPID key + live-subscribed queue health via shared `WebPushHealthRows` in `lib/ui/admin/web_push_health.dart`, and the **App install & APK** tab `appInstallDoc`). `FeaturesEditor` no longer shows Sentry controls or the duplicated assistant switch. Each `AdminScreenHeader` renders `Key('screen-title')` + `Key('screen-help')` (`lib/ui/admin/screen_header.dart`) across all 14 `adminCollections`, single docs, and custom admin screens.
 
 - **Verse of the day** card (PR #16, ADR-024; since PR #17 it controls the **hero** verse): "Show the verse of the day" switch (same flag as the
   `dailyVerse` section toggle), mode chips "A different verse
@@ -207,7 +207,7 @@ Two tabs: «الإشعارات» (`NotificationsAdminSection`, kept alive across
    `health.lastRunAt` in plain words: ok (≤ 1 h, «آخر فحص منذ …» in Cairo time), late (> 1 h), stopped (> 3 h or
    `status: error`), never run (no stamp — neutral, not red). Since ADR-060: web push subscriber stats from
    `meta/push_topics` (`activeSubscribers`), web reminder planner status from `meta/push_plan` (upcoming reminder topics
-   count and next service time in Cairo), and queue rate throttle cap warning banner when meta/push_topics.cronQueue.capReached is true (1,000 web opt-in batch writes/day limit reached).
+   count and next service time in Cairo), and queue rate throttle cap warning banner when meta/push_topics.cronQueue.capReached is true (1,000 web opt-in batch writes/day limit reached). Both `AdvancedOwnerScreen` and `NotificationsAdminSection` (`showTechnical: true`) render these rows via `WebPushHealthRows` (`lib/ui/admin/web_push_health.dart`), which subscribes live to `watchDoc('meta/push_topics')` and `watchDoc('meta/push_plan')` (with 1-minute age recomputation) rather than one-shot `.first` so stale IndexedDB cache emissions are replaced immediately when server snapshots arrive.
 2. **Scheduled announcements** (`schedule`, ≤ 20) — numbered 5-step editor: Arabic title + body (both required, as
    the rules and `parseScheduleRow` require), English optional (`draft-english`, collapsed by default — hidden
    alongside the English phone preview option when `settings/features.englishEnabled` is false while preserving

@@ -32,6 +32,7 @@ import 'package:church_portal/ui/admin/session_policy.dart';
 import 'package:church_portal/ui/admin/state_switch.dart';
 import 'package:church_portal/ui/admin/unsaved_bar.dart';
 import 'package:church_portal/ui/admin/unsaved_guard.dart';
+import 'package:church_portal/ui/admin/web_push_health.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -3951,6 +3952,142 @@ void main() {
       expect(find.text('طابور الاشتراكات لم يعمل بعد'), findsNothing);
     });
 
+    testWidgets('AdvancedOwnerScreen updates web-push drain & plan rows live when watchDoc emits fresh data after stale cache',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 1400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final now = DateTime.now().toUtc();
+      final repo = _StreamingDocBackend(initialDocs: {
+        'settings/features': {'errorReporting': true},
+        'meta/push_topics': {
+          'cronQueue': {
+            'lastDrainAt': now.subtract(const Duration(days: 10)).toIso8601String(),
+          },
+        },
+        'meta/push_plan': {
+          'lastPlanAt': now.subtract(const Duration(days: 10)).toIso8601String(),
+        },
+      });
+      addTearDown(repo.dispose);
+
+      await tester.pumpWidget(_app(
+        Scaffold(
+          body: AdvancedOwnerScreen(
+            repo: repo,
+            appCheckActive: true,
+            onSendTestError: () async => true,
+          ),
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // First (stale cache) snapshot shows both rows late.
+      expect(find.text('تأخر تفريغ طابور الاشتراكات (أكثر من ٤٥ دقيقة)'), findsOneWidget);
+      expect(find.text('تأخر مجدول التذكيرات (أكثر من ٧ ساعات)'), findsOneWidget);
+      expect(find.text('تفريغ طابور الاشتراكات يعمل بانتظام'), findsNothing);
+      expect(find.text('مجدول التذكيرات يعمل بانتظام'), findsNothing);
+
+      // Fresh meta/push_topics arrives -> drain row flips from late to OK.
+      repo.emitDoc('meta/push_topics', {
+        'cronQueue': {
+          'lastDrainAt': now.subtract(const Duration(minutes: 2)).toIso8601String(),
+        },
+      });
+      await tester.pumpAndSettle();
+
+      expect(find.text('تفريغ طابور الاشتراكات يعمل بانتظام'), findsOneWidget);
+      expect(find.text('تأخر تفريغ طابور الاشتراكات (أكثر من ٤٥ دقيقة)'), findsNothing);
+      expect(find.text('تأخر مجدول التذكيرات (أكثر من ٧ ساعات)'), findsOneWidget);
+
+      // Fresh meta/push_plan arrives -> plan row flips from late to OK.
+      repo.emitDoc('meta/push_plan', {
+        'lastPlanAt': now.subtract(const Duration(hours: 1)).toIso8601String(),
+      });
+      await tester.pumpAndSettle();
+
+      expect(find.text('مجدول التذكيرات يعمل بانتظام'), findsOneWidget);
+      expect(find.text('تأخر مجدول التذكيرات (أكثر من ٧ ساعات)'), findsNothing);
+    });
+
+    testWidgets('WebPushHealthRows refreshes age every minute, re-binds on repo change, and fits 320px RTL/LTR',
+        (tester) async {
+      tester.view.physicalSize = const Size(320, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      var currentUtc = DateTime.utc(2026, 11, 26, 12, 0);
+      final repoA = _StreamingDocBackend(initialDocs: {
+        'meta/push_topics': {
+          'cronQueue': {
+            // 44m30s ago -> initially OK, crosses >45m after 1 minute tick.
+            'lastDrainAt': currentUtc.subtract(const Duration(minutes: 44, seconds: 30)).toIso8601String(),
+          },
+        },
+        'meta/push_plan': {
+          'lastPlanAt': currentUtc.subtract(const Duration(hours: 1)).toIso8601String(),
+        },
+      });
+      addTearDown(repoA.dispose);
+
+      await tester.pumpWidget(_app(
+        MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(2.0)),
+          child: Scaffold(
+            body: Padding(
+              padding: const EdgeInsets.all(16),
+              child: WebPushHealthRows(repo: repoA, now: () => currentUtc),
+            ),
+          ),
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('تفريغ طابور الاشتراكات يعمل بانتظام'), findsOneWidget);
+      expect(find.text('مجدول التذكيرات يعمل بانتظام'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      // Advance clock past 45 min threshold and trigger the 1-minute periodic timer.
+      currentUtc = currentUtc.add(const Duration(minutes: 1));
+      await tester.pump(const Duration(minutes: 1));
+
+      expect(find.text('تأخر تفريغ طابور الاشتراكات (أكثر من ٤٥ دقيقة)'), findsOneWidget);
+
+      // Swapping repo re-binds subscriptions and resets stale cached data (English LTR check).
+      final repoB = _StreamingDocBackend(initialDocs: {
+        'meta/push_topics': {
+          'cronQueue': {
+            'lastDrainAt': currentUtc.subtract(const Duration(minutes: 5)).toIso8601String(),
+          },
+        },
+        'meta/push_plan': {
+          'lastPlanAt': currentUtc.subtract(const Duration(hours: 8)).toIso8601String(),
+        },
+      });
+      addTearDown(repoB.dispose);
+
+      await tester.pumpWidget(_app(
+        MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(2.0)),
+          child: Scaffold(
+            body: Padding(
+              padding: const EdgeInsets.all(16),
+              child: WebPushHealthRows(repo: repoB, now: () => currentUtc),
+            ),
+          ),
+        ),
+        locale: const Locale('en'),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Subscription queue drain is running normally'), findsOneWidget);
+      expect(find.text('Reminder planner is delayed (> 7 hours)'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('AdvancedOwnerScreen registers VAPID edits with UnsavedGuard and preserves edits during pending save',
         (tester) async {
       tester.view.physicalSize = const Size(1280, 1400);
@@ -7725,6 +7862,40 @@ class _ReactiveAdminBackend extends _TestAdminBackend {
       controller.add([
         for (final d in collections['admins'] ?? const <AdminDoc>[]) AdminDoc(d.id, Map<String, dynamic>.from(d.data)),
       ]);
+    }
+  }
+}
+
+class _StreamingDocBackend extends _TestAdminBackend {
+  final Map<String, StreamController<AdminDoc?>> _controllers = {};
+
+  _StreamingDocBackend({super.initialDocs});
+
+  @override
+  Stream<AdminDoc?> watchDoc(String path) {
+    final c = _controllers.putIfAbsent(path, () => StreamController<AdminDoc?>.broadcast());
+    scheduleMicrotask(() {
+      if (!c.isClosed) {
+        final d = docs[path];
+        c.add(d == null ? null : AdminDoc(path.split('/').last, d));
+      }
+    });
+    return c.stream;
+  }
+
+  void emitDoc(String path, Map<String, dynamic>? data) {
+    if (data == null) {
+      docs.remove(path);
+      _controllers[path]?.add(null);
+      return;
+    }
+    docs[path] = data;
+    _controllers[path]?.add(AdminDoc(path.split('/').last, data));
+  }
+
+  void dispose() {
+    for (final c in _controllers.values) {
+      c.close();
     }
   }
 }
