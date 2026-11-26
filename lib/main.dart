@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -22,6 +23,17 @@ import 'state/notify_providers.dart';
 import 'package:workmanager/workmanager.dart';
 import 'state/providers.dart';
 
+// Retained for the app lifetime on web so Flutter keeps the semantics tree active.
+// ignore: unused_element
+SemanticsHandle? _webSemanticsHandle;
+
+/// Enables Flutter's semantics tree at startup on web so screen readers and
+/// keyboard navigation reach main content without waiting for an activation
+/// gesture. Returns `null` on non-web platforms.
+@visibleForTesting
+SemanticsHandle? ensureWebSemantics({bool isWeb = kIsWeb}) =>
+    isWeb ? SemanticsBinding.instance.ensureSemantics() : null;
+
 /// Sentry error tracking (ADR-034) wraps the whole start-up when a DSN is
 /// configured (release builds, or `--dart-define=SENTRY_DSN=…`); otherwise
 /// the app simply starts.
@@ -29,6 +41,7 @@ Future<void> main() => ErrorReporting.run(_start);
 
 Future<void> _start() async {
   WidgetsFlutterBinding.ensureInitialized();
+  _webSemanticsHandle = ensureWebSemantics();
   usePathUrlStrategy(); // clean URLs (/mass-schedule) — Hosting rewrites to index.html
   // Fonts are bundled (assets/fonts, SIL OFL 1.1): no runtime font fetch.
   LicenseRegistry.addLicense(() async* {

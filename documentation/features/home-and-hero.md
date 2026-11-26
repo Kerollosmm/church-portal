@@ -65,7 +65,7 @@
   زالت تقبله حتى لا يفشل الحفظ.
 - على سطح المكتب في المتصفح تُحرَّك السحب وأشعة الضوء بـ CSS في طبقة HTML فوق الفيديو (`hero_ambient_web.dart`، ADR-037) بنفس الشكل، بدل إعادة رسم Flutter لكل إطار. ملفّا `hero_video.dart` و`hero_ambient.dart` يُحمَّلان مؤجّلَين (`deferred`) فقط عندما ستعمل الواجهة على سطح المكتب، وتبقى صورة الـposter حتى يصلا. على الهاتف لا يُطلب الملفّان ولا الفيديو، وتُلغى أشعة `MaskFilter.blur` تحت عرض 600، وتبقى صورة الـposter ثابتة (ADR-068). الحركة تتوقف أيضًا عندما يغادر التطبيق المقدمة.
 - منذ PR #30 (ADR-038): على الويب تبقى شاشة التحميل (صورة الواجهة واسم الكنيسة) حتى تصل أول بيانات حقيقية، ثم يبدأ تحميل الفيديو وطبقة السحب والأشعة عندما يهدأ المتصفح وتظهر بتلاشٍ؛ الشكل النهائي كما هو. انظر [performance-pagespeed.md](performance-pagespeed.md).
-- الحركة تتوقف مع `prefers-reduced-motion` (يصل إلى Flutter كـ `MediaQuery.disableAnimations`) أو `accessibleNavigation` أو `saveData` (`lib/core/motion_env*.dart`) أو `heroMotion: false`.
+- الحركة تتوقف مع `prefers-reduced-motion` (يصل إلى Flutter كـ `MediaQuery.disableAnimations`) أو `accessibleNavigation` (خارج الويب فقط، لأن تفعيل شجرة الدلالات على الويب يضبطها للجميع) أو `heroMotion: false`، بينما يوقف `saveData` (`lib/core/motion_env*.dart`) فيديو الواجهة. كما تبقي `Reveal` (`alwaysIncludeSemantics: true`) العناصر غير الظاهرة بعد في شجرة الدلالات لقارئات الشاشة.
 - الإعدادات في `settings/features`: `homeOrder` (ترتيب الكتل)، `homeHidden` (المخفية)، `heroTitleAr/En`،
   `heroSubtitleAr/En`، `heroMotion`، `heroShowAddress`، `bannerEnabled`، `bannerAr/En`، `bannerLink`.
   المنطق في `lib/domain/features.dart` (`HomeBlocks`، `showHomeBlock`، `visibleHomeBlocks`، `normalizeHomeOrder`).

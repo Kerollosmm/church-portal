@@ -350,10 +350,13 @@ void main() {
     expect(heroStillAsset(image: ArtAssets.heroTall, poster: null, videoPlaying: false, phoneLike: true), ArtAssets.heroTall);
   });
 
-  test('reduced motion covers disableAnimations and accessibleNavigation', () {
-    expect(reducedMotionRequested(const MediaQueryData(disableAnimations: true)), isTrue);
-    expect(reducedMotionRequested(const MediaQueryData(accessibleNavigation: true)), isTrue);
-    expect(reducedMotionRequested(const MediaQueryData()), isFalse);
+  test('reduced motion covers disableAnimations on all platforms and accessibleNavigation off web only', () {
+    expect(reducedMotionRequested(const MediaQueryData(disableAnimations: true), isWeb: false), isTrue);
+    expect(reducedMotionRequested(const MediaQueryData(disableAnimations: true), isWeb: true), isTrue);
+    expect(reducedMotionRequested(const MediaQueryData(accessibleNavigation: true), isWeb: false), isTrue);
+    expect(reducedMotionRequested(const MediaQueryData(accessibleNavigation: true), isWeb: true), isFalse);
+    expect(reducedMotionRequested(const MediaQueryData(), isWeb: false), isFalse);
+    expect(reducedMotionRequested(const MediaQueryData(), isWeb: true), isFalse);
   });
 
   testWidgets('motion gating: tests, reduced motion and the admin switch keep the stage still', (tester) async {
@@ -381,6 +384,37 @@ void main() {
     for (final o in tester.widgetList<Opacity>(
         find.descendant(of: find.byType(Reveal), matching: find.byType(Opacity)))) {
       expect(o.opacity, 1);
+    }
+  });
+
+  testWidgets('unrevealed Reveal keeps off-screen child in the semantics tree at opacity 0', (tester) async {
+    final handle = tester.ensureSemantics();
+    try {
+      await tester.pumpWidget(MediaQuery(
+        data: const MediaQueryData(size: Size(1200, 800)),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: Theme(
+            data: ThemeData(platform: TargetPlatform.linux),
+            child: const SingleChildScrollView(
+              child: Column(
+                children: [
+                  SizedBox(height: 3000),
+                  Reveal(child: Text('Below fold section')),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ));
+      await tester.pump();
+      final opacity = tester.widget<Opacity>(
+        find.descendant(of: find.byType(Reveal), matching: find.byType(Opacity)),
+      );
+      expect(opacity.opacity, 0);
+      expect(find.bySemanticsLabel('Below fold section'), findsOneWidget);
+    } finally {
+      handle.dispose();
     }
   });
 
