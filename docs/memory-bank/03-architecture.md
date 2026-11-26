@@ -149,10 +149,11 @@ flowchart TD
 4. Repository choice: `status.available ? FirestoreRepository(db, seed) : SeedRepository(seed)`; `AdminRepository`
    only when Firebase is available (otherwise `/admin` shows `adminUnavailable`).
 5. `ProviderScope(overrides: [firebaseStatusProvider, repositoryProvider, adminRepositoryProvider])`.
-6. `ChurchPortalApp` watches `contentReadyProvider` (`firstContentArrived`: settings, `featuresReadyProvider`, daily
-   verses) and, two frames after it turns true, calls `ContentReady.signal()` → `app-content-ready` on `window`, which
-   hides the `web/index.html` loading screen (ADR-038; cap 9 s after `flutter-first-frame`). `ContentReady.whenIdle`
-   (signal + fade + `requestIdleCallback`, hard cap 12 s) gates the hero video source and the CSS ambient layer.
+6. `ChurchPortalApp` watches `contentReadyProvider` (`firstContentArrived`: `settings/church` and `featuresReadyProvider` —
+   ungated on `dailyVersesProvider` since PR 6G / ADR-088) and, two frames after it turns true, calls
+   `ContentReady.signal()` → `app-content-ready` on `window`, which hides the `web/index.html` loading screen (ADR-038;
+   cap 9 s after `flutter-first-frame`). `ContentReady.whenIdle` (signal + fade + `requestIdleCallback`, hard cap 12 s)
+   gates the hero video source and the CSS ambient layer.
 
 ## Error reporting — Sentry (`lib/data/error_reporting.dart`, PR #24, ADR-034)
 
@@ -372,7 +373,7 @@ To protect the web initial load budget (`main.dart.js` gzip -9 ceiling <= 1,399,
 The desktop hero also defers `ui/widgets/hero_video.dart` and `ui/widgets/hero_ambient.dart` (ADR-068). `hero_motion_flag.dart` stays in the main bundle (`heroAmbientInDom`). `HeroStage` loads those two libraries only when the desktop web hero will play; the poster stays up until the chunks arrive. Phones never load them, so mobile web does not download the mp4 or the CSS ambient layer. Also `CairoTime` loads only the generated `Africa/Cairo` tzdb chunk (`cairo_tzdata.dart`), `UpdateBanner` conditionally exports `update_banner_stub.dart` on web, and public startup uses read-only `ReadOnlyMediaRepository` (`createPublicMediaRepository`).
 
 The routes build `DeferredLoader(loadLibrary: x.loadLibrary, builder: (_) => x.Page())`. Sibling path transitions (e.g. between `/readings/date1` and `/readings/date2`) recreate the routed page subtree via `key: ValueKey(s.uri.path)` on `FeatureGate` in `_page` (`lib/router.dart`), with `DeferredLoader.didUpdateWidget` serving as an in-place fallback if a parent preserves the loader state. `DeferredLoader` shows a live-region accessible spinner («جارٍ تحميل الصفحة…») and an `ErrorState` with Retry on network failure. All chunk loading failures report telemetry via `ErrorReporting.capture(e, st, section: 'deferred_chunk')`.
-Deferred isolation is mechanically enforced in CI via `node tool/check_web_bundle.mjs build/web`, which parses `main.dart.js.map` to assert 0 sourcemap leaks from any of the 11 tracked deferred modules or 4 forbidden main sources (`data/latest_10y.dart`, `ui/widgets/update_banner_io.dart`, `firebase_auth-`, `firebase_app_check-`), verifies at least 6 `.part.js` chunks, and checks OpenType font integrity. The hero chunks are extra part files; the guard tracks the 11 modules above.
+Deferred isolation is mechanically enforced in CI via `python3 tool/fingerprint_web_bundle.py build/web && node tool/check_web_bundle.mjs build/web`, which fingerprints ONLY `main.dart.js` → `main.<hash>.dart.js` (+ `.map`, updating `flutter_bootstrap.js` and leaving `main.dart.js_<N>.part.js` untouched — ADR-088), then parses `main.<hash>.dart.js.map` (or unhashed `main.dart.js.map`) to assert 0 sourcemap leaks from any of the 11 tracked deferred modules or 4 forbidden main sources (`data/latest_10y.dart`, `ui/widgets/update_banner_io.dart`, `firebase_auth-`, `firebase_app_check-`), verifies at least 6 `.part.js` chunks, and checks OpenType font integrity. The hero chunks are extra part files; the guard tracks the 11 modules above.
 
 **Web Push Permission Architecture & Guidance (ADR-065):**
 - **User-Gesture Requirement:** Strict enforcement of zero automatic `Notification.requestPermission()` calls on initial page load. Browser notification permission is requested exclusively via user interactions: either by clicking the primary action card («السماح بإشعارات المتصفح» / "Allow browser notifications") when `permission == 'default'`, or reactively when the visitor toggles any notification channel switch.

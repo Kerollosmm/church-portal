@@ -111,6 +111,16 @@ void main() {
       expect(shim, lessThan(html.indexOf('flutter_bootstrap.js')));
     });
 
+    test('preconnections and pinned boot preloads exist (PR 6G)', () {
+      expect(html, contains('<link rel="preconnect" href="https://www.gstatic.com" crossorigin>'));
+      expect(html, contains('<link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>'));
+      expect(html, contains('<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js" crossorigin>'));
+      expect(html, contains('<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore-pipelines.js" crossorigin>'));
+      expect(html, contains('<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js" crossorigin>'));
+      expect(html, contains('<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/13.1.0/firebase-app-check.js" crossorigin>'));
+      expect(html, contains('<link rel="preload" href="assets/assets/verses/daily_verses.json" as="fetch" crossorigin>'));
+    });
+
     test('the in-app seal stays small', () {
       expect(File('assets/branding/seal.png').lengthSync(), lessThan(40 * 1024));
     });

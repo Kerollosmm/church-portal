@@ -140,7 +140,7 @@ Firestore في المتصفح يحتفظ بنسخة محلية (cache بحجم 4
   - `app` → موقع `maximos-domadios-church` يقدّم `build/web` مع إعادة كل الروابط إلى `index.html`.
   - `legacy-redirect` → موقع `asafra-church-portal` يحوّل أي رابط بتحويل دائم **301** إلى
     `https://maximos-domadios-church.web.app/<نفس المسار>`.
-- الترويسات: `Cache-Control: no-cache` للصفحات ولـ `main.dart.js` وأجزائه المؤجلة (`main.dart.js_*.part.js`)، وتخزين **7 أيام** للصور والخطوط و `canvaskit`، مع ترويسات أمان
+- الترويسات: تخزين دائم (`public, max-age=31536000, immutable`) للحزمة المبصّمة `/main.*.dart.js` فقط (`tool/fingerprint_web_bundle.py`، PR 6G)، و`Cache-Control: no-cache` للصفحات وللأجزاء المؤجلة (`main.dart.js_*.part.js`) والنسخة غير المبصّمة و`no-cache, no-store, must-revalidate` لـ `flutter_bootstrap.js` و`index.html`، وتخزين **7 أيام** للصور والخطوط و `canvaskit`، مع ترويسات أمان
   (`X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`, HSTS, `Permissions-Policy`). لا توجد CSP؛ إن
   أُضيفت يجب أن تسمح بـ `browser.sentry-cdn.com` و `*.ingest.de.sentry.io`.
 
@@ -148,7 +148,7 @@ Firestore في المتصفح يحتفظ بنسخة محلية (cache بحجم 4
 
 | المسار | متى يعمل | ماذا يفعل |
 |---|---|---|
-| `ci.yml` | كل push على أي فرع، وكل PR | نسخة Flutter المثبتة `3.50.0`: فحص `dart run tool/gen_cairo_tz.dart --check` ← `flutter analyze` ← `flutter test` ← بناء الويب (بيئة Sentry `ci`) ← فحص الحزم `node tool/check_web_bundle.mjs build/web` ← تبصيم خطوط الأيقونات `tool/fingerprint_icon_fonts.py` ← التحقق من `seed.json` وأنه مطابق لمولّده؛ ووظيفة ثانية `firestore-rules` تشغّل اختبارات القواعد في المحاكي |
+| `ci.yml` | كل push على أي فرع، وكل PR | نسخة Flutter المثبتة `3.50.0`: فحص `dart run tool/gen_cairo_tz.dart --check` ← مطابقة إصدار `firebasejs` في `web/index.html` مع `firebase_core_web` ← `flutter analyze` ← `flutter test` ← `node --test` ← بناء الويب (بيئة Sentry `ci`) ← تبصيم الحزمة الرئيسية `tool/fingerprint_web_bundle.py` ← فحص الحزم `node tool/check_web_bundle.mjs build/web` ← تبصيم خطوط الأيقونات `tool/fingerprint_icon_fonts.py` ← التحقق من `seed.json` وأنه مطابق لمولّده؛ ووظيفة ثانية `firestore-rules` تشغّل اختبارات القواعد في المحاكي |
 | `deploy.yml` على PR | كل PR من نفس المستودع | `build` (بنسخة `3.50.0`، اختبارات + بناء بيئة `preview` **بدون مفتاح reCAPTCHA**، لذلك المساعد مخفي في المعاينة) ← `preview`: نشر على قناة معاينة `pr-<رقم>` لمدة 7 أيام وتعليق بالرابط على الـ PR |
 | `deploy.yml` على `main` | بعد الدمج | `build` (بيئة `production` مع `RECAPTCHA_SITE_KEY`) و `rules-test` ← `deploy-rules` (قواعد وفهارس Firestore، بيئة `production`) ← `deploy-live` (Hosting للموقع والتحويل القديم، ينتظر نشر القواعد أولًا) |
 | `seed.yml` | يدويًا فقط (Run workflow) | يرفع `seed.json` إلى Firestore. المدخلات: `admin` (UID:email)، `admin_email`، `only` (مجموعات مفصولة بفواصل)، `fill_missing`، `force` |

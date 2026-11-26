@@ -41,7 +41,9 @@
     محمّلتين مسبقًا (ومعهما `<img>` مخفية) لترسمها واجهة Flutter من الذاكرة.
   - نص مخفي بصريًا `role="status"` «جارٍ التحميل…» لقارئات الشاشة.
   - تلاشٍ ناعم `opacity 0.6s cubic-bezier(0.4, 0.0, 0.2, 1)`؛ وعند استدعاء `splashDone()` تُضاف الفئة `gone` ثم يُحذف العنصر `#splash` بالكامل من شجرة الـ DOM.
-  - تبقى الشاشة حتى الحدث `app-content-ready` الذي يرسله التطبيق (`lib/core/content_ready.dart`) بعد إطارين من جاهزية كل مصدر (`contentReadyProvider` / `firstContentArrived` في `lib/state/providers.dart`: `settings/church` وقائمة آيات اليوم جاهزتان بقيمة أو بخطأ يُظهر بديله أو رسالة الخطأ، و `settings/features` عند وصوله أو بديله `featuresReadyProvider`)، وبحد أقصى 9 ثوانٍ بعد `flutter-first-frame`.
+  - تبقى الشاشة حتى الحدث `app-content-ready` الذي يرسله التطبيق (`lib/core/content_ready.dart`) بعد إطارين من جاهزية الإعدادات والمفاتيح (`contentReadyProvider` / `firstContentArrived` في `lib/state/providers.dart`: `settings/church` و `settings/features` عبر `featuresReadyProvider` دون انتظار قراءة ملف آيات اليوم `dailyVersesProvider` — ADR-088)، وبحد أقصى 9 ثوانٍ بعد `flutter-first-frame`.
+  - يضيف `web/index.html` روابط `preconnect` لـ `www.gstatic.com` و `firestore.googleapis.com` وتحميلًا مسبقًا (`modulepreload` / `preload`) لحزم Firebase JS المثبتة على نسخة `firebase_core_web` (يفحصها CI) وملف `assets/assets/verses/daily_verses.json`.
+  - الأداة `tool/fingerprint_web_bundle.py` تبصّم `main.dart.js` إلى `main.<hash>.dart.js` (`immutable` في `firebase.json`) لتفادي إعادة تحميل الحزمة للزوار العائدين.
   - دعم تقليل الحركة: `@media (prefers-reduced-motion: reduce)` يوقف التحريك تمامًا ويملأ شريط التحميل باللون الذهبي الثابت.
   - مسار الفشل: تستبدل دالة `splashFailed()` في `web/index.html` شريط التحميل برسالة خطأ ورابط إعادة المحاولة باللون `#6E1C1C` في حالتين فقط: فشل تحميل سكربت الإقلاع (`flutter_bootstrap.js` أو خطأ تحميل عنصر `<script>`)، أو عدم رسم Flutter أي إطار خلال 30 ثانية. لا تعالج أخطاء التشغيل الأخرى.
 - **تأخير الفيديو والحركة حتى يهدأ المتصفح (PR #30)**: مصدر فيديو الواجهة وطبقة السحب والأشعة (CSS) لا تبدأ إلا بعد
@@ -51,7 +53,7 @@
 - **حراسة حزم الويب والتحميل المؤجل (ADR-061، ADR-077)**:
   - عزل 11 وحدة ثانوية بالكامل كأجزاء مؤجلة (`.part.js`) لا تُحمَّل إلا عند الحاجة (`admin_page`, `admin_repository`, `admin_strings`, `assistant_page`, `app_check_providers`, `notifications_page`, `readings_page`, `notification_health_page`, `apk_install_guide`, `web_push_repository`, `reminder_sheet`)، مع حظر تسرب 4 مصادر إلى الحزمة الرئيسية (`data/latest_10y.dart`, `ui/widgets/update_banner_io.dart`, `firebase_auth-`, `firebase_app_check-`).
   - تعتمد `CairoTime` على بيانات `Africa/Cairo` المولّدة (`lib/domain/cairo_tzdata.dart` عبر `tool/gen_cairo_tz.dart`) بدل كل مناطق العالم، وتعمل الواجهة العامة بمخزن صور للقراءة فقط (`ReadOnlyMediaRepository`) وبديل ويب خفيف لشريط تحديث الأندرويد (`update_banner_stub.dart`).
-  - أداة الفحص `tool/check_web_bundle.mjs` في `ci.yml` (بنسخة Flutter المثبتة `3.50.0`) تتحقق آليًا من خرائط المصدر `main.dart.js.map` وتلزم الحزمة بحد أقصى `gzip -9 <= 1,399,000 B` (المقاس الفعلي في CI على لينكس بـ Flutter `3.50.0`: `1,350,901 B` مع فائض أمان `+48,099 B`).
+  - أداة الفحص `tool/check_web_bundle.mjs` في `ci.yml` (بنسخة Flutter المثبتة `3.50.0`) تتحقق آليًا من خرائط المصدر `main(.<hash>)?.dart.js.map` بعد `tool/fingerprint_web_bundle.py` وتلزم الحزمة بحد أقصى `gzip -9 <= 1,399,000 B` (الأساس في CI على لينكس بـ Flutter `3.50.0`: `1,349,161 B` مع فائض أمان `+49,839 B`).
   - رصد أي فشل في تحميل الحزم المؤجلة عبر `ErrorReporting.capture(..., section: 'deferred_chunk')`.
   - الاحتفاظ الكامل بخطوط OpenType العربية دون تجزئة (`pyftsubset`) لحماية تشكيل النصوص وعلامات التشكيل في قراءات القطمارس والخط العربي (`GSUB`/`GPOS`)، مع بقاء حزم أندرويد المقتطعة (~15 ميجابايت) داخل الحدود القصوى.
 - **بديل `Intl.v8BreakIterator`**: محرك Flutter يستخدم هذه الواجهة القديمة في Chrome لتقسيم السطور، فيعتبرها Lighthouse

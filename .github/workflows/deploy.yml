@@ -103,6 +103,10 @@ jobs:
       - name: Remove key
         if: always()
         run: rm -f "$RUNNER_TEMP/sa.json"
+      - name: Fingerprint main web bundle (cache busting, PR 6G)
+        # Rename ONLY main.dart.js -> main.<hash>.dart.js (+ .map) and rewrite
+        # flutter_bootstrap.js so /main.*.dart.js can use immutable caching.
+        run: python3 tool/fingerprint_web_bundle.py build/web
       - name: Fingerprint icon fonts (cache busting, PR #23)
         # The tree-shaken icon fonts keep one file name per build but Hosting
         # caches fonts for 7 days: a hashed name makes a new subset a new URL.

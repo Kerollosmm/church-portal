@@ -91,9 +91,18 @@ void main() {
     final sources = [for (final h in headers) h['source'] as String];
     expect(sources.indexOf('**/*.@(js|mjs|wasm)'), lessThan(sources.indexOf('/main.dart.@(js|mjs|wasm)')));
     expect(sources.indexOf('**/*.@(js|mjs|wasm)'), lessThan(sources.indexOf('/main.dart.js_*.part.js')));
+    expect(sources.indexOf('**/*.@(js|mjs|wasm)'), lessThan(sources.indexOf('/main.*.dart.js')));
+    expect(cache('/main.*.dart.js'), 'public, max-age=31536000, immutable');
     expect(cache('/main.dart.@(js|mjs|wasm)'), 'no-cache');
     expect(cache('/main.dart.js_*.part.js'), 'no-cache');
+    expect(
+      cache('/@(flutter_bootstrap.js|flutter_service_worker.js|index.html|version.json|firebase-messaging-sw.js|push_client.js)'),
+      'no-cache, no-store, must-revalidate',
+    );
     expect(cache('canvaskit/**'), 'public, max-age=604800');
     expect(cache('**/*.@(png|jpg|jpeg|webp|gif|svg|ico|otf|ttf|woff|woff2)'), 'public, max-age=604800');
+
+    final ignores = (app['ignore'] as List).cast<String>();
+    expect(ignores, containsAll(<String>['**/*.test.mjs', '**/README.md']));
   });
 }

@@ -23,6 +23,7 @@ The `tool` component package encompasses administrative, content generation, dat
   - `[tool/gen_branding.sh:shrink]`: ImageMagick Lanczos downscaling utility with size-specific unsharp masks.
   - `[tool/gen_branding.sh:onbg]`: Compositing function centering artwork on colored/transparent canvases for adaptive icons.
   - `[tool/fingerprint_icon_fonts.py:fingerprint]`: Hashes subsetted icon fonts (`MaterialIcons-Regular.otf`, `CupertinoIcons.ttf`) with SHA-256 and updates `assets/FontManifest.json`.
+  - `[tool/fingerprint_web_bundle.py:fingerprint]`: Content-hashes ONLY `main.dart.js` (+ `.map`) to `main.<12hex>.dart.js` and updates `flutter_bootstrap.js` while leaving deferred `.part.js` chunks untouched.
 - **Release & Data Seeding:**
   - `[tool/make_apk_manifest.mjs:readPubspecVersion]`: Parses `version: x.y.z+n` strings from `pubspec.yaml`.
   - `[tool/make_apk_manifest.mjs:resolveDownloadUrl]`: Rewrites GitHub release asset links into immutable tag URLs or direct URLs.

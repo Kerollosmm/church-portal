@@ -624,7 +624,8 @@ class HeroVerse extends ConsumerWidget {
     if (!ref.watch(featuresReadyProvider)) return const SizedBox.shrink();
     final features = ref.watch(featuresProvider);
     if (!features.enabled(Sections.dailyVerse)) return const SizedBox.shrink();
-    final verses = ref.watch(dailyVersesProvider).value ?? const <Verse>[];
+    final versesState = ref.watch(dailyVersesProvider);
+    final verses = versesState.value ?? const <Verse>[];
     final now = ref.watch(nowProvider).value ?? DateTime.now();
     // Season verse set (ADR-042): read only when an admin set season verses.
     // The seasons stream is usually already open for the next-service card;
@@ -639,7 +640,14 @@ class HeroVerse extends ConsumerWidget {
         : features.seasonVerses.activeSet(seasons.value ?? const [], now);
     final verse = resolveSeasonalVerse(features.dailyVerse, verses, now,
         day: ref.watch(liturgicalDayProvider).date, seasonSet: seasonSet);
-    if (verse == null) return const SizedBox.shrink();
+    if (verse == null) {
+      // Hold an unobtrusive slot while bundled verses parse after PR 6G un-gated
+      // the splash screen on dailyVersesProvider, avoiding a CTA button jump.
+      if (!versesState.hasValue && !versesState.hasError) {
+        return const SizedBox(key: Key('heroVerseLoading'), height: 88);
+      }
+      return const SizedBox.shrink();
+    }
     final narrow = MediaQuery.sizeOf(context).width < 600;
     // ADR-047: English text on the English site when the verse has it, else
     // the Arabic text with its Arabic reference (never mixed).
