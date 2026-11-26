@@ -75,6 +75,7 @@ lib/
     assistant_model.dart    FirebaseAssistantModel (AssistantModel on Firebase AI Logic, imported only by /ask) — PR #19
     content_repository.dart ContentRepository (interface), SeedRepository, FirestoreRepository,
                             normalizeFirestoreValue/normalizeDoc
+    stream_watchdog.dart    watchWithFallback<T> bounded stream watchdog (PR 6D, ADR-089)
     seed_data.dart          SeedData: typed view over assets/seed/seed.json
     admin_repository.dart   AdminBackend (interface; `media`), AdminRepository (Firestore+Auth), AdminDoc, AdminRoles
     media_repository.dart   MediaRepository, FirestoreMediaRepository (media/{id} base64), ReadOnlyMediaRepository,
@@ -245,6 +246,9 @@ flowchart LR
   has loaded (never a premature «هذه الصفحة غير متاحة حاليًا»), and an items list can no longer stay on its
   placeholders forever. Unit tests: `test/live_loading_test.dart`.
 - Timestamps are normalised to UTC `DateTime` (`normalizeFirestoreValue`) before `fromMap`.
+- **Bounded stream watchdog (`lib/data/stream_watchdog.dart`, PR 6D, ADR-089):** `FirestoreRepository` wraps ONLY `liturgies()`, `seasons()`, `settings()`, and `features()` with `watchWithFallback` (`streamWatchdogTimeout = 8 s`), keeping `_guard`/`_custom` untouched:
+  - `settings()` / `features()`: after 8 s without live emission, reads `Source.cache` (4 s timeout), else falls back to `seed.settings` / `seed.features` (`_markFallback`) and keeps the live stream subscribed so late updates recover automatically.
+  - `liturgies()` / `seasons()` (time-sensitive): holds back empty `isFromCache` snapshots via `snapshots(includeMetadataChanges: true)` so a cold offline empty cache triggers the watchdog; on stall, reads `Source.cache` (4 s timeout), and on cache miss emits `TimeoutException` (`onMissError`) showing `'—'` / `ErrorState` + Retry (never seed values as if live; an explicitly unseeded database with `_gate.markerAbsent == true` on an empty server snapshot still serves the seed), keeping the live listener active for automatic recovery.
 - `settings/features` missing → `seed.features` (all sections on).
 - `seed_firestore.js` writes `settings` **last** so an interrupted seed never marks the DB as seeded.
 

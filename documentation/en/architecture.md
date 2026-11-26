@@ -55,6 +55,7 @@ lib/
 │   └── assistant_context.dart # Grounding prompt builder for the AI assistant
 ├── data/                      # Data sources and repositories
 │   ├── content_repository.dart# Public Firestore streams and seed fallback handlers
+│   ├── stream_watchdog.dart   # Bounded stream watchdog for core schedule/settings streams (ADR-089)
 │   ├── admin_repository.dart  # Authenticated Firestore write operations and audit logging
 │   ├── media_repository.dart  # Inline Firestore media storage and compression handlers
 │   ├── app_check_providers.dart# Platform-specific App Check provider selection

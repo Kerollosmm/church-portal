@@ -18,6 +18,7 @@ The `lib/data` layer manages all local persistence, remote networking, platform 
 - [`SeedGate`](content_repository.dart#L138): Seeding marker tracker detecting if `settings/church` exists in Firestore.
 - [`guardSeeded`](content_repository.dart#L205): Stream wrapper preventing stranded fallbacks while awaiting seeding confirmation.
 - [`settleFirst`](content_repository.dart#L378): Stream combinator delaying provisional cache reads for custom content until confirmed by server.
+- [`watchWithFallback`](stream_watchdog.dart#L15): Bounded stream watchdog for `liturgies`, `seasons`, `settings`, and `features` falling back to `Source.cache`, seed (`settings`/`features` only), or `onMissError` (time-sensitive `liturgies`/`seasons`) on listener stall while keeping the live stream subscribed.
 - [`normalizeFirestoreValue`](content_repository.dart#L113), [`normalizeDoc`](content_repository.dart#L120): Normalizes Firestore `Timestamp` objects into UTC `DateTime` values.
 - [`LiveReading`](content_repository.dart#L365): Typed record describing a snapshot's value, provisional cache status, and change flag.
 - [`SeedData`](seed_data.dart#L10): Typed parser and static loader over bundled `assets/seed/seed.json`.
