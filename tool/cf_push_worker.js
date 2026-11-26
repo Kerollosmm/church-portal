@@ -13,7 +13,10 @@ import { handleAssistantRequest } from './assistant_worker.js';
 
 function scrubSentryText(raw) {
   return String(raw || 'Unknown error')
-    .replace(/-----BEGIN[ A-Z0-9_-]+PRIVATE KEY-----[\s\S]*?-----END[ A-Z0-9_-]+PRIVATE KEY-----/g, '[REDACTED_PRIVATE_KEY]')
+    .replace(
+      /-----BEGIN[ A-Z0-9_-]+PRIVATE KEY-----[\s\S]*?(?:-----END[ A-Z0-9_-]+PRIVATE KEY-----|$)/g,
+      '[REDACTED_PRIVATE_KEY]',
+    )
     .replace(/Bearer\s+\S+/gi, 'Bearer [REDACTED]')
     .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, '[REDACTED_JWT]')
     .replace(/(https?:\/\/)[^:\s/@]+(?::[^@\s/]+)?@/gi, '$1[REDACTED]@')
