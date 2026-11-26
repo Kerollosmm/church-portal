@@ -17,10 +17,8 @@
   من الختم بـ `tool/gen_branding.sh`.
 - **الخطوط مدمجة** في التطبيق (`assets/fonts/`: IBM Plex Sans Arabic، Lalezar، Aref Ruqaa — رخصة SIL OFL)، بدون
   تحميل من Google Fonts، ويُحمَّل الخطان الأساسيان مسبقًا (`preload`) في `index.html`.
-- **ترويسات الاستضافة** (`firebase.json`): الصفحات و`index.html` و`FontManifest.json` بـ `no-cache` (تُفحص كل مرة)،
-  والصور والخطوط و`canvaskit` تُخزَّن **7 أيام**. ملفات `main.dart.js` و`main.dart.js_*.part.js` (و`main.dart.mjs` /
-  `main.dart.wasm` إن وُجدت) أسماؤها ثابتة، لذلك هي أيضًا `no-cache` وتُراجع عبر ETag بعد كل نشر. باقي ملفات
-  JavaScript تبقى مخزّنة 30 يومًا. إعادة التوجيه إلى `index.html` للمسارات التي بلا امتداد (ولمسارات الأقسام والصفحات وصفحات التفاصيل)، أما الروابط التي تنتهي بامتداد ملف (مثل `.json` أو `.map`) ولا يوجد لها ملف فترجع 404.
+- **ترويسات الاستضافة** (`firebase.json`): الصفحات و`index.html` و`flutter_bootstrap.js` و`FontManifest.json` بـ `no-cache, no-store, must-revalidate` أو `no-cache` (تُفحص كل مرة)، والصور والخطوط و`canvaskit` تُخزَّن **7 أيام**. أما الحزمة الرئيسية المُبصَّمة `/main.*.dart.js` فتُخزَّن بشكل دائم (`public, max-age=31536000, immutable`) دون إعادة تحميل للزائر العائد، بينما تبقى ملفات `main.dart.js_*.part.js` والنسخة غير المبصّمة `main.dart.@(js|mjs|wasm)` على `no-cache`. وتستبعد الاستضافة ملفات الاختبار (`**/*.test.mjs`) وملفات `**/README.md`. إعادة التوجيه إلى `index.html` للمسارات التي بلا امتداد (ولمسارات الأقسام والصفحات وصفحات التفاصيل)، أما الروابط التي تنتهي بامتداد ملف (مثل `.json` أو `.map`) ولا يوجد لها ملف فترجع 404.
+- **تبصيم الحزمة الرئيسية (PR 6G، ADR-088)**: الأداة `tool/fingerprint_web_bundle.py` (تعمل في `ci.yml` و`deploy.yml` بعد البناء) تعيد تسمية `main.dart.js` و`main.dart.js.map` فقط إلى `main.<sha256[:12]>.dart.js` (و`.map`) وتحدّث `flutter_bootstrap.js` و`sourceMappingURL`، مع إبقاء ملفات `main.dart.js_*.part.js` كما هي لأن أسماءها مدمجة داخل `main.dart.js`.
 - **تبصيم خطوط الأيقونات (PR #23)**: Flutter يقلّص خط الأيقونات `MaterialIcons-Regular.otf` (و `CupertinoIcons.ttf`)
   للأيقونات المستخدمة فقط ويكتبه **بنفس الاسم** كل بناء؛ مع تخزين 7 أيام كانت الهواتف تحتفظ بنسخة قديمة فتظهر الأيقونات
   الجديدة فارغة. الأداة `tool/fingerprint_icon_fonts.py` تعيد تسمية كل خط إلى `<name>.<sha256[:12]>.<ext>` وتحدّث

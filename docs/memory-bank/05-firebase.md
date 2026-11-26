@@ -227,7 +227,7 @@ stays `asafra-church-portal.firebaseapp.com` (admin sign-in is email/password, n
 
 App target settings:
 
-- `public: build/web` (output of `flutter build web --release`); ignores `firebase.json`, dotfiles, `node_modules`.
+- `public: build/web` (output of `flutter build web --release`); ignores `firebase.json`, dotfiles, `node_modules`, `**/*.test.mjs`, `**/README.md`.
 - `cleanUrls: true`, `trailingSlash: false`, **rewrite `"regex": "^/[^.]*$"` → `/index.html`** (SPA + path URL
   strategy; ADR-037 — was `**`) — every extension-less path, so the PR #13 item detail URLs (`/clinics/<id>`,
   `/about/priests/<id>`…), `/section/<slug>`, `/page/<slug>`, `/admin`, `/ask` load with HTTP 200 and the app decides
@@ -260,18 +260,23 @@ App target settings:
   `streetAddress` prefix of `addressAr`, `geo` and `sameAs` with the seed / l10n; `telephone`, the address type,
   `addressCountry` and `url` are hard-coded in the test; `image` is not checked. If the church's facts change, update
   the seed, `web/index.html` and the hard-coded test values together.
-- Headers: `**` → `Cache-Control: no-cache` (Flutter bundles are not content-hashed, so HTML must revalidate),
+- Headers: `**` → `Cache-Control: no-cache` (HTML and unhashed manifests must revalidate),
   `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: SAMEORIGIN`,
   `Strict-Transport-Security: max-age=31536000; includeSubDomains`, `Permissions-Policy: camera=(), microphone=(),
   geolocation=()` (PR 1, SEC-05);
   images/fonts and `canvaskit/**` → `public, max-age=604800` (7 days).
   `**/*.@(js|mjs|wasm)` → 30 days + `stale-while-revalidate` (this also covers canvaskit `.js` / `.wasm`, which stay cached).
-  **ADR-069:** `main.dart.js`, `main.dart.mjs`, `main.dart.wasm`, and `main.dart.js_*.part.js` are **not**
-  content-hashed. A later header sets them to `Cache-Control: no-cache` (revalidate with ETag). Without it,
-  a browser keeps an old `main.dart.js` beside a new part file and `/ask` and `/readings` throw
-  `DeferredLoadException` (`part main.dart.js_N.part.js not loaded`). `DeferredLoader` reloads the tab once
-  per session only for that hash mismatch, then shows the existing retry card. A network
-  `DeferredLoadException` does not reload.
+  **ADR-069 / ADR-088 (PR 6G):** `main.dart.js` (and its `.map`) is content-hashed by `tool/fingerprint_web_bundle.py`
+  into `main.<sha256[:12]>.dart.js` (rewriting `//# sourceMappingURL=` and `"mainJsPath"` in `flutter_bootstrap.js`),
+  allowing `/main.*.dart.js` to be served with `Cache-Control: public, max-age=31536000, immutable` so return visitors
+  never re-download the ~1.35 MB entry bundle. Deferred `main.dart.js_*.part.js` chunks (whose filenames are compiled
+  into `main.dart.js`), unhashed `main.dart.@(js|mjs|wasm)`, and boot entrypoints (`flutter_bootstrap.js`, `index.html`,
+  `version.json`, `firebase-messaging-sw.js`, `push_client.js`) stay un-cached / revalidated (`no-cache` or
+  `no-cache, no-store, must-revalidate`) so browsers never load mismatched chunks; `DeferredLoader` still reloads the
+  tab once per session on a stale-chunk mismatch. `web/index.html` also preconnects `www.gstatic.com` and
+  `firestore.googleapis.com`, preloads pinned ES modules `firebasejs/13.1.0/firebase-app.js` and
+  `firebasejs/13.1.0/firebase-firestore-pipelines.js` (`modulepreload`, enforced in CI against `firebase_core_web`),
+  and preloads `assets/assets/verses/daily_verses.json`.
   **Icon fonts are fingerprinted (PR #23):** `flutter build web` tree-shakes `MaterialIcons-Regular.otf` /
   `CupertinoIcons.ttf` to the icons in use but keeps one file name, so the 7-day font cache kept an old subset and
   icons added later (the PR #18 admin menu entries) drew as blank space. `tool/fingerprint_icon_fonts.py` (run by

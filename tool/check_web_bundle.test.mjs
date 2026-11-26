@@ -224,3 +224,30 @@ test('checkWebBundle ignores firebase_auth_web and firebase_app_check_web regist
   assert.equal(result.success, true);
   assert.equal(result.deferredIsolation.passed, true);
 });
+
+test('checkWebBundle accepts fingerprinted main.<hash>.dart.js and main.<hash>.dart.js.map while keeping .part.js pattern', (t) => {
+  const dir = createSyntheticBuild(t);
+  fs.renameSync(path.join(dir, 'main.dart.js'), path.join(dir, 'main.0123456789ab.dart.js'));
+  fs.renameSync(path.join(dir, 'main.dart.js.map'), path.join(dir, 'main.0123456789ab.dart.js.map'));
+
+  const result = checkWebBundle(dir, {
+    maxGzipBytes: 50000,
+    minPartCount: 6,
+    minFontBytes: 20480,
+  });
+  assert.equal(result.success, true, result.errors.join('; '));
+  assert.equal(result.mainBundle.name, 'main.0123456789ab.dart.js');
+});
+
+test('checkWebBundle fails when multiple main bundle files exist', (t) => {
+  const dir = createSyntheticBuild(t);
+  fs.writeFileSync(path.join(dir, 'main.0123456789ab.dart.js'), 'console.log("stale");');
+
+  const result = checkWebBundle(dir, {
+    maxGzipBytes: 50000,
+    minPartCount: 6,
+    minFontBytes: 20480,
+  });
+  assert.equal(result.success, false);
+  assert.ok(result.errors.some((e) => e.includes('Multiple main bundle files found')));
+});

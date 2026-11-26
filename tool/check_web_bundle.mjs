@@ -90,11 +90,18 @@ export function checkWebBundle(buildDir, options = {}) {
     };
   }
 
-  // 1. Verify main.dart.js exists & inspect size
-  const mainJsPath = path.join(buildDir, 'main.dart.js');
+  // 1. Verify main.dart.js (or main.<12-hex>.dart.js) exists & inspect size
+  const entries = fs.readdirSync(buildDir);
+  const mainFiles = entries
+    .filter((f) => /^main(?:\.[0-9a-f]{12})?\.dart\.js$/.test(f))
+    .sort();
+  const mainFileName = mainFiles.length === 1 ? mainFiles[0] : 'main.dart.js';
+  const mainJsPath = path.join(buildDir, mainFileName);
   let mainBundle = null;
-  if (!fs.existsSync(mainJsPath)) {
-    errors.push(`main.dart.js not found in ${buildDir}`);
+  if (mainFiles.length === 0) {
+    errors.push(`main.dart.js (or main.<hash>.dart.js) not found in ${buildDir}`);
+  } else if (mainFiles.length > 1) {
+    errors.push(`Multiple main bundle files found in ${buildDir}: ${mainFiles.join(', ')}`);
   } else {
     const mainBuf = fs.readFileSync(mainJsPath);
     const rawBytes = mainBuf.length;
@@ -104,11 +111,12 @@ export function checkWebBundle(buildDir, options = {}) {
 
     if (!passed) {
       errors.push(
-        `main.dart.js gzip -9 size ${gzipBytes.toLocaleString()} B exceeds ceiling of ${maxGzipBytes.toLocaleString()} B by ${(gzipBytes - maxGzipBytes).toLocaleString()} B`
+        `${mainFileName} gzip -9 size ${gzipBytes.toLocaleString()} B exceeds ceiling of ${maxGzipBytes.toLocaleString()} B by ${(gzipBytes - maxGzipBytes).toLocaleString()} B`
       );
     }
 
     mainBundle = {
+      name: mainFileName,
       path: mainJsPath,
       rawBytes,
       gzipBytes,
@@ -129,7 +137,6 @@ export function checkWebBundle(buildDir, options = {}) {
   }
 
   // 2. Verify deferred part chunks
-  const entries = fs.readdirSync(buildDir);
   const partFileNames = entries
     .filter((f) => /^main\.dart\.js_\d+\.part\.js$/.test(f))
     .sort((a, b) => {
@@ -165,7 +172,8 @@ export function checkWebBundle(buildDir, options = {}) {
   lines.push('');
 
   // 3. Verify sourcemap deferred isolation
-  const mainMapPath = path.join(buildDir, 'main.dart.js.map');
+  const mainMapName = `${mainFileName}.map`;
+  const mainMapPath = path.join(buildDir, mainMapName);
   const deferredIsolation = {
     passed: true,
     modules: [],
@@ -175,7 +183,7 @@ export function checkWebBundle(buildDir, options = {}) {
   };
 
   if (!fs.existsSync(mainMapPath)) {
-    const msg = `main.dart.js.map not found in ${buildDir}`;
+    const msg = `${mainMapName} not found in ${buildDir}`;
     errors.push(msg);
     deferredIsolation.passed = false;
   } else {
@@ -183,7 +191,7 @@ export function checkWebBundle(buildDir, options = {}) {
     try {
       mainMap = JSON.parse(fs.readFileSync(mainMapPath, 'utf8'));
     } catch (e) {
-      const msg = `Failed to parse main.dart.js.map: ${e.message}`;
+      const msg = `Failed to parse ${mainMapName}: ${e.message}`;
       errors.push(msg);
       deferredIsolation.passed = false;
     }
@@ -222,7 +230,7 @@ export function checkWebBundle(buildDir, options = {}) {
             module: mod,
             matches: matchesInMain,
           });
-          errors.push(`Deferred module LEAKED into main.dart.js.map: ${mod} (${matchesInMain.join(', ')})`);
+          errors.push(`Deferred module LEAKED into ${mainMapName}: ${mod} (${matchesInMain.join(', ')})`);
         }
 
         if (partChunks.length === 0) {
@@ -246,7 +254,7 @@ export function checkWebBundle(buildDir, options = {}) {
         );
         if (matches.length > 0) {
           deferredIsolation.forbiddenLeaks.push({ source: forbidden, matches });
-          errors.push(`Forbidden source LEAKED into main.dart.js.map: ${forbidden} (${matches.join(', ')})`);
+          errors.push(`Forbidden source LEAKED into ${mainMapName}: ${forbidden} (${matches.join(', ')})`);
         }
       }
 
@@ -263,7 +271,7 @@ export function checkWebBundle(buildDir, options = {}) {
       lines.push(`  [OK]   ${m.module.padEnd(38)} -> chunk(s): [${m.partChunks.join(', ')}]`);
     } else {
       if (m.leakedInMain) {
-        lines.push(`  [LEAK] ${m.module.padEnd(38)} -> FOUND IN main.dart.js.map: ${m.matchesInMain.join(', ')}`);
+        lines.push(`  [LEAK] ${m.module.padEnd(38)} -> FOUND IN ${mainMapName}: ${m.matchesInMain.join(', ')}`);
       }
       if (m.partChunks.length === 0) {
         lines.push(`  [MISS] ${m.module.padEnd(38)} -> NOT FOUND IN ANY PART MAP`);
@@ -272,7 +280,7 @@ export function checkWebBundle(buildDir, options = {}) {
   }
   lines.push(`Forbidden Main-Bundle Sources (${forbiddenMainSources.length} guarded): [${deferredIsolation.forbiddenLeaks.length === 0 ? 'PASS' : 'FAIL'}]`);
   for (const f of deferredIsolation.forbiddenLeaks) {
-    lines.push(`  [LEAK] ${f.source.padEnd(38)} -> FOUND IN main.dart.js.map: ${f.matches.join(', ')}`);
+    lines.push(`  [LEAK] ${f.source.padEnd(38)} -> FOUND IN ${mainMapName}: ${f.matches.join(', ')}`);
   }
   lines.push('');
 

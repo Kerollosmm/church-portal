@@ -31,6 +31,41 @@ jobs:
       - name: Cairo tzdata matches timezone package
         run: dart run tool/gen_cairo_tz.dart --check
 
+      - name: Pinned gstatic Firebase JS version matches firebase_core_web
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, re, sys, urllib.parse
+
+          cfg = json.loads(pathlib.Path('.dart_tool/package_config.json').read_text(encoding='utf-8'))
+          pkg = next((p for p in cfg.get('packages', []) if p.get('name') == 'firebase_core_web'), None)
+          if not pkg:
+              sys.exit('firebase_core_web not found in .dart_tool/package_config.json')
+          root_uri = pkg['rootUri']
+          if root_uri.startswith('file://'):
+              pkg_dir = pathlib.Path(urllib.parse.unquote(urllib.parse.urlparse(root_uri).path))
+          else:
+              pkg_dir = (pathlib.Path('.dart_tool') / root_uri).resolve()
+
+          sdk_text = (pkg_dir / 'lib/src/firebase_sdk_version.dart').read_text(encoding='utf-8')
+          m = re.search(r"supportedFirebaseJsSdkVersion\s*=\s*'([^']+)'", sdk_text)
+          if not m:
+              sys.exit('Could not parse supportedFirebaseJsSdkVersion')
+          expected_ver = m.group(1)
+
+          core_text = (pkg_dir / 'lib/src/firebase_core_web.dart').read_text(encoding='utf-8')
+          html_text = pathlib.Path('web/index.html').read_text(encoding='utf-8')
+          urls = re.findall(r'https://www\.gstatic\.com/firebasejs/([^/]+)/([^"\'>\s]+)', html_text)
+          if not urls:
+              sys.exit('No gstatic firebasejs preload URLs found in web/index.html')
+          versions = sorted({v for v, _ in urls})
+          if versions != [expected_ver]:
+              sys.exit(f'Mismatch: firebase_core_web expects {expected_ver}, web/index.html has {versions}')
+          scripts = {s for _, s in urls}
+          if 'firebase-firestore-pipelines.js' in core_text and 'firebase-firestore-pipelines.js' not in scripts:
+              sys.exit('web/index.html must preload firebase-firestore-pipelines.js matching firebase_core_web')
+          print(f'Pinned gstatic preloads OK: {expected_ver} {sorted(scripts)}')
+          PY
+
       - name: Analyze
         run: flutter analyze
 
@@ -50,6 +85,9 @@ jobs:
           DEFINES=(--source-maps --dart-define=SENTRY_ENVIRONMENT=ci --dart-define=GIT_SHA="$GITHUB_SHA" --dart-define=APP_VERSION="$APP_VERSION")
           if [ -n "$SENTRY_DSN" ]; then DEFINES+=(--dart-define=SENTRY_DSN="$SENTRY_DSN"); fi
           flutter build web --release "${DEFINES[@]}"
+
+      - name: Fingerprint main web bundle (cache busting, PR 6G)
+        run: python3 tool/fingerprint_web_bundle.py build/web
 
       - name: Check web bundle size & deferred chunk isolation
         run: node tool/check_web_bundle.mjs build/web

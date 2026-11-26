@@ -619,12 +619,15 @@ class HaloText extends StatelessWidget {
 class HeroVerse extends ConsumerWidget {
   const HeroVerse({super.key});
 
+  static const _loadingSlot = SizedBox(key: Key('heroVerseLoading'), height: 88);
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (!ref.watch(featuresReadyProvider)) return const SizedBox.shrink();
     final features = ref.watch(featuresProvider);
     if (!features.enabled(Sections.dailyVerse)) return const SizedBox.shrink();
-    final verses = ref.watch(dailyVersesProvider).value ?? const <Verse>[];
+    final versesState = ref.watch(dailyVersesProvider);
+    final verses = versesState.value ?? const <Verse>[];
     final now = ref.watch(nowProvider).value ?? DateTime.now();
     // Season verse set (ADR-042): read only when an admin set season verses.
     // The seasons stream is usually already open for the next-service card;
@@ -632,14 +635,24 @@ class HeroVerse extends ConsumerWidget {
     // seasons listener itself (CodeRabbit review on PR #33).
     final seasons = features.seasonVerses.isEmpty ? null : ref.watch(seasonsProvider);
     // Hold the verse until the seasons settle, so the general verse never
-    // flashes before the season's (CodeRabbit review on PR #33).
-    if (seasons != null && !seasons.hasValue && !seasons.hasError) return const SizedBox.shrink();
+    // flashes before the season's (CodeRabbit review on PR #33), while keeping
+    // the 88 px loading slot so CTAs do not jump when seasons settle (PR 6G).
+    if (seasons != null && !seasons.hasValue && !seasons.hasError) {
+      return _loadingSlot;
+    }
     final seasonSet = seasons == null
         ? const <Verse>[]
         : features.seasonVerses.activeSet(seasons.value ?? const [], now);
     final verse = resolveSeasonalVerse(features.dailyVerse, verses, now,
         day: ref.watch(liturgicalDayProvider).date, seasonSet: seasonSet);
-    if (verse == null) return const SizedBox.shrink();
+    if (verse == null) {
+      // Hold an unobtrusive slot while bundled verses parse after PR 6G un-gated
+      // the splash screen on dailyVersesProvider, avoiding a CTA button jump.
+      if (!versesState.hasValue && !versesState.hasError) {
+        return _loadingSlot;
+      }
+      return const SizedBox.shrink();
+    }
     final narrow = MediaQuery.sizeOf(context).width < 600;
     // ADR-047: English text on the English site when the verse has it, else
     // the Arabic text with its Arabic reference (never mixed).
