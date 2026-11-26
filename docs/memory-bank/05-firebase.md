@@ -186,7 +186,7 @@ Notable details:
 - **Web push rules (ADR-060):**
   - `push_queue/{id}`: create-only, read/update/delete denied; validates payload (`token`, `want`, `rem`, `drop`, `retries == 0`, `createdAt == request.time`) and binds `meta/push_rate` in the same batch.
   - `meta/push_rate`: create/update throttle (3s spacing, integer UTC day, count <= 1000). Evaluates all scalar checks before cross-document existence checks. Read/delete denied to all clients (including admins).
-  - `meta/push_topics` and `meta/push_plan`: read-only for `isAdmin()`, client write denied.
+  - `meta/push_topics` and `meta/push_plan`: read-only for `isAdmin()`, client write denied. `tool/push_queue.js` (Worker Cron 2) stamps `cronQueue.lastDrainAt` and `cronQueue.lastIdleAt` on `meta/push_topics` via `patchDoc` (`updateMask`) even on empty-queue idle runs (`0` `batchGet` reads) so `/admin` health doesn't report stale/never-run timestamps, and both `tool/push_queue.js` and `tool/push_reminders.js` (`meta/push_plan`) rethrow Firestore write failures.
 
 ## Cloud Storage (not used — Spark)
 
@@ -448,6 +448,9 @@ Sentry UI, not in the repo:
   settings; source maps / Android symbols need a Sentry auth token.
 - In the app: switch `/admin` → Sections & home page → **Error reports** (`settings/features.errorReporting`) and
   the owner-only **Send test error** button. Everything else in `03-architecture.md` → *Error reporting*.
+- In the Cloudflare Worker (`tool/cf_push_worker.js`, PR 6B / ADR-085): `buildSentryStoreRequest` parses `SENTRY_DSN` into
+  `<protocol>//<host>/api/<projectId>/store/` with `X-Sentry-Auth` (`sentry_version=7`, `sentry_key`), returns `null`
+  on empty/invalid DSNs, and scrubs Bearer tokens, PEM private keys, JWTs, and URL credentials from the error message.
 
 ## Service account (CI/CD)
 

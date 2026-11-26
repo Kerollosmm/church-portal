@@ -276,7 +276,7 @@ class _AdvancedOwnerScreenState extends State<AdvancedOwnerScreen> with SingleTi
         }
 
         final cronQueue = _topicsMeta?['cronQueue'] as Map?;
-        final drainAt = _asDateTime(cronQueue?['lastDrainAt'] ?? _topicsMeta?['lastDrainAt']);
+        final drainAt = _asDateTime(cronQueue?['lastDrainAt'] ?? cronQueue?['lastIdleAt'] ?? _topicsMeta?['lastDrainAt']);
         final drainError = (cronQueue?['lastIidError'] ?? _topicsMeta?['lastIidError']) as String?;
         final drainAge = drainAt == null ? null : DateTime.now().toUtc().difference(drainAt);
         final (Color drainColor, String drainText) = switch (drainAge) {

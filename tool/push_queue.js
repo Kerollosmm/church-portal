@@ -7,6 +7,7 @@ import {
   batchGetDocs,
   commitWrites,
   getCachedAccessToken,
+  patchDoc,
   queryCollection,
   setDocRest,
 } from './firestore_rest.js';
@@ -123,8 +124,27 @@ export async function runPushQueueDrain(env, options = {}) {
 
   const queueDocs = await queryCollection(projectId, token, query, fetchImpl);
 
-  // If queue is empty, exit immediately with 0 batchGet calls on meta/*
+  // If queue is empty, stamp idle heartbeat via updateMask (0 batchGet reads on meta/*)
   if (!queueDocs || queueDocs.length === 0) {
+    try {
+      await patchDoc(
+        projectId,
+        token,
+        'meta/push_topics',
+        {
+          cronQueue: {
+            lastDrainAt: nowIso,
+            lastIdleAt: nowIso,
+          },
+        },
+        ['cronQueue.lastDrainAt', 'cronQueue.lastIdleAt'],
+        null,
+        fetchImpl,
+      );
+    } catch (err) {
+      console.error('Failed to update meta/push_topics on idle:', err);
+      throw err;
+    }
     return {
       status: 'idle',
       processed: 0,
@@ -384,21 +404,27 @@ export async function runPushQueueDrain(env, options = {}) {
   cronQueue.queueFailedCount = queueFailedCount;
   cronQueue.lastIidError = lastIidError;
 
-  await setDocRest(
-    projectId,
-    token,
-    'meta/push_topics',
-    {
-      topics: existingTopics,
-      retryCounts,
-      cronQueue,
-    },
-    fetchImpl,
-  ).catch((err) => {
+  let metaWriteError = null;
+  try {
+    await setDocRest(
+      projectId,
+      token,
+      'meta/push_topics',
+      {
+        topics: existingTopics,
+        retryCounts,
+        cronQueue,
+      },
+      fetchImpl,
+    );
+  } catch (err) {
     console.error('Failed to update meta/push_topics:', err);
-  });
+    metaWriteError = err;
+  }
 
   // 9. Batch delete completed/evicted queue docs in 1 commitWrites subrequest
+  // Always delete before propagating any meta write error so processed/evicted
+  // queue items are not re-applied on the next cron run.
   const deleteList = Array.from(docsToDelete);
   if (deleteList.length > 0) {
     const writes = deleteList.map((id) => ({
@@ -407,6 +433,10 @@ export async function runPushQueueDrain(env, options = {}) {
     await commitWrites(projectId, token, writes, fetchImpl).catch((err) => {
       console.error('Failed to batch-delete push_queue docs:', err);
     });
+  }
+
+  if (metaWriteError) {
+    throw metaWriteError;
   }
 
   return {
