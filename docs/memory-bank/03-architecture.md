@@ -19,7 +19,7 @@
 
 ```
 lib/
-  main.dart                 bootstrap: seed + Firebase in parallel (never crashes) -> ProviderScope overrides
+  main.dart                 bootstrap: ensureWebSemantics (kIsWeb -> SemanticsBinding.ensureSemantics, ADR-084) + seed + Firebase in parallel (never crashes) -> ProviderScope overrides
   app.dart                  ChurchPortalApp: MaterialApp.router, locale, theme preset, <html lang>
   router.dart               routerProvider (GoRouter), FeatureGate wrapper, ?lang=en sync, 404; /admin and /ask
                             are deferred imports (`deferred as`) loaded by DeferredLoader

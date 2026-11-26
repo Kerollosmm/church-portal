@@ -203,7 +203,7 @@ This document provides a comprehensive, feature-by-feature manual for all 31 cap
 
 ### 30. Accessibility & WCAG 2.2 AA Compliance
 - **Visitor Experience:** Full compatibility with screen readers (TalkBack, VoiceOver), high-contrast text modes, large text scaling (up to 200%), and keyboard navigation.
-- **Technical Implementation:** Strict adherence to 48dp minimum touch targets, automated color luminance contrast verification, and explicit accessibility semantic labels.
+- **Technical Implementation:** Strict adherence to 48dp minimum touch targets, automated color luminance contrast verification, explicit accessibility semantic labels, and automatic web semantics tree activation at startup (`ensureWebSemantics` in `lib/main.dart` guarded by `kIsWeb`, keeping decorative `ExcludeSemantics` wrappers such as `HaloText` and hero ambient intact — ADR-084).
 - **ADR-061 Responsive Invariants:** Verified with real bundled OpenType fonts via `FontLoader` down to 320 px × 200% text scale without overflow; `AppShell` recovers space on `< 360 px` viewports with a 54 dp seal tab and drawer language toggle on subpages; landscape viewports `< 420 px` suppress utility banners; and Katameros body reading scaling is clamped to `(osScale * readerScale).clamp(0.85, 2.5)` eliminating 4.0x text runaway.
 
 ### 31. Android Native Application & Play Integrity
