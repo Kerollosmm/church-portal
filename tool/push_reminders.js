@@ -513,19 +513,22 @@ export async function runPushReminderPlanner(env, options = {}) {
   const activeEventKeys = Array.from(activeEventKeysSet);
 
   // Write meta/push_plan as sole writer
-  await setDocRest(
-    projectId,
-    token,
-    'meta/push_plan',
-    {
-      reminderPlan,
-      activeEventKeys,
-      lastPlanAt: nowIso,
-    },
-    fetchImpl,
-  ).catch((err) => {
+  try {
+    await setDocRest(
+      projectId,
+      token,
+      'meta/push_plan',
+      {
+        reminderPlan,
+        activeEventKeys,
+        lastPlanAt: nowIso,
+      },
+      fetchImpl,
+    );
+  } catch (err) {
     console.error('Failed to write meta/push_plan:', err);
-  });
+    throw err;
+  }
 
   return {
     status: 'ok',

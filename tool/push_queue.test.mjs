@@ -77,6 +77,126 @@ describe('runPushQueueDrain workflow', () => {
     assert.equal(batchGetCalled, false, 'must not call batchGet on meta/* when queue is empty');
   });
 
+  test('patches cronQueue.lastDrainAt and cronQueue.lastIdleAt via updateMask on idle with zero batchGet calls', async () => {
+    const now = new Date('2026-11-15T12:15:00Z');
+    let batchGetCalled = false;
+    const patchCalls = [];
+
+    const fakeFetch = async (url, options = {}) => {
+      if (url.includes(':runQuery')) {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+      if (url.includes(':batchGet')) {
+        batchGetCalled = true;
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+      if (url.includes('meta/push_topics')) {
+        patchCalls.push({
+          url,
+          method: options.method,
+          body: JSON.parse(options.body),
+        });
+        return new Response(JSON.stringify({ updateTime: now.toISOString() }), { status: 200 });
+      }
+      return new Response('{}', { status: 200 });
+    };
+
+    const res = await runPushQueueDrain(
+      {},
+      {
+        serviceAccount: mockSa,
+        now,
+        mintToken: async () => 'test-token',
+        fetchImpl: fakeFetch,
+      },
+    );
+
+    assert.deepEqual(res, { status: 'idle', processed: 0, failed: 0, deleted: 0 });
+    assert.equal(batchGetCalled, false);
+    assert.equal(patchCalls.length, 1);
+    assert.equal(patchCalls[0].method, 'PATCH');
+    const parsedUrl = new URL(patchCalls[0].url);
+    assert.deepEqual(parsedUrl.searchParams.getAll('updateMask.fieldPaths'), [
+      'cronQueue.lastDrainAt',
+      'cronQueue.lastIdleAt',
+    ]);
+    const cronQueueFields = patchCalls[0].body.fields.cronQueue.mapValue.fields;
+    assert.equal(cronQueueFields.lastDrainAt.stringValue, now.toISOString());
+    assert.equal(cronQueueFields.lastIdleAt.stringValue, now.toISOString());
+  });
+
+  test('rethrows write failure when patching meta/push_topics on idle returns HTTP 500', async () => {
+    const now = new Date('2026-11-15T12:15:00Z');
+    const fakeFetch = async (url) => {
+      if (url.includes(':runQuery')) {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+      if (url.includes('meta/push_topics')) {
+        return new Response('Internal Error', { status: 500 });
+      }
+      return new Response('{}', { status: 200 });
+    };
+
+    await assert.rejects(
+      () =>
+        runPushQueueDrain(
+          {},
+          {
+            serviceAccount: mockSa,
+            now,
+            mintToken: async () => 'test-token',
+            fetchImpl: fakeFetch,
+          },
+        ),
+      /500/,
+    );
+  });
+
+  test('rethrows write failure when setDocRest on meta/push_topics returns HTTP 500', async () => {
+    const now = new Date('2026-11-15T12:00:00Z');
+    const oldCreated = new Date('2026-11-01T12:00:00Z').toISOString();
+
+    const fakeFetch = async (url) => {
+      if (url.includes(':runQuery')) {
+        return new Response(
+          JSON.stringify([
+            {
+              document: {
+                name: 'projects/test-project/databases/(default)/documents/push_queue/docOld',
+                fields: {
+                  token: { stringValue: 'tokenA'.repeat(20) },
+                  createdAt: { stringValue: oldCreated },
+                },
+              },
+            },
+          ]),
+          { status: 200 },
+        );
+      }
+      if (url.includes(':batchGet')) {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+      if (url.includes('meta/push_topics')) {
+        return new Response('Internal Error', { status: 500 });
+      }
+      return new Response('{}', { status: 200 });
+    };
+
+    await assert.rejects(
+      () =>
+        runPushQueueDrain(
+          {},
+          {
+            serviceAccount: mockSa,
+            now,
+            mintToken: async () => 'test-token',
+            fetchImpl: fakeFetch,
+          },
+        ),
+      /500/,
+    );
+  });
+
   test('evicts poison docs older than 7 days and retried >= 30 times', async () => {
     const now = new Date('2026-11-15T12:00:00Z');
     const oldCreated = new Date('2026-11-01T12:00:00Z').toISOString();

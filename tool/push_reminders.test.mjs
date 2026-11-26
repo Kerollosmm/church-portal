@@ -522,4 +522,44 @@ describe('runPushReminderPlanner workflow', () => {
     assert.ok(!plannedKeys.includes('season-rev-undated:20270106'), 'Overlapping undated seasonal service must be suppressed');
     assert.ok(plannedKeys.includes('lit-wed-reg:20270106'), 'Non-overlapping regular liturgy 09:00-10:00 must remain');
   });
+
+  test('rethrows write failure when writing meta/push_plan returns HTTP 500', async () => {
+    const now = new Date('2027-01-05T12:00:00Z');
+    const fakeFetch = async (url) => {
+      if (url.includes(':batchGet')) {
+        return new Response(
+          JSON.stringify([
+            {
+              found: {
+                name: 'projects/test-project/databases/(default)/documents/settings/features',
+                fields: {},
+              },
+            },
+          ]),
+          { status: 200 },
+        );
+      }
+      if (url.includes('/liturgies') || url.includes('/meetings') || url.includes('/seasons')) {
+        return new Response(JSON.stringify({ documents: [] }), { status: 200 });
+      }
+      if (url.includes('meta/push_plan')) {
+        return new Response('Internal Error', { status: 500 });
+      }
+      return new Response('{}', { status: 200 });
+    };
+
+    await assert.rejects(
+      () =>
+        runPushReminderPlanner(
+          {},
+          {
+            serviceAccount: mockSa,
+            now,
+            mintToken: async () => 'test-token',
+            fetchImpl: fakeFetch,
+          },
+        ),
+      /500/,
+    );
+  });
 });

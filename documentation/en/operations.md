@@ -245,19 +245,19 @@ The native Android app is packaged as lightweight, split release APKs for maximu
 
 The remote scheduled push delivery and readings synchronization infrastructure runs as a pure Web-API Cloudflare Worker with four scheduled crons defined in `wrangler.toml`:
 1. `*/15 * * * *` (Cron 1): Scheduled notification sender, daily seasons alert, and due reminder dispatch using FCM boolean conditions (`'web_rem_...' in topics && !('app_...' in topics)`).
-2. `7,22,37,52 * * * *` (Cron 2): Web push subscription queue drain (`push_queue`) via Google IID REST with subscriber health metrics written to `meta/push_topics`.
-3. `3 2,8,14,20 * * *` (Cron 3): Web reminder planner compiling active liturgies, meetings, and special day events into `meta/push_plan`.
+2. `7,22,37,52 * * * *` (Cron 2): Web push subscription queue drain (`push_queue`) via Google IID REST with subscriber health metrics written to `meta/push_topics`. When idle (`[]`), it patches `cronQueue.lastDrainAt` and `cronQueue.lastIdleAt` via `patchDoc` (`updateMask`) with `0` `batchGet` reads (preserving existing `topics` and `retryCounts`) and rethrows write failures.
+3. `3 2,8,14,20 * * *` (Cron 3): Web reminder planner compiling active liturgies, meetings, and special day events into `meta/push_plan` (rethrowing `meta/push_plan` write errors to Worker Sentry reporting).
 4. `0 16 * * *` (Cron 4): Daily Katameros lectionary & Synaxarium synchronization at 18:00 Cairo liturgical rollover (Firestore REST + KV).
 
 ### Cloudflare Worker Configuration & KV Caching
 - **Cron Triggers:** scheduled crons. There is no public `POST /trigger`. `POST /assistant` is the Android assistant only (Workers Free, `GEMINI_API_KEY` via `npx wrangler secret put GEMINI_API_KEY`, URL in GitHub variable `ASSISTANT_WORKER_URL`).
 - **KV Token Cache (`PUSH_KV`):** Uses Cloudflare KV storage to cache Google OAuth2 access tokens (L2 cache after L1 memory), reducing token minting to ~1 per hour. Created via `npx wrangler kv namespace create PUSH_KV` and bound in `wrangler.toml`.
-- **Worker Deployment:** Deployed via `npx wrangler deploy` (must be executed prior to merging into `dev` or `main`).
+- **Worker Deployment:** Deployed manually via `npx wrangler deploy` after merging Worker changes in `tool/*.js` to `main` (not auto-deployed by Firebase CI/Deploy).
 - **Worker Secrets (`wrangler secret put <KEY>`):**
   - `FIREBASE_PROJECT_ID`: Firebase project ID (`asafra-church-portal`).
   - `FIREBASE_CLIENT_EMAIL`: Service Account email with FCM and Firestore read/write permissions.
   - `FIREBASE_PRIVATE_KEY`: Service Account private key in PEM format (starting with `-----BEGIN PRIVATE KEY-----`).
-  - `SENTRY_DSN`: Sentry DSN for error telemetry.
+  - `SENTRY_DSN`: Sentry DSN formatted by `buildSentryStoreRequest` to `/api/<projectId>/store/` with `X-Sentry-Auth` and scrubbed error messages (Bearer/PEM/JWT/userinfo stripped).
   - `SENTRY_CRON_MONITOR_ID`: Sentry Cron monitor ID for heartbeat health alerts.
 
 ### Spark Quota & Subrequest Budgets

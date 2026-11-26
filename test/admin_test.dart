@@ -3917,6 +3917,40 @@ void main() {
       expect(find.byKey(const ValueKey('app-install-doc')), findsOneWidget);
     });
 
+    testWidgets('AdvancedOwnerScreen falls back to cronQueue.lastIdleAt for drain health when lastDrainAt is absent',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 1400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _TestAdminBackend(initialDocs: {
+        'settings/features': {'errorReporting': true},
+        'meta/push_topics': {
+          'cronQueue': {
+            'lastIdleAt': DateTime.now().toUtc().toIso8601String(),
+          },
+        },
+        'meta/push_plan': {
+          'lastPlanAt': DateTime.now().toUtc().toIso8601String(),
+        },
+      });
+
+      await tester.pumpWidget(_app(
+        Scaffold(
+          body: AdvancedOwnerScreen(
+            repo: repo,
+            appCheckActive: true,
+            onSendTestError: () async => true,
+          ),
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('تفريغ طابور الاشتراكات يعمل بانتظام'), findsOneWidget);
+      expect(find.text('طابور الاشتراكات لم يعمل بعد'), findsNothing);
+    });
+
     testWidgets('AdvancedOwnerScreen registers VAPID edits with UnsavedGuard and preserves edits during pending save',
         (tester) async {
       tester.view.physicalSize = const Size(1280, 1400);

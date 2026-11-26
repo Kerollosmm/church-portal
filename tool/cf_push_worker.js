@@ -11,6 +11,54 @@ import { runPushReminderPlanner } from './push_reminders.js';
 import { syncDailyReadingsAndSynaxarium } from './readings_syncer.js';
 import { handleAssistantRequest } from './assistant_worker.js';
 
+function scrubSentryText(raw) {
+  return String(raw || 'Unknown error')
+    .replace(/-----BEGIN[ A-Z0-9_-]+PRIVATE KEY-----[\s\S]*?-----END[ A-Z0-9_-]+PRIVATE KEY-----/g, '[REDACTED_PRIVATE_KEY]')
+    .replace(/Bearer\s+\S+/gi, 'Bearer [REDACTED]')
+    .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, '[REDACTED_JWT]')
+    .replace(/(https?:\/\/)[^:\s/@]+(?::[^@\s/]+)?@/gi, '$1[REDACTED]@')
+    .slice(0, 1000);
+}
+
+/**
+ * Parses a Sentry DSN into a legacy `/api/<projectId>/store/` POST request.
+ * Returns `null` when DSN is empty or malformed.
+ */
+export function buildSentryStoreRequest(dsn, err, section = 'push_worker') {
+  if (!dsn || typeof dsn !== 'string' || !dsn.trim()) return null;
+  let u;
+  try {
+    u = new URL(dsn.trim());
+  } catch (_) {
+    return null;
+  }
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+
+  const publicKey = (u.username || '').trim();
+  const segments = u.pathname.replace(/^\/+|\/+$/g, '').split('/').filter(Boolean);
+  const projectId = segments.pop() || '';
+  if (!publicKey || !projectId) return null;
+
+  const basePath = segments.length > 0 ? `/${segments.join('/')}` : '';
+  const url = `${u.protocol}//${u.host}${basePath}/api/${projectId}/store/`;
+  const message = scrubSentryText(err?.message || err);
+
+  return {
+    url,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Sentry-Auth': `Sentry sentry_version=7, sentry_client=cf-push-worker/1.0, sentry_key=${publicKey}`,
+    },
+    body: JSON.stringify({
+      message,
+      level: 'error',
+      platform: 'javascript',
+      tags: { section: section || 'push_worker' },
+    }),
+  };
+}
+
 export default {
   async fetch(request, env) {
     return handleAssistantRequest(request, env);
@@ -22,10 +70,10 @@ export default {
     let section = 'push_worker';
 
     if (cron === '7,22,37,52 * * * *') {
-      runner = runPushQueueDrain(env, ctx);
+      runner = runPushQueueDrain(env, {});
       section = 'push_queue_drain';
     } else if (cron === '3 2,8,14,20 * * *') {
-      runner = runPushReminderPlanner(env, ctx);
+      runner = runPushReminderPlanner(env, {});
       section = 'push_reminder_planner';
     } else if (cron === '0 16 * * *') {
       runner = syncDailyReadingsAndSynaxarium(env);
@@ -39,16 +87,13 @@ export default {
     ctx.waitUntil(
       runner.catch(async (err) => {
         console.error(`${section} scheduled execution error:`, err);
-        if (env?.SENTRY_DSN) {
+        const req = buildSentryStoreRequest(env?.SENTRY_DSN, err, section);
+        if (req) {
           try {
-            await fetch(env.SENTRY_DSN, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                message: err?.message || String(err),
-                level: 'error',
-                tags: { section },
-              }),
+            await fetch(req.url, {
+              method: req.method,
+              headers: req.headers,
+              body: req.body,
             });
           } catch (_) {}
         }
