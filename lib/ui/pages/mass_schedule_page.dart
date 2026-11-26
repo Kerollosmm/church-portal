@@ -102,10 +102,16 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
             ),
           ),
         ],
-        if (lits.isLoading || (_seasons && seasons.isLoading) || waitingForPages)
-          const Padding(padding: EdgeInsets.only(top: 16), child: SkeletonList(count: 4))
-        else if (lits.hasError && !lits.hasValue)
+        // Check error before isLoading: Riverpod 3 keeps isLoading true during
+        // automatic retry backoff on AsyncError.
+        if (lits.hasError && !lits.hasValue)
           ErrorState(onRetry: () => ref.invalidate(liturgiesProvider))
+        else if ((!lits.hasValue && lits.isLoading) ||
+            (_seasons && !seasons.hasValue && !seasons.hasError && seasons.isLoading) ||
+            waitingForPages)
+          const Padding(padding: EdgeInsets.only(top: 16), child: SkeletonList(count: 4))
+        else if (_seasons && seasons.hasError && !seasons.hasValue)
+          ErrorState(onRetry: () => ref.invalidate(seasonsProvider))
         else if (!suppressEmpty && _seasons)
           ..._seasonal(context, allSeasons, allLits, now)
         else if (!suppressEmpty)

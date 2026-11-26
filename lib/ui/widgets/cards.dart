@@ -173,7 +173,11 @@ class NextMassCard extends ConsumerWidget {
 
     Widget body;
     NextMassResult? result;
-    if (lits.isLoading || seasons.isLoading) {
+    if (!lits.hasValue && lits.hasError) {
+      // Check error before isLoading: Riverpod 3 keeps isLoading true during
+      // automatic retry backoff on AsyncError.
+      body = ErrorState(onRetry: () => ref.invalidate(liturgiesProvider));
+    } else if (!lits.hasValue && lits.isLoading) {
       body = const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         SkeletonBox(height: 14, width: 120),
         SizedBox(height: 10),
@@ -181,8 +185,6 @@ class NextMassCard extends ConsumerWidget {
         SizedBox(height: 8),
         SkeletonBox(height: 16, width: 180),
       ]);
-    } else if (lits.hasError && !lits.hasValue) {
-      body = ErrorState(onRetry: () => ref.invalidate(liturgiesProvider));
     } else {
       final r = computeNextMass(liturgies: lits.value ?? const [], seasons: seasons.value ?? const [], now: now);
       result = r;
