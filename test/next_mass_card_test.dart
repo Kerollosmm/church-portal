@@ -159,7 +159,12 @@ void main() {
     expect(find.byType(ErrorState), findsNothing);
   });
 
-  testWidgets('MassSchedulePage seasonal view shows ErrorState + retry when seasonsProvider errors', (tester) async {
+  testWidgets('MassSchedulePage surfaces seasons error notice on weekly view, ErrorState on card and seasonal view',
+      (tester) async {
+    tester.view.physicalSize = const Size(320, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
     final lit = todayLiturgy();
     await tester.pumpWidget(wrap(
       const MassSchedulePage(),
@@ -168,16 +173,22 @@ void main() {
         seasonsOverride: seasonsProvider.overrideWith((_) => Stream<List<Season>>.error(TimeoutException('seasons'))),
       ),
     ));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump();
 
-    // Weekly view renders fine even while seasonsProvider is errored.
+    // Weekly schedule stays unblocked while surfacing seasons unavailability notice; NextMassCard waits/errors safely.
     expect(find.byType(LiturgyCard), findsOneWidget);
+    expect(find.byKey(const Key('seasonsErrorNotice')), findsOneWidget);
+    expect(find.byType(ErrorState), findsOneWidget);
+    expect(tester.takeException(), isNull);
 
     // Toggle seasonal switch ON -> shows ErrorState + retry instead of fake empty state.
     await tester.ensureVisible(find.byType(SwitchListTile));
+    await tester.pump();
     await tester.tap(find.byType(SwitchListTile));
-    await tester.pumpAndSettle();
-    expect(find.byType(ErrorState), findsOneWidget);
+    await tester.pump();
+    expect(find.byType(ErrorState), findsNWidgets(2));
     expect(find.byKey(const Key('noCurrentSeasons')), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 }

@@ -114,11 +114,63 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
           ErrorState(onRetry: () => ref.invalidate(seasonsProvider))
         else if (!suppressEmpty && _seasons)
           ..._seasonal(context, allSeasons, allLits, now)
-        else if (!suppressEmpty)
+        else if (!suppressEmpty) ...[
+          if (!seasons.hasValue && seasons.hasError) _seasonsErrorNotice(context),
           ..._weekly(context, allLits, allSeasons, now),
+        ],
       ],
     );
   }
+
+  Widget _seasonsErrorNotice(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Card(
+          key: const Key('seasonsErrorNotice'),
+          color: context.pal.surfaceAlt,
+          margin: EdgeInsets.zero,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final retryBtn = TextButton.icon(
+                  onPressed: () => ref.invalidate(seasonsProvider),
+                  icon: const Icon(Icons.refresh, size: 18),
+                  label: Text(context.tr('retry')),
+                );
+                final msgRow = Row(
+                  children: [
+                    Icon(Icons.warning_amber_rounded, color: context.pal.alert, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        context.tr('loadError'),
+                        style: TextStyle(color: context.pal.alert, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ],
+                );
+                if (constraints.maxWidth < 340) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      msgRow,
+                      const SizedBox(height: 4),
+                      Align(alignment: AlignmentDirectional.centerEnd, child: retryBtn),
+                    ],
+                  );
+                }
+                return Row(
+                  children: [
+                    Expanded(child: msgRow),
+                    const SizedBox(width: 8),
+                    retryBtn,
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+      );
 
   List<Widget> _weekly(BuildContext context, List<Liturgy> all, List<Season> seasons, DateTime now) {
     final list = regularLiturgiesForTab(all, _tab);

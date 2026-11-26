@@ -320,5 +320,123 @@ void main() {
         raw.close();
       });
     });
+
+    test('markerAbsent empty server snapshot releases [] and clears seed mark once whenSeeded fires', () {
+      fakeAsync((async) {
+        final raw = StreamController<({List<String> value, bool isFromCache})>();
+        var isSeeded = false;
+        final gate = SeedGate(() async => isSeeded);
+        final values = <List<String>>[];
+        final seedMarks = <bool>[];
+
+        final sub = guardTimeSensitive<String>(
+          raw: raw.stream,
+          gate: gate,
+          timeout: const Duration(seconds: 8),
+          readCache: () async => null,
+          unseededFallback: const ['seed-season'],
+          onSeed: seedMarks.add,
+          onMissError: () => TimeoutException('timeout'),
+        ).listen(values.add);
+
+        raw.add((value: const [], isFromCache: false));
+        async.flushMicrotasks();
+        expect(values, [
+          ['seed-season'],
+        ]);
+        expect(seedMarks, [true]);
+
+        // Later settings/church appears -> gate.markSeeded() must release [] and clear mark.
+        isSeeded = true;
+        gate.markSeeded();
+        async.flushMicrotasks();
+        expect(values, [
+          ['seed-season'],
+          <String>[],
+        ]);
+        expect(seedMarks, [true, false]);
+
+        sub.cancel();
+        raw.close();
+      });
+    });
+
+    test('markerAbsent holds partial non-empty live snapshot on seed until settings/church confirms', () {
+      fakeAsync((async) {
+        final raw = StreamController<({List<String> value, bool isFromCache})>();
+        var seeded = false;
+        final gate = SeedGate(() async => seeded);
+        final values = <List<String>>[];
+        final seedMarks = <bool>[];
+
+        final sub = guardTimeSensitive<String>(
+          raw: raw.stream,
+          gate: gate,
+          timeout: const Duration(seconds: 8),
+          readCache: () async => null,
+          unseededFallback: const ['seed-mass'],
+          onSeed: seedMarks.add,
+          onMissError: () => TimeoutException('timeout'),
+        ).listen(values.add);
+
+        // First establish markerAbsent == true cleanly.
+        raw.add((value: const [], isFromCache: false));
+        async.flushMicrotasks();
+        expect(values, [
+          ['seed-mass'],
+        ]);
+
+        // Mid-seed partial write reaches liturgies before settings/church exists.
+        raw.add((value: const ['partial-liturgy'], isFromCache: false));
+        async.flushMicrotasks();
+        expect(values.last, ['seed-mass']);
+        expect(seedMarks, [true]);
+
+        // Once settings/church is written last, partial value is released as live.
+        seeded = true;
+        gate.markSeeded();
+        async.flushMicrotasks();
+        expect(values.last, ['partial-liturgy']);
+        expect(seedMarks, [true, false]);
+
+        sub.cancel();
+        raw.close();
+      });
+    });
+
+    test('forwards empty cache snapshot deletion after a usable non-empty live value was accepted', () {
+      fakeAsync((async) {
+        final raw = StreamController<({List<String> value, bool isFromCache})>();
+        final gate = SeedGate(() async => true);
+        final values = <List<String>>[];
+
+        final sub = guardTimeSensitive<String>(
+          raw: raw.stream,
+          gate: gate,
+          timeout: const Duration(seconds: 8),
+          readCache: () async => null,
+          unseededFallback: const ['seed-mass'],
+          onSeed: (_) {},
+          onMissError: () => TimeoutException('timeout'),
+        ).listen(values.add);
+
+        raw.add((value: const ['live-mass'], isFromCache: false));
+        async.flushMicrotasks();
+        expect(values, [
+          ['live-mass'],
+        ]);
+
+        // Subsequent deletion while offline emits empty isFromCache snapshot -> must reach UI.
+        raw.add((value: const [], isFromCache: true));
+        async.flushMicrotasks();
+        expect(values, [
+          ['live-mass'],
+          <String>[],
+        ]);
+
+        sub.cancel();
+        raw.close();
+      });
+    });
   });
 }

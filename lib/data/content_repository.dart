@@ -468,6 +468,8 @@ Stream<List<T>> guardTimeSensitive<T>({
   var cancelled = false;
   var onSeedNow = false;
   var holdingEmptyServer = false;
+  var hasAcceptedValue = false;
+  List<T>? heldLive;
 
   void setSeedMark(bool v) {
     if (onSeedNow == v) return;
@@ -478,20 +480,55 @@ Stream<List<T>> guardTimeSensitive<T>({
   filtered = StreamController<List<T>>(
     onListen: () {
       unawaited(gate.whenSeeded.then((_) {
-        if (!holdingEmptyServer || cancelled || filtered.isClosed) return;
+        if (cancelled || filtered.isClosed) return;
+        if (heldLive != null) {
+          final v = heldLive!;
+          heldLive = null;
+          holdingEmptyServer = false;
+          hasAcceptedValue = true;
+          setSeedMark(false);
+          filtered.add(v);
+          return;
+        }
+        if (!holdingEmptyServer) return;
         holdingEmptyServer = false;
+        hasAcceptedValue = true;
         setSeedMark(false);
         filtered.add(const []);
       }));
       sub = raw.listen(
         (snap) async {
           if (snap.value.isNotEmpty) {
+            // Keep partial writes hidden behind the bundled seed while settings/church
+            // is confirmed absent (e.g. mid-seed collection-first upload).
+            if (!gate.isSeeded && gate.markerAbsent) {
+              sub?.pause();
+              var seeded = false;
+              try {
+                seeded = await gate.check();
+              } finally {
+                if (!cancelled) sub?.resume();
+              }
+              if (cancelled || filtered.isClosed) return;
+              if (!seeded && !gate.isSeeded) {
+                heldLive = snap.value;
+                holdingEmptyServer = false;
+                setSeedMark(true);
+                if (!hasAcceptedValue) {
+                  hasAcceptedValue = true;
+                  filtered.add(unseededFallback);
+                }
+                return;
+              }
+            }
+            heldLive = null;
             holdingEmptyServer = false;
+            hasAcceptedValue = true;
             setSeedMark(false);
             if (!filtered.isClosed) filtered.add(snap.value);
             return;
           }
-          if (snap.isFromCache) return;
+          if (snap.isFromCache && !hasAcceptedValue) return;
           sub?.pause();
           var seeded = gate.isSeeded;
           try {
@@ -501,11 +538,14 @@ Stream<List<T>> guardTimeSensitive<T>({
           }
           if (cancelled || filtered.isClosed) return;
           if (seeded || gate.isSeeded) {
+            heldLive = null;
             holdingEmptyServer = false;
+            hasAcceptedValue = true;
             setSeedMark(false);
             filtered.add(const []);
           } else if (gate.markerAbsent) {
-            holdingEmptyServer = false;
+            heldLive = null;
+            holdingEmptyServer = true;
             setSeedMark(true);
             filtered.add(unseededFallback);
           } else {
@@ -525,6 +565,7 @@ Stream<List<T>> guardTimeSensitive<T>({
     onResume: () => sub?.resume(),
     onCancel: () async {
       cancelled = true;
+      heldLive = null;
       holdingEmptyServer = false;
       setSeedMark(false);
       await sub?.cancel();
@@ -534,7 +575,16 @@ Stream<List<T>> guardTimeSensitive<T>({
   return watchWithFallback<List<T>>(
     live: filtered.stream,
     timeout: timeout,
-    readCache: readCache,
+    readCache: () async {
+      if (!gate.isSeeded && gate.markerAbsent) {
+        final seeded = await gate.check();
+        if (!seeded && !gate.isSeeded) {
+          setSeedMark(true);
+          return unseededFallback;
+        }
+      }
+      return readCache();
+    },
     onMissError: onMissError,
   );
 }
@@ -650,25 +700,34 @@ class FirestoreRepository implements ContentRepository {
     String name,
     T Function(String, Map<String, dynamic>) f,
     List<T> unseededFallback,
-  ) =>
-      guardTimeSensitive<T>(
-        raw: db.collection(name).snapshots(includeMetadataChanges: true).map((snap) => (
-              value: _docs(snap, f),
-              isFromCache: snap.metadata.isFromCache,
-            )),
-        gate: _gate,
-        timeout: streamWatchdogTimeout,
-        readCache: () async {
-          final snap =
-              await db.collection(name).get(const GetOptions(source: Source.cache)).timeout(customCacheRead);
-          final list = _docs(snap, f);
-          return list.isEmpty ? null : list;
-        },
-        unseededFallback: unseededFallback,
-        onSeed: (onSeed) => _markFallback(name, onSeed),
-        onMissError: () => TimeoutException('Firestore stream $name timed out', streamWatchdogTimeout),
-        onStreamError: (e, st) => ErrorReporting.capture(e, st, section: 'content:$name'),
-      );
+  ) {
+    var hasForwardedNonEmpty = false;
+    final raw = db.collection(name).snapshots(includeMetadataChanges: true).where((snap) {
+      // Skip pure cache->server metadata sync transitions that add no doc changes.
+      final skip = hasForwardedNonEmpty && snap.docChanges.isEmpty && !snap.metadata.isFromCache;
+      if (!skip && snap.docs.any((d) => !isSoftDeleted(d.data()))) {
+        hasForwardedNonEmpty = true;
+      }
+      return !skip;
+    }).map((snap) => (
+          value: _docs(snap, f),
+          isFromCache: snap.metadata.isFromCache,
+        ));
+    return guardTimeSensitive<T>(
+      raw: raw,
+      gate: _gate,
+      timeout: streamWatchdogTimeout,
+      readCache: () async {
+        final snap = await db.collection(name).get(const GetOptions(source: Source.cache)).timeout(customCacheRead);
+        final list = _docs(snap, f);
+        return list.isEmpty ? null : list;
+      },
+      unseededFallback: unseededFallback,
+      onSeed: (onSeed) => _markFallback(name, onSeed),
+      onMissError: () => TimeoutException('Firestore stream $name timed out', streamWatchdogTimeout),
+      onStreamError: (e, st) => ErrorReporting.capture(e, st, section: 'content:$name'),
+    );
+  }
 
   @override
   Stream<ChurchSettings> settings() => _guard(

@@ -173,10 +173,14 @@ class NextMassCard extends ConsumerWidget {
 
     Widget body;
     NextMassResult? result;
-    if (!lits.hasValue && lits.hasError) {
+    if ((!lits.hasValue && lits.hasError) || (!seasons.hasValue && seasons.hasError)) {
       // Check error before isLoading: Riverpod 3 keeps isLoading true during
-      // automatic retry backoff on AsyncError.
-      body = ErrorState(onRetry: () => ref.invalidate(liturgiesProvider));
+      // automatic retry backoff on AsyncError. Also avoid announcing a regular
+      // mass as next once seasonsProvider has timed out/errored.
+      body = ErrorState(onRetry: () {
+        if (!lits.hasValue) ref.invalidate(liturgiesProvider);
+        if (!seasons.hasValue) ref.invalidate(seasonsProvider);
+      });
     } else if (!lits.hasValue && lits.isLoading) {
       body = const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         SkeletonBox(height: 14, width: 120),
