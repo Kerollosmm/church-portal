@@ -295,8 +295,7 @@ For each `CollectionDef`:
   **kept** — Firestore may still commit the queued write pointing at them; any other error deletes them (BUG-13).
   Note: `AdminRepository.save`/`saveDoc` set no timeout of their own today (the only 15 s timeout is the role/access read
   in `adminAccess`), so this path applies to a timeout raised by a caller/backend wrapper.
-- **Add** (FAB) / tap to **edit** → full-screen `DocEditor`; **delete** in `collection_list.dart` uses the shared 10-second
-  reversible soft-delete coordinator (`SoftDeleteUndo` + `PendingDelete`, `pending_delete.dart`). Non-category items register synchronously into
+- **Add** (FAB) / tap to **edit** → full-screen `DocEditor`; **delete** in `collection_list.dart` prompts `confirmNamedAction` naming the item (`deleteItemConfirm`: «حذف «{n}»؟ يمكنك التراجع خلال ١٠ ثوانٍ.») across both `_tile` and `_entryRow` (cancelling leaves the item untouched with zero writes) before passing to the shared 10-second reversible soft-delete coordinator (`SoftDeleteUndo` + `PendingDelete`, `pending_delete.dart`). Non-category items register synchronously into
   `SoftDeleteUndo` and immediately write Firestore
   `deletedAt: DateTime.now().toUtc()` (allowed by `meta()` and `optTimestamp(d, 'deletedAt')` in `firestore.rules`,
   serialized per doc via `_inFlightWrites` with monotonic `_gen` guards so rapid consecutive deletes never
@@ -344,12 +343,7 @@ For each `CollectionDef`:
 ### Generic form (`DocEditor`, `doc_editor.dart`)
 - Field widgets by `FieldType`: text, multiline, integer, decimal, boolean, time (stored 24h `"HH:mm"`, UI labels free of `HH:mm`), weekday, weekdays (chips),
   dateTime / date (Cairo), looseDate, choice (labels via `choiceLabel`/`opt_*`), url, phone, objectList, **image**.
-- **Pickers (ADR-049, P2-26):** time / date / dateTime fields (also inside rows) are read-only with a clock / calendar
-  suffix (`pick-<key>`; optional fields also `clear-<key>`); time = `showTimePicker` in 12-hour AM/PM mode (ص/م in Arabic,
-  `alwaysUse24HourFormat: false`), stored strictly 24-hour `HH:mm`, the field's helper shows the 12-hour reading
-  (`formatTimeArabic/Latin`, «٠٦:٣٠ م» / "06:30 PM"; date-times also the date);
-  date = `showDatePicker` (2000–2100), `YYYY-MM-DD`; dateTime = date then time, `YYYY-MM-DD HH:mm` Cairo; **`looseDate`** (priests' `ordinationDate`, `hegumenDate`, `departedDate`) stays manually editable (accepting year alone like `1995`, `YYYY-MM`, or `YYYY-MM-DD`) AND provides a calendar picker (`_LooseDatePickerDialog` using `monthNamesAr` / `fullMonthNamesEn`, `daysInMonth`, `parseLooseDate`, `formatLooseDateValue`). Formatters
-  `formatPickedTime/Date/DateTime`, prefill `parseFieldTime/DateTime` in `admin_validators.dart`. Stored types unchanged.
+- **Pickers & direct typing (ADR-049, P2-26, PR 6C):** time / date / dateTime fields (top-level and inside rows) allow **direct typing** (`readOnly: false`, `onTap: null`) alongside the clock / calendar suffix (`pick-<key>`; optional fields also `clear-<key>`). `validateFieldValue` and `parseFieldValue` normalize Arabic-Indic digits (`٠٦:٣٠`, `٢٠٢٧-٠١-٠٦ ٢٠:٠٠`) and unpadded hours (`9:00`) via `normalizeDigits` + `parseFieldTime`, reject invalid calendar dates/times (`2027-02-30`, `25:00`), and store canonical 24-hour ASCII `"HH:mm"`, `"YYYY-MM-DD"`, or Cairo-wall-time UTC `DateTime` (`_Row.collect` also canonicalizes encoded row dates/times). `time` = `showTimePicker` in 12-hour AM/PM mode (ص/م in Arabic, `alwaysUse24HourFormat: false`); the field's helper shows the live 12-hour reading (`formatTimeArabic/Latin`, «٠٦:٣٠ م» / "06:30 PM"; date-times also the date); `date` = `showDatePicker` (2000–2100); `dateTime` = date then time. **`looseDate`** (priests' `ordinationDate`, `hegumenDate`, `departedDate`) remains directly editable (`1995`, `YYYY-MM`, `YYYY-MM-DD`) AND provides `_LooseDatePickerDialog`. `DocEditor` hides raw `ID: <docId>` text and shows `'جارٍ الحفظ…'` / `'Saving…'` (`saving`) on `saveButton`, `editor-save-top`, and `UnsavedBar` while a save is pending. Formatters `formatPickedTime/Date/DateTime`, prefill `parseFieldTime/DateTime` in `admin_validators.dart`.
 - Validation (`admin_validators.dart` `validateFieldValue`): required, max length (`effectiveMaxLength`), 24h time validation,
   real calendar dates (rejects 2027-02-30), loose dates, numeric ranges (Arabic digits accepted), URLs (`https://…`
   or in-app path where `allowPath`), phones (`^\+?[0-9]{5,15}$` after normalising). Cross-field

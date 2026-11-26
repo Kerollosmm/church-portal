@@ -61,14 +61,14 @@ The `admin` package implements the authenticated back-office management console 
   - `AssistantSwitches`: Switch matrix controlling AI model enablement, context injection, and rate limiting.
 - `collection_list.dart`:
   - `ListFilter`: Filter enumeration for collection listing (`all`, `visible`, `hidden`, `unconfirmed`).
-  - `CollectionListScreen`: Searchable, filterable list table for browsing and managing collection items with 10-second undoable deletion (retaining pending-deleted items in `_lastDocs` for `takenSlugs` uniqueness and capturing `repo`/`def`/`media` when scheduling deletion). Unifies `categories` + nested `entries` (P1-16/P1-17) and offers the «صفحة تبرعات جاهزة» chooser when adding a page (P1-15).
+  - `CollectionListScreen`: Searchable, filterable list table for browsing and managing collection items with named delete confirmation (`confirmNamedAction` via `deleteItemConfirm`) feeding 10-second undoable deletion (retaining pending-deleted items in `_lastDocs` for `takenSlugs` uniqueness and capturing `repo`/`def`/`media` when scheduling deletion). Unifies `categories` + nested `entries` (P1-16/P1-17) and offers the «صفحة تبرعات جاهزة» chooser when adding a page (P1-15).
 - `confirm_named.dart`:
   - `confirmNamedAction(BuildContext context, {String? title, required String summary, required String actionLabel, bool destructive = false})`: Confirmation dialog displaying explicit name of target item or action; destructive actions use alert palette.
 - `contact_admin.dart`:
   - `ContactCategoriesScreen`: Department routing and phone directory management screen.
 - `doc_editor.dart`:
   - `ImageBytesPicker`: Typedef for asynchronous image file byte loader.
-  - `DocEditor`: Dynamic form editor generating input controls from `FieldDef` descriptors, hiding `advanced` fields (`slug`) inside `_advancedCard` while auto-syncing new slugs from the Arabic title (`slugFromTitle`) and syncing `placement == 'nav'` ↔ `showInNav`.
+  - `DocEditor`: Dynamic form editor generating input controls from `FieldDef` descriptors, supporting direct typing alongside pickers for `FieldType.{time,date,dateTime}` (normalizing Arabic-Indic digits and unpadded hours), displaying «جارٍ الحفظ…» (`saving`) while a save is pending, hiding internal doc IDs, hiding `advanced` fields (`slug`) inside `_advancedCard` while auto-syncing new slugs from the Arabic title (`slugFromTitle`), and syncing `placement == 'nav'` ↔ `showInNav`.
   - `DocEditorState`: State manager for document form validation, dirty tracking, image uploads, and multi-step payload saving.
 - `features_editor.dart`:
   - `FeaturesScreen`: Management screen for global feature toggles and navigation sections.
@@ -104,7 +104,7 @@ The `admin` package implements the authenticated back-office management console 
 - `[admin_validators.dart:validateDocument]`: Liturgy entries are allowed to cross midnight (e.g. midnight praise), but all other events must enforce that end time/date is after start time/date.
 - `[admin_validators.dart:parseFieldValue]`: All time values must be normalized to Cairo wall-time strings (`HH:mm`), and dates to `YYYY-MM-DD` or UTC instants.
 - `[admin_page.dart:AdminPage]`: Unauthenticated users must be intercepted by `_AdminCheck` and prevented from accessing dashboard tabs.
-- `[confirm_named.dart:confirmNamedAction]`: Push notifications targeting all subscribers or immediate dispatch (matching recipients and timing with dedicated summaries and action labels, plus post-await past-time check), visitor message deletions, and administrator removals must explicitly name the target item/action in a confirmation dialog before proceeding.
+- `[confirm_named.dart:confirmNamedAction]`: Collection item and sub-entry soft-deletes (`CollectionListScreen`), push notifications targeting all subscribers or immediate dispatch (matching recipients and timing with dedicated summaries and action labels, plus post-await past-time check), visitor message deletions, and administrator removals must explicitly name the target item/action in a confirmation dialog before proceeding.
 - `[unsaved_guard.dart:UnsavedGuard]`: Unsaved administrative edits must intercept back-navigation, dashboard destination changes, logout, and browser window close/refresh; the default dialog action button must be «متابعة التعديل».
 - `[pending_delete.dart:SoftDeleteUndo]`: Collection and inbox deletions must immediately write Firestore `deletedAt` and hide from the view with a 10-second batch undo window (reserving slugs in `takenSlugs` until deletion commits), canceling local timers on dispose while expired soft-deletes are lazily purged on admin open.
 - `[unsaved_bar.dart:UnsavedBar]`: Editing forms with uncommitted edits must render a sticky bottom save bar without overflowing at 320 px or 200% text scaling.
