@@ -387,6 +387,37 @@ void main() {
     }
   });
 
+  testWidgets('unrevealed Reveal keeps off-screen child in the semantics tree at opacity 0', (tester) async {
+    final handle = tester.ensureSemantics();
+    try {
+      await tester.pumpWidget(MediaQuery(
+        data: const MediaQueryData(size: Size(1200, 800)),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: Theme(
+            data: ThemeData(platform: TargetPlatform.linux),
+            child: const SingleChildScrollView(
+              child: Column(
+                children: [
+                  SizedBox(height: 3000),
+                  Reveal(child: Text('Below fold section')),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ));
+      await tester.pump();
+      final opacity = tester.widget<Opacity>(
+        find.descendant(of: find.byType(Reveal), matching: find.byType(Opacity)),
+      );
+      expect(opacity.opacity, 0);
+      expect(find.bySemanticsLabel('Below fold section'), findsOneWidget);
+    } finally {
+      handle.dispose();
+    }
+  });
+
   test('bottom feather: opaque at the top, fully transparent at the bottom edge (CSS mask matches)', () {
     expect(BottomFeather.alphas.first, 1);
     expect(BottomFeather.alphas.last, 0);

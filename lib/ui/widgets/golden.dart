@@ -536,6 +536,7 @@ class _RevealState extends State<Reveal> with SingleTickerProviderStateMixin, Vi
           child: widget.child,
           builder: (context, child) => Opacity(
             opacity: curve.value,
+            alwaysIncludeSemantics: true,
             child: Transform.translate(offset: Offset(0, 28 * (1 - curve.value)), child: child),
           ),
         ),
