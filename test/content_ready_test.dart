@@ -7,6 +7,7 @@ import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/daily_verse.dart';
 import 'package:church_portal/domain/features.dart';
 import 'package:church_portal/domain/models.dart';
+import 'package:church_portal/domain/season_verses.dart';
 import 'package:church_portal/state/providers.dart';
 import 'package:church_portal/ui/pages/home_page.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -134,6 +135,80 @@ void main() {
           }
         }
       }
+    });
+
+    testWidgets(
+        'HeroVerse keeps loading slot while seasonsProvider is pending before falling through to dailyVersesProvider',
+        (tester) async {
+      CairoTime.ensureInitialized();
+      final seasonsController = StreamController<List<Season>>();
+      final versesCompleter = Completer<List<Verse>>();
+      addTearDown(seasonsController.close);
+
+      const features = FeatureSettings(
+        seasonVerses: SeasonVerses({
+          'nativity': [
+            Verse(textAr: 'ولد لنا ولد', refAr: 'إشعياء ٩: ٦'),
+          ],
+        }),
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            repositoryProvider.overrideWithValue(SeedRepository(SeedData(const {}))),
+            settingsProvider.overrideWithValue(
+              const AsyncData(ChurchSettings(nameAr: 'كنيسة', nameEn: 'Church', addressAr: 'أ', addressEn: 'A')),
+            ),
+            featuresStreamProvider.overrideWithValue(AsyncData(features)),
+            seasonsProvider.overrideWith((ref) => seasonsController.stream),
+            nowProvider.overrideWithValue(AsyncData(CairoTime.at(2026, 11, 26, 10 * 60))),
+            dailyVersesProvider.overrideWith((ref) => versesCompleter.future),
+          ],
+          child: MaterialApp(
+            locale: const Locale('ar'),
+            supportedLocales: const [Locale('ar'), Locale('en')],
+            localizationsDelegates: GlobalMaterialLocalizations.delegates,
+            home: Scaffold(
+              body: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const HeroVerse(),
+                  const SizedBox(height: 20),
+                  FilledButton(
+                    key: const Key('heroCtaButton'),
+                    onPressed: () {},
+                    child: const Text('CTA'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // 1. Both seasons and daily verses pending -> slot reserved, verse hidden.
+      expect(find.byKey(const Key('heroVerseLoading')), findsOneWidget);
+      expect(find.byKey(const Key('heroVerse')), findsNothing);
+      final ctaWhileSeasonsPendingY = tester.getTopLeft(find.byKey(const Key('heroCtaButton'))).dy;
+
+      // 2. Seasons settles empty while daily verses are still pending -> slot preserved without jump.
+      seasonsController.add(const []);
+      await tester.pump();
+      await tester.pump();
+      expect(find.byKey(const Key('heroVerseLoading')), findsOneWidget);
+      expect(find.byKey(const Key('heroVerse')), findsNothing);
+      expect(tester.getTopLeft(find.byKey(const Key('heroCtaButton'))).dy, ctaWhileSeasonsPendingY);
+
+      // 3. Daily verses settles -> verse renders cleanly.
+      versesCompleter.complete(const [
+        Verse(textAr: 'الرب نوري', refAr: 'مزمور ٢٧: ١'),
+      ]);
+      await tester.pump();
+      await tester.pump();
+      expect(find.byKey(const Key('heroVerse')), findsOneWidget);
+      expect(find.byKey(const Key('heroVerseLoading')), findsNothing);
     });
   });
 }

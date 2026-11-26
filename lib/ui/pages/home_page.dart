@@ -619,6 +619,8 @@ class HaloText extends StatelessWidget {
 class HeroVerse extends ConsumerWidget {
   const HeroVerse({super.key});
 
+  static const _loadingSlot = SizedBox(key: Key('heroVerseLoading'), height: 88);
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (!ref.watch(featuresReadyProvider)) return const SizedBox.shrink();
@@ -633,8 +635,11 @@ class HeroVerse extends ConsumerWidget {
     // seasons listener itself (CodeRabbit review on PR #33).
     final seasons = features.seasonVerses.isEmpty ? null : ref.watch(seasonsProvider);
     // Hold the verse until the seasons settle, so the general verse never
-    // flashes before the season's (CodeRabbit review on PR #33).
-    if (seasons != null && !seasons.hasValue && !seasons.hasError) return const SizedBox.shrink();
+    // flashes before the season's (CodeRabbit review on PR #33), while keeping
+    // the 88 px loading slot so CTAs do not jump when seasons settle (PR 6G).
+    if (seasons != null && !seasons.hasValue && !seasons.hasError) {
+      return _loadingSlot;
+    }
     final seasonSet = seasons == null
         ? const <Verse>[]
         : features.seasonVerses.activeSet(seasons.value ?? const [], now);
@@ -644,7 +649,7 @@ class HeroVerse extends ConsumerWidget {
       // Hold an unobtrusive slot while bundled verses parse after PR 6G un-gated
       // the splash screen on dailyVersesProvider, avoiding a CTA button jump.
       if (!versesState.hasValue && !versesState.hasError) {
-        return const SizedBox(key: Key('heroVerseLoading'), height: 88);
+        return _loadingSlot;
       }
       return const SizedBox.shrink();
     }
