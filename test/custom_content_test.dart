@@ -760,7 +760,7 @@ void main() {
   });
 
   group('public pages', () {
-    testWidgets('a category page lists its visible items with cards; hidden / unknown are unavailable', (tester) async {
+    testWidgets('a category page lists its visible items with cards; hidden is unavailable, unknown is 404', (tester) async {
       final (router, _) = await _pump(tester, '/section/youth-trips');
       expect(find.byKey(const Key('category-youth-trips')), findsOneWidget);
       expect(find.text('Youth trips'), findsWidgets);
@@ -770,18 +770,21 @@ void main() {
       expect(find.text('Register'), findsOneWidget);
       expect(find.text('Hidden trip'), findsNothing);
       expect(tester.takeException(), isNull);
-      for (final p in ['/section/hidden-cat', '/section/nope']) {
-        router.go(p);
-        await tester.pumpAndSettle();
-        expect(find.byKey(const Key('categoryUnavailable')), findsOneWidget, reason: p);
-      }
+      router.go('/section/hidden-cat');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('categoryUnavailable')), findsOneWidget);
+      router.go('/section/nope');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('categoryNotFound')), findsOneWidget);
+      expect(find.byType(NotFoundPage), findsOneWidget);
+      expect(find.text('Page not found'), findsOneWidget);
       // An empty category says so.
       router.go('/section/library');
       await tester.pumpAndSettle();
       expect(find.text('Nothing in this section yet'), findsOneWidget);
     });
 
-    testWidgets('a custom page renders its blocks and donation info (display only)', (tester) async {
+    testWidgets('a custom page renders its blocks and donation info (display only); hidden is unavailable, unknown is 404', (tester) async {
       final (router, _) = await _pump(tester, '/page/donate');
       expect(find.byKey(const Key('page-donate')), findsOneWidget);
       expect(find.text('Building donations'), findsWidgets);
@@ -798,6 +801,11 @@ void main() {
       router.go('/page/draft');
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('pageUnavailable')), findsOneWidget);
+      router.go('/page/does-not-exist');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('pageNotFound')), findsOneWidget);
+      expect(find.byType(NotFoundPage), findsOneWidget);
+      expect(find.text('Page not found'), findsOneWidget);
     });
 
     testWidgets('menu: categories with showInNav under services, pages switched into the menu', (tester) async {
@@ -5871,6 +5879,219 @@ void main() {
       },
     );
   });
+
+  group('#152: custom page internal links, tappable cards, and 404 vs unavailable', () {
+    test('isPageBlockVisible hides disabled/missing/hidden internal links and keeps external links', () {
+      const fAllOn = FeatureSettings.defaults;
+      final fScheduleOff = FeatureSettings.fromMap({
+        'sections': {Sections.schedule: false},
+      });
+      final pages = publicPages(_pages);
+      final cats = publicCategories(_cats);
+
+      expect(isInternalAppLink('/mass-schedule'), isTrue);
+      expect(isInternalAppLink(' //evil.com '), isFalse);
+      expect(isInternalAppLink('https://example.org'), isFalse);
+
+      expect(
+        isPageBlockVisible(
+          const PageBlock(type: BlockTypes.button, textEn: 'Mass', url: '/mass-schedule'),
+          features: fAllOn,
+          pages: pages,
+          categories: cats,
+        ),
+        isTrue,
+      );
+      expect(
+        isPageBlockVisible(
+          const PageBlock(type: BlockTypes.button, textEn: 'Mass', url: '/mass-schedule'),
+          features: fScheduleOff,
+          pages: pages,
+          categories: cats,
+        ),
+        isFalse,
+      );
+      expect(
+        isPageBlockVisible(
+          const PageBlock(type: BlockTypes.link, textEn: 'Draft', url: '/page/draft?lang=en#top'),
+          features: fAllOn,
+          pages: pages,
+          categories: cats,
+        ),
+        isFalse,
+      );
+      expect(
+        isPageBlockVisible(
+          const PageBlock(type: BlockTypes.button, textEn: 'Missing page', url: '/page/missing'),
+          features: fAllOn,
+          pages: pages,
+          categories: cats,
+        ),
+        isFalse,
+      );
+      expect(
+        isPageBlockVisible(
+          const PageBlock(type: BlockTypes.link, textEn: 'Hidden sec', url: '/section/hidden-cat'),
+          features: fAllOn,
+          pages: pages,
+          categories: cats,
+        ),
+        isFalse,
+      );
+      expect(
+        isPageBlockVisible(
+          const PageBlock(type: BlockTypes.button, textEn: 'Youth', url: '/section/youth-trips/'),
+          features: fAllOn,
+          pages: pages,
+          categories: cats,
+        ),
+        isTrue,
+      );
+      expect(
+        isPageBlockVisible(
+          const PageBlock(type: BlockTypes.link, textEn: 'External', url: 'https://example.org'),
+          features: fScheduleOff,
+          pages: pages,
+          categories: cats,
+        ),
+        isTrue,
+      );
+    });
+
+    testWidgets('CustomPageView hides button/link blocks whose internal target is disabled, hidden, or missing',
+        (tester) async {
+      final linkPage = const CustomPage(
+        id: 'p-links',
+        slug: 'links-check',
+        titleAr: 'صفحة روابط',
+        titleEn: 'Links check',
+        blocks: [
+          PageBlock(type: BlockTypes.button, textEn: 'Open schedule', url: '/mass-schedule'),
+          PageBlock(type: BlockTypes.link, textEn: 'Open contact', url: '/contact'),
+          PageBlock(type: BlockTypes.button, textEn: 'Hidden page', url: '/page/draft'),
+          PageBlock(type: BlockTypes.link, textEn: 'Missing page', url: '/page/unknown'),
+          PageBlock(type: BlockTypes.button, textEn: 'Hidden section', url: '/section/hidden-cat'),
+          PageBlock(type: BlockTypes.link, textEn: 'Visible section', url: '/section/youth-trips'),
+          PageBlock(type: BlockTypes.link, textEn: 'External link', url: 'https://example.org'),
+        ],
+      );
+      final repo = _ControlledPagesRepo(
+        Stream.value([..._pages, linkPage]),
+        entries: _entries,
+        cats: _cats,
+      );
+      // With schedule off, /mass-schedule is hidden, while /contact, /section/youth-trips, and external stay.
+      final repoWithScheduleOff = _ControlledPagesRepoWithSections(
+        Stream.value([..._pages, linkPage]),
+        entries: _entries,
+        cats: _cats,
+        sections: const {Sections.schedule: false},
+      );
+      await _pump(tester, '/page/links-check', repo: repoWithScheduleOff);
+      expect(find.text('Open schedule'), findsNothing);
+      expect(find.text('Hidden page'), findsNothing);
+      expect(find.text('Missing page'), findsNothing);
+      expect(find.text('Hidden section'), findsNothing);
+      expect(find.text('Open contact'), findsOneWidget);
+      expect(find.text('Visible section'), findsOneWidget);
+      expect(find.text('External link'), findsOneWidget);
+      expect(repo.pages, isNotNull); // keep _ControlledPagesRepo exercised
+    });
+
+    testWidgets('CustomPageCard is tappable across the whole card (including cover), keeps semantics, and uses RTL-aware arrow_forward_rounded',
+        (tester) async {
+      const linkedPage = CustomPage(
+        id: 'p-card',
+        slug: 'card-target',
+        titleAr: 'صفحة البطاقة',
+        titleEn: 'Card Target Page',
+        subtitleAr: 'وصف فرعي',
+        subtitleEn: 'Card subtitle',
+        image: MediaImage.url('https://example.com/card.webp'),
+        placement: PagePlacements.section,
+        categoryId: 'k1',
+      );
+      final repo = _ControlledPagesRepo(
+        Stream.value([..._pages, linkedPage]),
+        entries: _entries,
+        cats: _cats,
+      );
+      final semHandle = tester.ensureSemantics();
+      try {
+        final (router, _) = await _pump(tester, '/section/youth-trips', repo: repo);
+        final cardFinder = find.byKey(const Key('sectionPage-card-target'));
+        expect(cardFinder, findsOneWidget);
+
+        // Uses in-app RTL-aware arrow_forward_rounded, not open_in_new_rounded.
+        expect(
+          find.descendant(of: cardFinder, matching: find.byIcon(Icons.arrow_forward_rounded)),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(of: cardFinder, matching: find.byIcon(Icons.open_in_new_rounded)),
+          findsNothing,
+        );
+        expect(Icons.arrow_forward_rounded.matchTextDirection, isTrue);
+
+        // Cover does NOT hijack tap to zoom.
+        expect(find.descendant(of: cardFinder, matching: find.byKey(const Key('itemImageTap'))), findsNothing);
+
+        // Semantics label on the action chip is preserved.
+        expect(find.bySemanticsLabel('Learn more — Card Target Page'), findsOneWidget);
+
+        // Tapping the card title/body navigates to the custom page.
+        await tester.tap(find.descendant(of: cardFinder, matching: find.text('Card subtitle')));
+        await tester.pumpAndSettle();
+        expect(router.routerDelegate.currentConfiguration.uri.path, '/page/card-target');
+
+        // Navigate back to the section and tap the cover image directly -> still navigates to the custom page.
+        router.go('/section/youth-trips');
+        await tester.pumpAndSettle();
+        final coverFinder = find.descendant(
+          of: find.byKey(const Key('sectionPage-card-target')),
+          matching: find.byKey(const Key('cardCover')),
+        );
+        expect(coverFinder, findsOneWidget);
+        await tester.tap(coverFinder);
+        await tester.pumpAndSettle();
+        expect(router.routerDelegate.currentConfiguration.uri.path, '/page/card-target');
+      } finally {
+        semHandle.dispose();
+      }
+    });
+
+    testWidgets('unknown slug shows NotFoundPage after load, hidden shows ContentUnavailable, section off shows SectionUnavailable',
+        (tester) async {
+      final (router, _) = await _pump(tester, '/page/does-not-exist');
+      expect(find.byKey(const Key('pageNotFound')), findsOneWidget);
+      expect(find.byType(NotFoundPage), findsOneWidget);
+      expect(find.byKey(const Key('pageUnavailable')), findsNothing);
+
+      router.go('/page/draft');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('pageUnavailable')), findsOneWidget);
+      expect(find.byType(NotFoundPage), findsNothing);
+
+      router.go('/section/does-not-exist');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('categoryNotFound')), findsOneWidget);
+      expect(find.byType(NotFoundPage), findsOneWidget);
+
+      router.go('/section/hidden-cat');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('categoryUnavailable')), findsOneWidget);
+      expect(find.byType(NotFoundPage), findsNothing);
+
+      // Switched-off section keeps SectionUnavailable even for existing pages.
+      await _pump(
+        tester,
+        '/page/donate',
+        repo: _Repo({Sections.customPages: false}),
+      );
+      expect(find.byType(SectionUnavailable), findsOneWidget);
+      expect(find.byType(NotFoundPage), findsNothing);
+    });
+  });
 }
 
 final _asyncSectionTestProvider = StreamProvider<List<String>>((_) => const Stream.empty());
@@ -5953,6 +6174,19 @@ class _ControlledPagesRepo extends _Repo {
 
   @override
   Stream<List<CustomPage>> pages() => _pagesStream;
+}
+
+class _ControlledPagesRepoWithSections extends _ControlledPagesRepo {
+  final Map<String, bool> sections;
+  _ControlledPagesRepoWithSections(
+    super.pagesStream, {
+    required super.entries,
+    super.cats,
+    required this.sections,
+  });
+
+  @override
+  Stream<FeatureSettings> features() => Stream.value(FeatureSettings.fromMap({'sections': sections}));
 }
 
 class _FailSubsequentPagesReadBackend extends _Backend {

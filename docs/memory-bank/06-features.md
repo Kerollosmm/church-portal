@@ -265,9 +265,7 @@ An admin-defined category: poster header with its name, optional intro panel, th
 (`entriesOf`) as `EntryCard`s in the `ResponsiveGrid` with `CardCover` / `CardLead` (collection `entries`, the
 item's `imageStyle` else the category's), description, call / WhatsApp, and a link button (in-app path via
 `context.go`, else `openUrl`), plus any visible custom pages with `placement == 'section'` (`sectionPages`) as
-`CustomPageCard`s with a `CardCover` (collection `'pages'`, respecting `Sections.media`), title, subtitle, and an
-«اعرف المزيد / Learn more» button (gated by `Sections.customPages`, PR 3D / P1-18). Widget tests in `test/custom_content_test.dart` verify `CustomPageCard` (`CardCover`) and `CustomPageView` (`FittedCover`) render at 320 px Home and `/section/<slug>` with zero overflow, confirming no legacy image field fallback was added and fonts are untouched per owner directive. Hidden /
-unknown slug → `ContentUnavailable` (`Key('categoryUnavailable')`, `noindex`); no items and no section pages →
+`CustomPageCard`s (whole card tappable via `InkWell` with `CardCover` `enlargeOnTap: false`, keeping the «اعرف المزيد / Learn more» `ActionChipButton` with RTL-aware `Icons.arrow_forward_rounded` and `semanticLabel`, gated by `Sections.customPages`, PR 3D / P1-18). Widget tests in `test/custom_content_test.dart` verify `CustomPageCard` (`CardCover`) and `CustomPageView` (`FittedCover`) render at 320 px Home and `/section/<slug>` with zero overflow, confirming no legacy image field fallback was added and fonts are untouched per owner directive. Hidden slug → `ContentUnavailable` (`Key('categoryUnavailable')`, `noindex`); unknown slug → `NotFoundPage` (`Key('categoryNotFound')`, `noindex`); no items and no section pages →
 «لا توجد عناصر في هذا القسم بعد». Gated by `Sections.customSections` (all categories and
 their menu entries) plus each category's own `visible`. **PR #23:** the page (and its items list) stays on the
 loading skeleton until the categories / items have loaded from the server, or 8 s pass without an answer — a cold deep link no longer
@@ -289,8 +287,7 @@ marker and `pal.ink` body; zero new keys in `l10n.dart`), and collapsible detail
 `Semantics(button: true, expanded: _expanded)` + `AnimatedSize` reduced-motion aware without `ExpansionTile`; block-level
 language selection via `resolveDetails(isAr: context.isAr)` renders English only when both `summaryEn` and `bodyEn` are
 non-empty, otherwise both summary and body fall back to Arabic; collapsed by default, `SelectableText` body, zero new
-keys in `l10n.dart`). Empty blocks are skipped. Hidden /
-unknown → `Key('pageUnavailable')`, `noindex`. Placement (`placement`, PR 3D / P1-18): `'link'` (default, reached from
+keys in `l10n.dart`). Empty blocks and button/link blocks whose internal target is disabled (`features.routeEnabled`), hidden, or missing (`isPageBlockVisible`) are skipped; external links stay unchanged. Hidden → `Key('pageUnavailable')`, `noindex`; unknown slug → `NotFoundPage` (`Key('pageNotFound')`), `noindex`. Placement (`placement`, PR 3D / P1-18): `'link'` (default, reached from
 notices/buttons/links), `'nav'` (synced with `showInNav`), or `'section'` (`categoryId`, rendered as an «اعرف المزيد»
 `CustomPageCard` inside `/section/<slug>` — or, since Phase 4 PR2 / ADR-075, inside the linked built-in section page
 `/mass-schedule`, `/church-education`, `/church-activities`, `/public-services`, `/about`, or `/contact` via

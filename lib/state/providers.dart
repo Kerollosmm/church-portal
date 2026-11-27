@@ -250,17 +250,32 @@ final milestonesProvider = StreamProvider<List<Milestone>>(
 );
 final saintsProvider = StreamProvider<List<Saint>>((ref) => _public(ref.watch(repositoryProvider).saints()));
 
+AsyncValue<R> _mapPublic<T, R>(AsyncValue<T> v, R Function(T) f) {
+  if (v.hasValue) return AsyncData<R>(f(v.requireValue));
+  if (v.hasError) return AsyncError<R>(v.error!, v.stackTrace!);
+  return AsyncLoading<R>(progress: v.progress);
+}
+
+/// Raw admin-defined categories (including hidden/unusable entries so
+/// `/section/<slug>` can distinguish hidden categories from unknown 404 slugs).
+final rawCategoriesProvider =
+    StreamProvider<List<CustomCategory>>((ref) => ref.watch(repositoryProvider).categories());
+
 /// Admin-defined categories (ADR-027): public ones (visible, usable slug,
 /// unique), sorted by `order`.
-final categoriesProvider =
-    StreamProvider<List<CustomCategory>>((ref) => ref.watch(repositoryProvider).categories().map(publicCategories));
+final categoriesProvider = Provider<AsyncValue<List<CustomCategory>>>(
+    (ref) => _mapPublic(ref.watch(rawCategoriesProvider), publicCategories));
 
 /// Every category item (filtered per category by [entriesOf]).
 final entriesProvider = StreamProvider<List<CategoryEntry>>((ref) => ref.watch(repositoryProvider).entries());
 
+/// Raw admin-built pages (including hidden/unusable entries so `/page/<slug>`
+/// can distinguish hidden pages from unknown 404 slugs).
+final rawPagesProvider = StreamProvider<List<CustomPage>>((ref) => ref.watch(repositoryProvider).pages());
+
 /// Public custom pages (visible, usable slug, unique), sorted by `order`.
-final customPagesProvider =
-    StreamProvider<List<CustomPage>>((ref) => ref.watch(repositoryProvider).pages().map(publicPages));
+final customPagesProvider = Provider<AsyncValue<List<CustomPage>>>(
+    (ref) => _mapPublic(ref.watch(rawPagesProvider), publicPages));
 
 /// Contact-form categories (ADR-028); code defaults until / unless stored.
 final contactSettingsProvider =

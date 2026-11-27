@@ -35,6 +35,7 @@ class SitemapContent {
   final List<Saint> saints;
   final List<Milestone> milestones;
   final List<CustomCategory> categories;
+  final List<CategoryEntry> entries;
   final List<CustomPage> pages;
 
   const SitemapContent({
@@ -46,6 +47,7 @@ class SitemapContent {
     this.saints = const [],
     this.milestones = const [],
     this.categories = const [],
+    this.entries = const [],
     this.pages = const [],
   });
 
@@ -63,17 +65,19 @@ class SitemapContent {
 /// The indexable public paths, without duplicates, in a stable order:
 /// - fixed pages whose section is on ([FeatureSettings.routeEnabled], the
 ///   same check as `FeatureGate`);
-/// - `/section/<slug>` for each public category ([publicCategories]: visible,
-///   usable, first of a slug) and `/page/<slug>` for each public custom page
-///   ([publicPages]) while their section switch is on. A page kept out of the
-///   menu (`showInNav: false`) is still indexable, exactly like the app
-///   (`CustomPageView` is indexable whenever the page exists);
+/// - `/section/<slug>` for each non-empty public category
+///   ([publicNonEmptyCategories]: visible, usable, first of a slug, at least
+///   one visible entry or visible section page, matching the nav) and
+///   `/page/<slug>` for each public custom page ([publicPages]) while their
+///   section switch is on. A page kept out of the menu (`showInNav: false`) is
+///   still indexable, exactly like the app (`CustomPageView` is indexable
+///   whenever the page exists);
 /// - the detail page of every item whose page opens ([detailItemOpens]:
 ///   listed, `detailsEnabled` not false, its section — for priests the one
 ///   matching their status — on).
 ///
 /// Category items (`entries`) have no page of their own, so only their
-/// category's URL is listed.
+/// category's URL is listed (and used to drop empty categories).
 List<String> sitemapPaths(SitemapContent c) {
   final f = c.features;
   final out = <String>[];
@@ -85,7 +89,8 @@ List<String> sitemapPaths(SitemapContent c) {
   for (final p in sitemapStaticPaths) {
     if (f.routeEnabled(p)) add(p);
   }
-  for (final cat in publicCategories(c.categories)) {
+  final visiblePages = f.enabled(Sections.customPages) ? c.pages : const <CustomPage>[];
+  for (final cat in publicNonEmptyCategories(c.categories, c.entries, visiblePages)) {
     if (f.routeEnabled(cat.path)) add(cat.path);
   }
   for (final page in publicPages(c.pages)) {
@@ -146,6 +151,7 @@ SitemapContent sitemapContentFromExport(Map<String, dynamic> export, {Map<String
     saints: _exported(export, 'saints', Saint.fromMap),
     milestones: _exported(export, 'milestones', Milestone.fromMap),
     categories: _exported(export, 'categories', CustomCategory.fromMap),
+    entries: _exported(export, 'entries', CategoryEntry.fromMap),
     pages: _exported(export, 'pages', CustomPage.fromMap),
   );
 }

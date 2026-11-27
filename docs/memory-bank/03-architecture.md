@@ -261,6 +261,7 @@ flowchart LR
 | `featuresProvider` | `Provider<FeatureSettings>` | value or `FeatureSettings.defaults` (all on) |
 | `featuresReadyProvider` | `Provider<bool>` | true once the features stream has a value or error; `FeatureGate` waits on it |
 | `alertsProvider`, `liturgiesProvider`, `meetingsProvider`, `activitiesProvider`, `facilitiesProvider`, `priestsProvider`, `milestonesProvider`, `saintsProvider` | `StreamProvider<List<T>>` | wrapped by `_public` → `publicItems` (drops `visible == false`, stable sort by `order`) |
+| `rawCategoriesProvider`, `rawPagesProvider` | `StreamProvider<List<…>>` | raw `categories` / `pages` streams used by `CategoryPage` / `CustomPageView` to tell hidden entries (`ContentUnavailable`) apart from unknown slugs (`NotFoundPage`) |
 | `categoriesProvider`, `customPagesProvider` | `StreamProvider<List<…>>` | PR #18: `categories` / `pages` through `publicCategories` / `publicPages` (visible, valid slug, unique, by `order`); empty when the collections do not exist |
 | `entriesProvider` | `StreamProvider<List<CategoryEntry>>` | every entry; pages filter with `entriesOf` |
 | `contactSettingsProvider` | `StreamProvider<ContactSettings>` | `settings/contact`, code defaults when missing (and in seed mode) |
@@ -326,7 +327,7 @@ flowchart LR
 | `/clinics`, `/clinics/:id` | redirect → `/` (query preserved) | — |
 | `/notices` | redirect → `/notifications` (query preserved) | — |
 | `/donations` | redirect → `/page/donations` (query preserved) | — |
-| anything else | `errorBuilder` → `AppShell` + "Page not found" + Back home | — |
+| anything else | `errorBuilder` → `AppShell` + `NotFoundPage` ("Page not found" + Back home) | — |
 
 `FeatureGate` shows a spinner (`Key('featuresLoading')`) until `featuresReadyProvider`, then the page or
 `SectionUnavailable` («هذا القسم غير متاح حاليًا» + Back to home).
