@@ -12,11 +12,11 @@ void main() {
       expect(settings.webPersistentTabManager, isA<WebPersistentMultipleTabManager>());
     });
 
-    test('native platforms keep existing persistence settings without webPersistentTabManager', () {
+    test('native platforms increase Firestore persistence cache to 100 MB without webPersistentTabManager', () {
       final settings = firestoreSettings(isWeb: false);
 
       expect(settings.persistenceEnabled, isTrue);
-      expect(settings.cacheSizeBytes, 40 * 1024 * 1024);
+      expect(settings.cacheSizeBytes, 100 * 1024 * 1024);
       expect(settings.webPersistentTabManager, isNull);
     });
   });

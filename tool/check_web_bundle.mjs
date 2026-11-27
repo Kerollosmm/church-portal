@@ -33,6 +33,7 @@ export const DEFAULT_DEFERRED_MODULES = [
 export const DEFAULT_FORBIDDEN_MAIN_SOURCES = [
   'data/latest_10y.dart',
   'ui/widgets/update_banner_io.dart',
+  'data/url_image_cache_io.dart',
   'firebase_auth-',
   'firebase_app_check-',
 ];

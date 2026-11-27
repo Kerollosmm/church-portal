@@ -398,10 +398,10 @@ on); owners can press **Send test error**. Details: `03-architecture.md` → *Er
 - **No image ⇒ the exact current look** (`ItemImage` returns its placeholder: person icon, category icon, milestone
   icon, megaphone, or nothing for saints/seasons). Same when the admin switches **Images** (`Sections.media`) off —
   `FeatureSettings.showImages`; nothing is fetched then.
-- `url`/`storage` images: `Image.network` with `webHtmlElementStrategy: fallback` (hosts without CORS still show on
-  the web). `inline` images: `MediaRepository.load(mediaId)` → `media/{id}` read lazily per card, cached in
-  `MediaCache.instance` (in-memory LRU, 60 entries, failures retried). Fade-in (300 ms), placeholder while loading and
-  on any error, semantic label = `alt` or the item's name, fixed square / circle sizes (no layout shift).
+- `url`/`storage` images: on web, `Image.network` with `webHtmlElementStrategy: fallback` (hosts without CORS still show on
+  the web); on native platforms (Android/IO), `MediaImageView` resolves via conditional `UrlImageCache`
+  (`lib/data/url_image_cache_io.dart` -> async `cacheDir/url_images/<sha256>.bin`, 30-entry in-memory LRU, 25 s HTTP timeout with next-attempt retry after failure, 5 MB max single image via `Content-Length`, 50 MB amortized LRU eviction cap, captive-portal/image-header verification, 0-byte/decode-error cleanup; `0 B` web bundle delta). `inline` images: `MediaRepository.load(mediaId)`
+  reads `Source.cache` first before default Firestore fetch (`media/{id}`), cached in `MediaCache.instance` (in-memory LRU, 60 entries, failures retried). Fade-in (300 ms), placeholder while loading and on any error, semantic label = `alt` or the item's name, fixed square / circle sizes (no layout shift).
 - Tap an image ⇒ `showImageViewer` dialog (pinch/scroll zoom, close button).
 - The assistant never sees image data (cover `image`, `gallery` URLs, media ids or alt text — PR #11 test).
 
@@ -595,7 +595,7 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
   - `WarmBackdrop` (`lib/ui/widgets/golden.dart`) wrapped in `RepaintBoundary` for zero-cost raster caching of the clouds texture + color filter.
   - `HeroVideo` (`lib/ui/widgets/hero_video_io.dart`) wrapped in `RepaintBoundary` to isolate 60 fps video rendering from ancestor repaint layers.
 - Arabic scripture text (Van Dyck) and English chapter:verse references (`refs-only`).
-- Offline caching via `ReadingsStore` (SharedPreferences on mobile, in-memory on web) with automatic pruning of dates older than yesterday.
+- Offline caching via `ReadingsStore` (SharedPreferences on mobile, 8 s HTTP fetch timeout falling back cleanly to cached JSON or `null`, in-memory on web) with automatic pruning of dates older than yesterday; Android additionally registers an unmetered periodic Workmanager job (`church_portal_readings_prefetch`, `ExistingPeriodicWorkPolicy.keep`) executing `prefetchUpcomingDays` for the next 7 `Africa/Cairo` days (`CairoTime` + `isoDate`).
 - Accessible directly via the «اقرأ القراءات» action on the Today card, direct link `/readings/YYYY-MM-DD`, or bare `/readings` (redirects to today's Cairo date `/readings/YYYY-MM-DD`, preserving query parameters).
 
 ### Notification Preferences & Reminders (`/notifications`, `notifications_page.dart`, ADR-057, ADR-064, ADR-065, ADR-067)

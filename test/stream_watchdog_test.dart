@@ -181,6 +181,41 @@ void main() {
         live.close();
       });
     });
+
+    test('7. silent live + cache hit + refreshServer emits cache then updates from server immediately without second watchdog', () {
+      fakeAsync((async) {
+        final live = StreamController<String>();
+        final serverRefresh = Completer<String?>();
+        final values = <String>[];
+        var refreshCalls = 0;
+
+        final sub = watchWithFallback<String>(
+          live: live.stream,
+          timeout: const Duration(seconds: 8),
+          readCache: () async => 'cached-features',
+          refreshServer: () {
+            refreshCalls++;
+            return serverRefresh.future;
+          },
+          fallback: 'seed-features',
+        ).listen(values.add);
+
+        async.elapse(const Duration(seconds: 8));
+        expect(values, ['cached-features']);
+        expect(refreshCalls, 1);
+
+        serverRefresh.complete('server-features');
+        async.flushMicrotasks();
+        expect(values, ['cached-features', 'server-features']);
+
+        live.add('live-features-2');
+        async.flushMicrotasks();
+        expect(values, ['cached-features', 'server-features', 'live-features-2']);
+
+        sub.cancel();
+        live.close();
+      });
+    });
   });
 
   group('guardTimeSensitive', () {

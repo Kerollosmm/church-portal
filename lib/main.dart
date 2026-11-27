@@ -115,6 +115,16 @@ Future<void> _start() async {
         ),
         existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
       );
+      Workmanager().registerPeriodicTask(
+        readingsPrefetchUniqueName,
+        readingsPrefetchTaskName,
+        frequency: const Duration(hours: 24),
+        constraints: Constraints(
+          networkType: NetworkType.unmetered,
+          requiresBatteryNotLow: true,
+        ),
+        existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
+      );
     }
   }
 

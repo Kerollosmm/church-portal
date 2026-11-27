@@ -197,6 +197,8 @@ void main() {
       final cairoSource = File('lib/domain/cairo_time.dart').readAsStringSync();
       final updateBannerStub = File('lib/ui/widgets/update_banner_stub.dart').readAsStringSync();
       final updateBannerRouter = File('lib/ui/widgets/update_banner.dart').readAsStringSync();
+      final urlImageCacheRouter = File('lib/data/url_image_cache.dart').readAsStringSync();
+      final urlImageCacheStub = File('lib/data/url_image_cache_stub.dart').readAsStringSync();
 
       expect(mainSource, isNot(contains('firebase_auth')));
       expect(mainSource, isNot(contains('admin_repository.dart')));
@@ -218,6 +220,11 @@ void main() {
       expect(updateBannerStub, isNot(contains('l10n.dart')));
       expect(updateBannerStub, isNot(contains('appUpdaterProvider')));
       expect(updateBannerStub, contains('this.autoStart = true'));
+
+      expect(urlImageCacheRouter, contains("if (dart.library.io) 'url_image_cache_io.dart'"));
+      expect(urlImageCacheStub, isNot(contains('dart:io')));
+      expect(urlImageCacheStub, isNot(contains('package:http/')));
+      expect(urlImageCacheStub, isNot(contains('package:crypto/')));
     });
 
     test('isAppCheckConfigured matches selectAppCheckPlan.activate across all build/platform inputs', () {

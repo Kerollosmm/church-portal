@@ -53,8 +53,9 @@ The `lib/state` package manages global application state using Flutter Riverpod.
   - [`computeLiturgyOccurrences(...)`](notify_providers.dart#L67), [`computeMeetingOccurrences(...)`](notify_providers.dart#L85): Expands schedule occurrences up to 60 days ahead in Cairo time.
   - [`PlannerSnapshot`](notify_providers.dart#L128): Serialized state snapshot supporting background replenishment.
   - [`savePlannerSnapshot(...)`](notify_providers.dart#L302), [`loadPlannerSnapshot(...)`](notify_providers.dart#L329): Serialization helpers for planner inputs.
-  - [`notificationReplenishCallbackDispatcher()`](notify_providers.dart#L462): Background WorkManager entry point.
-  - [`executeReplenishmentTask(...)`](notify_providers.dart#L469): Executes background verification and replenishment of scheduled notifications.
+  - [`notificationReplenishCallbackDispatcher()`](notify_providers.dart#L502): Background WorkManager entry point dispatching notification replenishment and `readingsPrefetch`.
+  - [`executeReplenishmentTask(...)`](notify_providers.dart#L524): Executes background verification and replenishment of scheduled notifications.
+  - [`executeReadingsPrefetchTask(...)`](notify_providers.dart#L510): Executes unmetered 7-day Cairo Katameros readings prefetch and pruning.
 
 ## Invariants
 - [`providers.dart:repositoryProvider`](providers.dart#L37): Must be overridden at root `ProviderScope` during application startup (`main()`); accessing the default provider throws `UnimplementedError`.

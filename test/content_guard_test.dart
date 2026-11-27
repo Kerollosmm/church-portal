@@ -354,5 +354,58 @@ void main() {
       expect(marks, [false]);
       await sub.cancel();
     });
+
+    test('SeedGate with readCache=true resolves immediately while firing background server refresh', () {
+      fakeAsync((async) {
+        final server = Completer<bool>();
+        var serverCalls = 0;
+        final gate = SeedGate(
+          () {
+            serverCalls++;
+            return server.future;
+          },
+          readCache: () async => true,
+        );
+
+        bool? result;
+        gate.check().then((v) => result = v);
+        async.flushMicrotasks();
+
+        expect(result, isTrue);
+        expect(gate.isSeeded, isTrue);
+        expect(serverCalls, 1);
+
+        // Background server error later does not throw unhandled or un-seed the gate.
+        server.completeError(TimeoutException('offline'));
+        async.flushMicrotasks();
+        expect(gate.isSeeded, isTrue);
+      });
+    });
+
+    test('SeedGate with readCache=null/false waits for server check', () {
+      fakeAsync((async) {
+        final server = Completer<bool>();
+        var serverCalls = 0;
+        final gate = SeedGate(
+          () {
+            serverCalls++;
+            return server.future;
+          },
+          readCache: () async => null,
+        );
+
+        bool? result;
+        gate.check().then((v) => result = v);
+        async.flushMicrotasks();
+
+        expect(result, isNull);
+        expect(serverCalls, 1);
+
+        server.complete(true);
+        async.flushMicrotasks();
+        expect(result, isTrue);
+        expect(gate.isSeeded, isTrue);
+      });
+    });
   });
 }

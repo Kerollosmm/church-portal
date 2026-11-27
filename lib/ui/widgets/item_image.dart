@@ -1,21 +1,29 @@
+import 'dart:async' show unawaited;
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
 import '../../data/media_repository.dart';
+import '../../data/url_image_cache.dart';
 import '../../domain/media.dart';
 import '../../state/providers.dart';
 
 typedef MediaLoader = Future<Uint8List?> Function(String mediaId);
+typedef UrlMediaLoader = Future<Uint8List?> Function(String url);
+typedef UrlMediaEvictor = Future<void> Function(String url);
 
-/// Renders a [MediaImage]: network for url/storage images, lazily fetched +
-/// cached bytes for inline (`media/{id}`) images. Shows [placeholder] while
-/// loading and on any error, and fades the picture in.
+/// Renders a [MediaImage]: network (or native LRU disk cache via [UrlImageCache]
+/// off-web) for url/storage images, lazily fetched + cached bytes for inline
+/// (`media/{id}`) images. Shows [placeholder] while loading and on any error,
+/// and fades the picture in.
 class MediaImageView extends StatefulWidget {
   final MediaImage image;
   final MediaLoader? loader;
+  final UrlMediaLoader? urlLoader;
+  final UrlMediaEvictor? urlEvictor;
   final Widget placeholder;
   final BoxFit fit;
   final String semanticLabel;
@@ -30,6 +38,8 @@ class MediaImageView extends StatefulWidget {
     required this.image,
     required this.placeholder,
     this.loader,
+    this.urlLoader,
+    this.urlEvictor,
     this.fit = BoxFit.cover,
     this.semanticLabel = '',
     this.cache,
@@ -42,6 +52,7 @@ class MediaImageView extends StatefulWidget {
 
 class _MediaImageViewState extends State<MediaImageView> {
   Future<Uint8List?>? _bytes;
+  String? _failedRemoteUrl;
 
   @override
   void initState() {
@@ -52,10 +63,21 @@ class _MediaImageViewState extends State<MediaImageView> {
   @override
   void didUpdateWidget(covariant MediaImageView old) {
     super.didUpdateWidget(old);
-    if (old.image != widget.image || old.loader != widget.loader) _resolve();
+    final retryFailedRemote = widget.image.isRemote && _failedRemoteUrl == widget.image.url;
+    if (old.image != widget.image ||
+        old.loader != widget.loader ||
+        old.urlLoader != widget.urlLoader ||
+        retryFailedRemote) {
+      _resolve();
+    }
   }
 
   void _resolve() {
+    _failedRemoteUrl = null;
+    if (widget.image.isRemote) {
+      _bytes = kIsWeb ? null : (widget.urlLoader ?? UrlImageCache.instance.get)(widget.image.url);
+      return;
+    }
     final id = widget.image.ownedMediaId;
     final loader = widget.loader;
     _bytes = (id == null || loader == null) ? null : (widget.cache ?? MediaCache.instance).get(id, loader);
@@ -74,12 +96,17 @@ class _MediaImageViewState extends State<MediaImageView> {
     ]);
   }
 
-  Widget _error(BuildContext context, Object error, StackTrace? stack) => widget.placeholder;
+  Widget _error(BuildContext context, Object error, StackTrace? stack) {
+    if (widget.image.isRemote && !kIsWeb) {
+      unawaited((widget.urlEvictor ?? UrlImageCache.instance.evict)(widget.image.url));
+    }
+    return widget.placeholder;
+  }
 
   @override
   Widget build(BuildContext context) {
     final label = widget.semanticLabel.isEmpty ? null : widget.semanticLabel;
-    if (widget.image.isRemote) {
+    if (widget.image.isRemote && kIsWeb) {
       return Image.network(
         widget.image.url,
         key: widget.keyed ? const Key('itemImage') : null,
@@ -98,7 +125,13 @@ class _MediaImageViewState extends State<MediaImageView> {
       future: future,
       builder: (context, snap) {
         final data = snap.data;
-        if (data == null || data.isEmpty) return widget.placeholder;
+        if (data == null || data.isEmpty) {
+          if (widget.image.isRemote && snap.connectionState == ConnectionState.done) {
+            _failedRemoteUrl = widget.image.url;
+          }
+          return widget.placeholder;
+        }
+        _failedRemoteUrl = null;
         return Image.memory(
           data,
           key: widget.keyed ? const Key('itemImage') : null,
