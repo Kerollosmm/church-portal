@@ -52,6 +52,7 @@ class MediaImageView extends StatefulWidget {
 
 class _MediaImageViewState extends State<MediaImageView> {
   Future<Uint8List?>? _bytes;
+  String? _failedRemoteUrl;
 
   @override
   void initState() {
@@ -62,10 +63,17 @@ class _MediaImageViewState extends State<MediaImageView> {
   @override
   void didUpdateWidget(covariant MediaImageView old) {
     super.didUpdateWidget(old);
-    if (old.image != widget.image || old.loader != widget.loader || old.urlLoader != widget.urlLoader) _resolve();
+    final retryFailedRemote = widget.image.isRemote && _failedRemoteUrl == widget.image.url;
+    if (old.image != widget.image ||
+        old.loader != widget.loader ||
+        old.urlLoader != widget.urlLoader ||
+        retryFailedRemote) {
+      _resolve();
+    }
   }
 
   void _resolve() {
+    _failedRemoteUrl = null;
     if (widget.image.isRemote) {
       _bytes = kIsWeb ? null : (widget.urlLoader ?? UrlImageCache.instance.get)(widget.image.url);
       return;
@@ -117,7 +125,13 @@ class _MediaImageViewState extends State<MediaImageView> {
       future: future,
       builder: (context, snap) {
         final data = snap.data;
-        if (data == null || data.isEmpty) return widget.placeholder;
+        if (data == null || data.isEmpty) {
+          if (widget.image.isRemote && snap.connectionState == ConnectionState.done) {
+            _failedRemoteUrl = widget.image.url;
+          }
+          return widget.placeholder;
+        }
+        _failedRemoteUrl = null;
         return Image.memory(
           data,
           key: widget.keyed ? const Key('itemImage') : null,

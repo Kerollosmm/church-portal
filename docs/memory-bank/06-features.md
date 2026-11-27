@@ -400,8 +400,7 @@ on); owners can press **Send test error**. Details: `03-architecture.md` → *Er
   `FeatureSettings.showImages`; nothing is fetched then.
 - `url`/`storage` images: on web, `Image.network` with `webHtmlElementStrategy: fallback` (hosts without CORS still show on
   the web); on native platforms (Android/IO), `MediaImageView` resolves via conditional `UrlImageCache`
-  (`lib/data/url_image_cache_io.dart` -> `cacheDir/url_images/<sha256>.bin`, 8 s HTTP timeout, 50 MB LRU eviction cap,
-  0-byte corrupt cleanup, offline disk hit; `0 B` web bundle delta). `inline` images: `MediaRepository.load(mediaId)`
+  (`lib/data/url_image_cache_io.dart` -> async `cacheDir/url_images/<sha256>.bin`, 30-entry in-memory LRU, 25 s HTTP timeout with next-attempt retry after failure, 5 MB max single image via `Content-Length`, 50 MB amortized LRU eviction cap, captive-portal/image-header verification, 0-byte/decode-error cleanup; `0 B` web bundle delta). `inline` images: `MediaRepository.load(mediaId)`
   reads `Source.cache` first before default Firestore fetch (`media/{id}`), cached in `MediaCache.instance` (in-memory LRU, 60 entries, failures retried). Fade-in (300 ms), placeholder while loading and on any error, semantic label = `alt` or the item's name, fixed square / circle sizes (no layout shift).
 - Tap an image ⇒ `showImageViewer` dialog (pinch/scroll zoom, close button).
 - The assistant never sees image data (cover `image`, `gallery` URLs, media ids or alt text — PR #11 test).

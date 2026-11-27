@@ -80,7 +80,7 @@ lib/
     admin_repository.dart   AdminBackend (interface; `media`), AdminRepository (Firestore+Auth), AdminDoc, AdminRoles
     media_repository.dart   MediaRepository, FirestoreMediaRepository & ReadOnlyMediaRepository (Source.cache first, ADR-091),
                             MediaCache (in-memory LRU), EncodedImage
-    url_image_cache*.dart   UrlImageCache (conditional import: IO = 50 MB LRU sha256 disk cache in cacheDir/url_images with 8s timeout; stub/web = 0 B no-op — ADR-091)
+    url_image_cache*.dart   UrlImageCache (conditional import: IO = async 50 MB LRU sha256 disk cache + 30-entry in-memory LRU in cacheDir/url_images with 25 s timeout, 5 MB max single file, captive-portal/magic-byte check, amortized eviction; stub/web = 0 B no-op — ADR-091)
     image_processing.dart   prepareUpload/compressDecoded; codecs image_codec/image_codec_web.dart (canvas, WebP)
                             and image_codec_io.dart (`image` package, JPEG) via conditional import
     local_notifications*.dart LocalNotifier, PlatformLocalNotifier (flutter_local_notifications wrapper, channels, exact alarms) — ADR-058
@@ -235,7 +235,7 @@ flowchart LR
   the seeding check cannot answer (before, `/contact` kept the four default types in that case).
 - **Custom content waits for loaded data (PR #23, ADR-033, PR 6F-1 / ADR-091):** `categories`, `entries` and `pages` have no bundled
   copy, so `FirestoreRepository._custom` (a) listens with `includeMetadataChanges: true` through `settleFirst`
-  (`LiveReading {value, provisional: isFromCache, changed: docChanges.isNotEmpty}`): empty cache readings wait up to `customPatience` (8 s), while non-empty cache readings settle in `nonEmptyCachePatience` (1.5 s) — or `0 ms` immediately when `isOffline` is true — before emitting the held reading or `Source.cache` fallback, after which only readings that changed something pass;
+  (`LiveReading {value, provisional: isFromCache, changed: docChanges.isNotEmpty}`): empty cache readings wait up to `customPatience` (8 s), while non-empty cache readings settle in `nonEmptyCachePatience` (1.5 s) before emitting the held reading or `Source.cache` fallback (with an optional `isOffline` `0 ms` hook prepared on `settleFirst`/`FirestoreRepository` for PR 6F-2 `ConnectivityEnv` wiring), after which only readings that changed something pass;
   and (b) calls `guardSeeded(..., fallbackDelay: customFallbackDelay)` (13 s: longer than the 8 s patience + the 4 s
   `customCacheRead`, so the held / cached list always reaches the guard first), so an unanswered seeding check no
   longer emits the empty fallback at once; the delayed fallback is also deferred while a live value's seeding

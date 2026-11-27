@@ -17,7 +17,7 @@ The `lib/data` layer manages all local persistence, remote networking, platform 
 - [`ContactUnavailableException`](content_repository.dart#L14): Thrown when contact submission is attempted without live Firebase.
 - [`SeedGate`](content_repository.dart#L138): Seeding marker tracker detecting if `settings/church` exists in Firestore (probing `Source.cache` first and triggering a background `Source.server` refresh).
 - [`guardSeeded`](content_repository.dart#L205): Stream wrapper preventing stranded fallbacks while awaiting seeding confirmation.
-- [`settleFirst`](content_repository.dart#L378): Stream combinator delaying empty cache reads for custom content (`customPatience` 8 s) while settling non-empty cache reads faster (`1.5 s` or `0 ms` when `isOffline` is true).
+- [`settleFirst`](content_repository.dart#L406): Stream combinator delaying empty cache reads for custom content (`customPatience` 8 s) while settling non-empty cache reads faster (`1.5 s` in PR 6F-1; `isOffline` `0 ms` hook prepared for PR 6F-2).
 - [`watchWithFallback`](stream_watchdog.dart#L15): Bounded stream watchdog for `liturgies`, `seasons`, `settings`, and `features` falling back to `Source.cache` (plus optional `refreshServer`), seed (`settings`/`features` only), or `onMissError` (time-sensitive `liturgies`/`seasons`) on listener stall while keeping the live stream subscribed.
 - [`normalizeFirestoreValue`](content_repository.dart#L113), [`normalizeDoc`](content_repository.dart#L120): Normalizes Firestore `Timestamp` objects into UTC `DateTime` values.
 - [`LiveReading`](content_repository.dart#L365): Typed record describing a snapshot's value, provisional cache status, and change flag.
@@ -28,7 +28,7 @@ The `lib/data` layer manages all local persistence, remote networking, platform 
 - [`MediaRepository`](media_repository.dart#L31): Abstract contract for loading, uploading, and deleting media files.
 - [`FirestoreMediaRepository`](media_repository.dart#L46): Spark-plan implementation storing base64 image data inline in Firestore `media/{id}` (`Source.cache` first on `load`).
 - [`ReadOnlyMediaRepository`](media_repository.dart#L128): Spark-plan read-only public media loader (`Source.cache` first on `load`; `upload`/`delete` throw `UnsupportedError`).
-- [`UrlImageCache`](url_image_cache.dart#L1): Conditional remote URL image disk cache (`url_image_cache_io.dart` on native with 8 s timeout, 0-byte cleanup, 50 MB LRU eviction; `url_image_cache_stub.dart` on web).
+- [`UrlImageCache`](url_image_cache.dart#L1): Conditional remote URL image disk cache (`url_image_cache_io.dart` on native with async disk I/O, 30-entry memory LRU, 25 s streaming timeout, 5 MB max single image, 0-byte/decode cleanup, amortized 50 MB LRU eviction; `url_image_cache_stub.dart` on web).
 - [`MediaCache`](media_repository.dart#L172): In-memory LRU cache of inline image bytes (default capacity 60).
 - [`decodeMediaDoc`](media_repository.dart#L83): Extracts and decodes base64 bytes from a `media/{id}` document map.
 - [`createPublicMediaRepository`](media_repository.dart#L151): Factory returning read-only `ReadOnlyMediaRepository` for public startup without Firebase Auth.
