@@ -10,6 +10,7 @@ import '../domain/features.dart';
 import '../domain/models.dart';
 import 'error_reporting.dart';
 import 'seed_data.dart';
+import 'stream_watchdog.dart';
 
 class ContactUnavailableException implements Exception {
   @override
@@ -442,6 +443,152 @@ Stream<T> settleFirst<T>({
   return out.stream;
 }
 
+/// Time-sensitive collection guard (`liturgies`, `seasons`, PR 6D / ADR-089).
+///
+/// Holds back provisional empty cache snapshots (`isFromCache && value.isEmpty`)
+/// so a cold empty persistence cache lets the [watchWithFallback] timer fire
+/// rather than clearing it with `[]`. On timeout + cache miss, emits
+/// [onMissError] while keeping [raw] subscribed for recovery. Empty server
+/// snapshots on an uncertain [gate] wait on [SeedGate.whenSeeded] (ADR-038),
+/// while an explicitly unseeded database (`gate.markerAbsent == true`) still
+/// serves [unseededFallback].
+@visibleForTesting
+Stream<List<T>> guardTimeSensitive<T>({
+  required Stream<({List<T> value, bool isFromCache})> raw,
+  required SeedGate gate,
+  required Duration timeout,
+  required Future<List<T>?> Function() readCache,
+  required List<T> unseededFallback,
+  required void Function(bool onSeed) onSeed,
+  required Object Function() onMissError,
+  void Function(Object e, StackTrace st)? onStreamError,
+}) {
+  late final StreamController<List<T>> filtered;
+  StreamSubscription<({List<T> value, bool isFromCache})>? sub;
+  var cancelled = false;
+  var onSeedNow = false;
+  var holdingEmptyServer = false;
+  var hasAcceptedValue = false;
+  List<T>? heldLive;
+
+  void setSeedMark(bool v) {
+    if (onSeedNow == v) return;
+    onSeedNow = v;
+    onSeed(v);
+  }
+
+  filtered = StreamController<List<T>>(
+    onListen: () {
+      unawaited(gate.whenSeeded.then((_) {
+        if (cancelled || filtered.isClosed) return;
+        if (heldLive != null) {
+          final v = heldLive!;
+          heldLive = null;
+          holdingEmptyServer = false;
+          hasAcceptedValue = true;
+          setSeedMark(false);
+          filtered.add(v);
+          return;
+        }
+        if (!holdingEmptyServer) return;
+        holdingEmptyServer = false;
+        hasAcceptedValue = true;
+        setSeedMark(false);
+        filtered.add(const []);
+      }));
+      sub = raw.listen(
+        (snap) async {
+          if (snap.value.isNotEmpty) {
+            // Keep partial writes hidden behind the bundled seed while settings/church
+            // is confirmed absent (e.g. mid-seed collection-first upload).
+            if (!gate.isSeeded && gate.markerAbsent) {
+              sub?.pause();
+              var seeded = false;
+              try {
+                seeded = await gate.check();
+              } finally {
+                if (!cancelled) sub?.resume();
+              }
+              if (cancelled || filtered.isClosed) return;
+              if (!seeded && !gate.isSeeded) {
+                heldLive = snap.value;
+                holdingEmptyServer = false;
+                setSeedMark(true);
+                if (!hasAcceptedValue) {
+                  hasAcceptedValue = true;
+                  filtered.add(unseededFallback);
+                }
+                return;
+              }
+            }
+            heldLive = null;
+            holdingEmptyServer = false;
+            hasAcceptedValue = true;
+            setSeedMark(false);
+            if (!filtered.isClosed) filtered.add(snap.value);
+            return;
+          }
+          if (snap.isFromCache && !hasAcceptedValue) return;
+          sub?.pause();
+          var seeded = gate.isSeeded;
+          try {
+            if (!seeded) seeded = await gate.check();
+          } finally {
+            if (!cancelled) sub?.resume();
+          }
+          if (cancelled || filtered.isClosed) return;
+          if (seeded || gate.isSeeded) {
+            heldLive = null;
+            holdingEmptyServer = false;
+            hasAcceptedValue = true;
+            setSeedMark(false);
+            filtered.add(const []);
+          } else if (gate.markerAbsent) {
+            heldLive = null;
+            holdingEmptyServer = true;
+            setSeedMark(true);
+            filtered.add(unseededFallback);
+          } else {
+            holdingEmptyServer = true;
+          }
+        },
+        onError: (Object e, StackTrace st) {
+          onStreamError?.call(e, st);
+          if (!filtered.isClosed) filtered.addError(e, st);
+        },
+        onDone: () {
+          if (!filtered.isClosed) filtered.close();
+        },
+      );
+    },
+    onPause: () => sub?.pause(),
+    onResume: () => sub?.resume(),
+    onCancel: () async {
+      cancelled = true;
+      heldLive = null;
+      holdingEmptyServer = false;
+      setSeedMark(false);
+      await sub?.cancel();
+    },
+  );
+
+  return watchWithFallback<List<T>>(
+    live: filtered.stream,
+    timeout: timeout,
+    readCache: () async {
+      if (!gate.isSeeded && gate.markerAbsent) {
+        final seeded = await gate.check();
+        if (!seeded && !gate.isSeeded) {
+          setSeedMark(true);
+          return unseededFallback;
+        }
+      }
+      return readCache();
+    },
+    onMissError: onMissError,
+  );
+}
+
 /// Live Firestore implementation (offline persistence is enabled at startup).
 ///
 /// Fallback rules: if `settings/church` does not exist (database not seeded
@@ -490,7 +637,12 @@ class FirestoreRepository implements ContentRepository {
   /// settling on the held / cached reading ([settleFirst] patience).
   static const customPatience = Duration(seconds: 8);
 
-  /// Timeout of the `Source.cache` read [settleFirst] falls back to.
+  /// Timeout before the stream watchdog falls back to `Source.cache`,
+  /// bundled seed (`settings`/`features`), or an explicit timeout error
+  /// (`liturgies`/`seasons`).
+  static const streamWatchdogTimeout = Duration(seconds: 8);
+
+  /// Timeout of the `Source.cache` read [settleFirst] and stream watchdogs fall back to.
   static const customCacheRead = Duration(seconds: 4);
 
   /// How long the seeding fallback (the empty list) waits when the seeding
@@ -544,17 +696,62 @@ class FirestoreRepository implements ContentRepository {
         });
       }, fallback, confirms: (list) => list.isNotEmpty);
 
+  Stream<List<T>> _watchTimeSensitiveCol<T>(
+    String name,
+    T Function(String, Map<String, dynamic>) f,
+    List<T> unseededFallback,
+  ) {
+    var hasForwardedNonEmpty = false;
+    final raw = db.collection(name).snapshots(includeMetadataChanges: true).where((snap) {
+      // Skip pure cache->server metadata sync transitions that add no doc changes.
+      final skip = hasForwardedNonEmpty && snap.docChanges.isEmpty && !snap.metadata.isFromCache;
+      if (!skip && snap.docs.any((d) => !isSoftDeleted(d.data()))) {
+        hasForwardedNonEmpty = true;
+      }
+      return !skip;
+    }).map((snap) => (
+          value: _docs(snap, f),
+          isFromCache: snap.metadata.isFromCache,
+        ));
+    return guardTimeSensitive<T>(
+      raw: raw,
+      gate: _gate,
+      timeout: streamWatchdogTimeout,
+      readCache: () async {
+        final snap = await db.collection(name).get(const GetOptions(source: Source.cache)).timeout(customCacheRead);
+        final list = _docs(snap, f);
+        return list.isEmpty ? null : list;
+      },
+      unseededFallback: unseededFallback,
+      onSeed: (onSeed) => _markFallback(name, onSeed),
+      onMissError: () => TimeoutException('Firestore stream $name timed out', streamWatchdogTimeout),
+      onStreamError: (e, st) => ErrorReporting.capture(e, st, section: 'content:$name'),
+    );
+  }
+
   @override
   Stream<ChurchSettings> settings() => _guard(
         'settings',
-        () => db.doc('settings/church').snapshots().map((d) {
-              if (!d.exists) return seed.settings;
-              // settings/church IS the seeding marker: a snapshot showing it
-              // answers the gate for every stream (ADR-038), even when the
-              // one-shot check timed out on a slow cold start.
-              _gate.markSeeded();
-              return ChurchSettings.fromMap(normalizeDoc(d.data()));
-            }),
+        () => watchWithFallback<ChurchSettings>(
+          live: db.doc('settings/church').snapshots().map((d) {
+            if (!d.exists) return seed.settings;
+            // settings/church IS the seeding marker: a snapshot showing it
+            // answers the gate for every stream (ADR-038), even when the
+            // one-shot check timed out on a slow cold start.
+            _gate.markSeeded();
+            return ChurchSettings.fromMap(normalizeDoc(d.data()));
+          }),
+          timeout: streamWatchdogTimeout,
+          readCache: () async {
+            final d =
+                await db.doc('settings/church').get(const GetOptions(source: Source.cache)).timeout(customCacheRead);
+            if (!d.exists) return null;
+            _gate.markSeeded();
+            return ChurchSettings.fromMap(normalizeDoc(d.data()));
+          },
+          fallback: seed.settings,
+          onFallback: (onFallback) => _markFallback('settings_watchdog', onFallback),
+        ),
         seed.settings,
         // settings/church IS the seeding marker: a live snapshot of it that
         // differs from the seed proves it exists.
@@ -563,10 +760,23 @@ class FirestoreRepository implements ContentRepository {
   @override
   Stream<FeatureSettings> features() => _guard(
         'features',
-        () => db
-            .doc('settings/features')
-            .snapshots()
-            .map((d) => d.exists ? FeatureSettings.fromMap(normalizeDoc(d.data())) : seed.features),
+        () => watchWithFallback<FeatureSettings>(
+          live: db
+              .doc('settings/features')
+              .snapshots()
+              .map((d) => d.exists ? FeatureSettings.fromMap(normalizeDoc(d.data())) : seed.features),
+          timeout: streamWatchdogTimeout,
+          readCache: () async {
+            final d = await db
+                .doc('settings/features')
+                .get(const GetOptions(source: Source.cache))
+                .timeout(customCacheRead);
+            if (!d.exists) return null;
+            return FeatureSettings.fromMap(normalizeDoc(d.data()));
+          },
+          fallback: seed.features,
+          onFallback: (onFallback) => _markFallback('features_watchdog', onFallback),
+        ),
         seed.features,
         // A stored settings/features proves itself too (PR #23).
         confirms: (v) => !identical(v, seed.features),
@@ -574,9 +784,9 @@ class FirestoreRepository implements ContentRepository {
   @override
   Stream<List<Alert>> alerts() => _col('alerts', Alert.fromMap, seed.alerts);
   @override
-  Stream<List<Season>> seasons() => _col('seasons', Season.fromMap, seed.seasons);
+  Stream<List<Season>> seasons() => _watchTimeSensitiveCol('seasons', Season.fromMap, seed.seasons);
   @override
-  Stream<List<Liturgy>> liturgies() => _col('liturgies', Liturgy.fromMap, seed.liturgies);
+  Stream<List<Liturgy>> liturgies() => _watchTimeSensitiveCol('liturgies', Liturgy.fromMap, seed.liturgies);
   @override
   Stream<List<Meeting>> meetings() => _col('meetings', Meeting.fromMap, seed.meetings);
   @override

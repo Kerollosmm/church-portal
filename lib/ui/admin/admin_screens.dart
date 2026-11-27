@@ -49,10 +49,13 @@ class _OverviewScreenState extends State<OverviewScreen> {
   };
   static const _maxRefreshInterval = Duration(minutes: 1);
   static const _minRefreshDelay = Duration(milliseconds: 50);
+  static const _streamTimeout = Duration(seconds: 10);
 
   /// Latest docs per collection (null = still loading / failed).
   final Map<String, List<AdminDoc>?> _docs = {};
   final Set<String> _failed = {};
+  final Set<String> _timedOut = {};
+  final Map<String, Timer> _streamTimers = {};
   AdminDoc? _features;
   bool _featuresLoaded = false;
   final List<StreamSubscription<Object?>> _subs = [];
@@ -73,6 +76,7 @@ class _OverviewScreenState extends State<OverviewScreen> {
       _cancel();
       _docs.clear();
       _failed.clear();
+      _timedOut.clear();
       _features = null;
       _featuresLoaded = false;
       _subscribe();
@@ -85,30 +89,57 @@ class _OverviewScreenState extends State<OverviewScreen> {
       s.cancel();
     }
     _subs.clear();
+    for (final t in _streamTimers.values) {
+      t.cancel();
+    }
+    _streamTimers.clear();
     _refreshTimer?.cancel();
     _refreshTimer = null;
   }
 
+  void _startStreamTimer(String key) {
+    _streamTimers.remove(key)?.cancel();
+    _streamTimers[key] = Timer(_streamTimeout, () {
+      _streamTimers.remove(key);
+      if (!mounted) return;
+      setState(() => _timedOut.add(key));
+    });
+  }
+
+  void _clearStreamWatch(String key) {
+    _streamTimers.remove(key)?.cancel();
+    _timedOut.remove(key);
+  }
+
   void _subscribe() {
     for (final n in _watchedNames) {
+      _startStreamTimer(n);
       _subs.add(widget.repo.watch(n).listen(
-            (d) {
-              setState(() {
-                _docs[n] = d;
-                _failed.remove(n);
-              });
+            (d) => setState(() {
+              _docs[n] = d;
+              _failed.remove(n);
+              _clearStreamWatch(n);
               if (n == 'alerts') _rescheduleRefresh();
-            },
-            onError: (_) => setState(() => _failed.add(n)),
+            }),
+            onError: (_) => setState(() {
+              _failed.add(n);
+              _clearStreamWatch(n);
+            }),
           ));
     }
-    _subs.add(widget.repo.watchDoc('settings/features').listen(
+    const featuresKey = 'settings/features';
+    _startStreamTimer(featuresKey);
+    _subs.add(widget.repo.watchDoc(featuresKey).listen(
           (d) => setState(() {
             _features = d;
             _featuresLoaded = true;
-            _failed.remove('settings/features');
+            _failed.remove(featuresKey);
+            _clearStreamWatch(featuresKey);
           }),
-          onError: (_) => setState(() => _failed.add('settings/features')),
+          onError: (_) => setState(() {
+            _failed.add(featuresKey);
+            _clearStreamWatch(featuresKey);
+          }),
         ));
   }
 
@@ -117,6 +148,7 @@ class _OverviewScreenState extends State<OverviewScreen> {
     setState(() {
       _docs.clear();
       _failed.clear();
+      _timedOut.clear();
       _features = null;
       _featuresLoaded = false;
     });
@@ -218,7 +250,9 @@ class _OverviewScreenState extends State<OverviewScreen> {
       unconfirmedTarget: unconfirmedTarget ?? 'liturgies',
       missingEnglishTarget: missingEnglishTarget ?? 'liturgies',
     );
-    final hasError = _failed.isNotEmpty;
+    final hasError = _failed.isNotEmpty || _timedOut.isNotEmpty;
+    final featuresFailed =
+        _failed.contains('settings/features') || _timedOut.contains('settings/features');
     final ready = !hasError && _featuresLoaded && _watchedNames.every(_docs.containsKey);
 
     final edited = <(String, AdminDoc)>[
@@ -268,24 +302,44 @@ class _OverviewScreenState extends State<OverviewScreen> {
             color: context.pal.surfaceAlt,
             child: Padding(
               padding: const EdgeInsets.all(14),
-              child: Row(
-                children: [
-                  Icon(Icons.error_outline, color: context.pal.alert),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      context.tr('attentionLoadError'),
-                      style: TextStyle(color: context.pal.alert, fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  TextButton.icon(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final retryBtn = TextButton.icon(
                     key: const ValueKey('attention-retry'),
                     onPressed: _retry,
                     icon: const Icon(Icons.refresh, size: 18),
                     label: Text(context.tr('retry')),
-                  ),
-                ],
+                  );
+                  final msgRow = Row(
+                    children: [
+                      Icon(Icons.error_outline, color: context.pal.alert),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          context.tr('attentionLoadError'),
+                          style: TextStyle(color: context.pal.alert, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ],
+                  );
+                  if (constraints.maxWidth < 340) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        msgRow,
+                        const SizedBox(height: 4),
+                        Align(alignment: AlignmentDirectional.centerEnd, child: retryBtn),
+                      ],
+                    );
+                  }
+                  return Row(
+                    children: [
+                      Expanded(child: msgRow),
+                      const SizedBox(width: 8),
+                      retryBtn,
+                    ],
+                  );
+                },
               ),
             ),
           )
@@ -378,22 +432,42 @@ class _OverviewScreenState extends State<OverviewScreen> {
         Card(
           key: const ValueKey('sections-summary'),
           margin: EdgeInsets.zero,
-          child: ListTile(
-            leading: Icon(Icons.toggle_on_outlined, color: context.pal.primary),
-            title: Text(context.tr('sectionsSummary'), style: const TextStyle(fontWeight: FontWeight.w700)),
-            subtitle: Text(
-              _failed.contains('settings/features')
-                  ? '—'
-                  : (_featuresLoaded
-                      ? '${context.tr('sectionsOn')}: ${Sections.all.length - f.disabledCount}/${Sections.all.length}'
-                      : '…'),
-            ),
-            trailing: TextButton.icon(
-              icon: const Icon(Icons.open_in_new, size: 18),
-              label: Text(context.tr('openSite')),
-              onPressed: () => openUrl(Uri.base.resolve('/').toString()),
-            ),
-            onTap: () => onOpen('features'),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: Icon(Icons.toggle_on_outlined, color: context.pal.primary),
+                title: Text(context.tr('sectionsSummary'), style: const TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: Text(
+                  featuresFailed
+                      ? '—'
+                      : (_featuresLoaded
+                          ? '${context.tr('sectionsOn')}: ${Sections.all.length - f.disabledCount}/${Sections.all.length}'
+                          : '…'),
+                ),
+                trailing: TextButton.icon(
+                  icon: const Icon(Icons.open_in_new, size: 18),
+                  label: Text(context.tr('openSite')),
+                  onPressed: () => openUrl(Uri.base.resolve('/').toString()),
+                ),
+                onTap: () => onOpen('features'),
+              ),
+              if (featuresFailed) ...[
+                const Divider(height: 1),
+                Align(
+                  alignment: AlignmentDirectional.centerEnd,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    child: TextButton.icon(
+                      key: const ValueKey('sections-retry'),
+                      onPressed: _retry,
+                      icon: const Icon(Icons.refresh, size: 18),
+                      label: Text(context.tr('retry')),
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
         const SizedBox(height: 20),

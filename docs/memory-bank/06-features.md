@@ -187,6 +187,7 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
 
 ### `/mass-schedule` — `mass_schedule_page.dart` `MassSchedulePage`
 - `AlertBanner`, `NextMassCard` (no «times pending» banner since ADR-046).
+- **Non-blocking schedule & timeout error state (PR 6D, ADR-089):** `NextMassCard` and the `/mass-schedule` weekly view depend only on `liturgiesProvider` (treating `seasons.value ?? const []` while `seasonsProvider` is pending so a stalled `seasons` listener never leaves an infinite skeleton); checking `!hasValue && hasError` before `isLoading` (so Riverpod 3's automatic retry backoff never masks errors with a skeleton), a timed-out/failed `liturgies` stream (or `seasons` stream when Holy Seasons is toggled on) renders `ErrorState` with a Retry button (`ref.invalidate(...)`) instead of fake seed times.
 - **Holy Seasons** switch (`holySeasons`): defaults to **on** the first time seasons load only while a season that
   **replaces** the regular schedule is active (`activeSeasonsAt(seasons, now).any((s) => s.replacesRegular)`), so an
   additive evening revival keeps the weekly tabs; once the visitor flips it, their choice wins.
