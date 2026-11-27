@@ -10,6 +10,7 @@ import 'package:church_portal/state/providers.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _MemoryInstallEnv extends InstallEnv {
@@ -66,17 +67,20 @@ class _FakeLocalNotifier implements LocalNotifier {
 
 class _FakeFirebaseMessaging implements FirebaseMessaging {
   bool shouldThrow = false;
+  bool shouldHang = false;
   final List<String> subscribed = [];
   final List<String> unsubscribed = [];
 
   @override
   Future<void> subscribeToTopic(String topic) async {
+    if (shouldHang) return Completer<void>().future;
     if (shouldThrow) throw Exception('network offline');
     subscribed.add(topic);
   }
 
   @override
   Future<void> unsubscribeFromTopic(String topic) async {
+    if (shouldHang) return Completer<void>().future;
     if (shouldThrow) throw Exception('network offline');
     unsubscribed.add(topic);
   }
@@ -92,7 +96,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  group('PushMessaging.updateSubscriptions persistence', () {
+  group('PushMessaging.updateSubscriptions persistence & timeout', () {
     test('persists pendingTopicSyncKey on failure and clears on success', () async {
       final prefs = await SharedPreferences.getInstance();
       final messaging = _FakeFirebaseMessaging()..shouldThrow = true;
@@ -120,9 +124,26 @@ void main() {
       expect(await PushMessaging.hasPendingTopicSync(prefs: prefs), isFalse);
       expect(messaging.subscribed, ['app_announcements_ar']);
     });
+
+    test('times out hanging topic calls and persists pendingTopicSyncKey', () async {
+      expect(PushMessaging.topicSyncTimeout, const Duration(seconds: 20));
+      final prefs = await SharedPreferences.getInstance();
+      final messaging = _FakeFirebaseMessaging()..shouldHang = true;
+      final userPrefs = PushPrefs(types: const {NotifyType.announcements}, updatedAt: DateTime.utc(2026, 11, 27));
+
+      final ok = await PushMessaging.updateSubscriptions(
+        userPrefs,
+        'ar',
+        messagingInstance: messaging,
+        sharedPrefs: prefs,
+        timeout: const Duration(milliseconds: 30),
+      );
+      expect(ok, isFalse);
+      expect(prefs.getBool(pendingTopicSyncKey), isTrue);
+    });
   });
 
-  group('NotifyPlanner FCM retry on connectivity reconnect', () {
+  group('NotifyPlanner FCM retry on connectivity reconnect and app resume', () {
     test('retries only on offline->online transition, with no tight loop and deduped in-flight calls', () async {
       final conn = StreamController<bool>.broadcast();
       addTearDown(conn.close);
@@ -161,8 +182,6 @@ void main() {
 
       expect(syncCalls, 1);
       expect(planner.hasPendingTopicSyncInMemory, isTrue);
-      final sp = await SharedPreferences.getInstance();
-      expect(sp.getBool(pendingTopicSyncKey), isTrue);
 
       // Repeated offline emissions do NOT trigger tight retry loops.
       conn.add(false);
@@ -191,7 +210,6 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       expect(planner.hasPendingTopicSyncInMemory, isFalse);
-      expect(sp.getBool(pendingTopicSyncKey), isNull);
 
       // Subsequent offline -> online with no pending flag does NOT call topicSync again.
       conn.add(false);
@@ -199,6 +217,174 @@ void main() {
       conn.add(true);
       await Future<void>.delayed(Duration.zero);
       expect(syncCalls, 2);
+    });
+
+    test('records reconnect arriving during an in-flight failed sync and runs one follow-up retry without looping',
+        () async {
+      final conn = StreamController<bool>.broadcast();
+      addTearDown(conn.close);
+
+      var syncCalls = 0;
+      Completer<bool>? inFlight = Completer<bool>();
+      var nextResult = false;
+
+      final container = ProviderContainer(
+        overrides: [
+          installEnvProvider.overrideWithValue(_MemoryInstallEnv()),
+          localNotifierProvider.overrideWithValue(_FakeLocalNotifier()),
+          featuresProvider.overrideWithValue(FeatureSettings.defaults),
+          liturgiesProvider.overrideWith((_) => const Stream.empty()),
+          meetingsProvider.overrideWith((_) => const Stream.empty()),
+          seasonsProvider.overrideWith((_) => const Stream.empty()),
+          dailyVersesProvider.overrideWith((_) async => const []),
+          connectivityProvider.overrideWith((_) => conn.stream),
+          topicSyncProvider.overrideWithValue((prefs, lang) {
+            syncCalls++;
+            final active = inFlight;
+            if (active != null) return active.future;
+            return Future.value(nextResult);
+          }),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final sub = container.listen(notifyPlannerProvider, (_, _) {});
+      final planner = sub.read();
+      conn.add(false);
+      await Future<void>.delayed(Duration.zero);
+      expect(syncCalls, 1);
+
+      // Reconnect arrives while initial topic sync is still in flight.
+      conn.add(true);
+      await Future<void>.delayed(Duration.zero);
+      expect(syncCalls, 1);
+
+      // Initial sync fails -> consumes the recorded reconnect to trigger ONE follow-up retry (which also fails), no loop.
+      inFlight.complete(false);
+      inFlight = null;
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      expect(syncCalls, 2);
+      expect(planner.hasPendingTopicSyncInMemory, isTrue);
+
+      // If another reconnect arrives during a sync that succeeds, the recorded reconnect is cleared on success.
+      inFlight = Completer<bool>();
+      conn.add(false);
+      await Future<void>.delayed(Duration.zero);
+      conn.add(true);
+      await Future<void>.delayed(Duration.zero);
+      expect(syncCalls, 3);
+
+      conn.add(false);
+      await Future<void>.delayed(Duration.zero);
+      conn.add(true);
+      await Future<void>.delayed(Duration.zero);
+      expect(syncCalls, 3);
+
+      inFlight.complete(true);
+      inFlight = null;
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      expect(syncCalls, 3);
+      expect(planner.hasPendingTopicSyncInMemory, isFalse);
+    });
+
+    testWidgets('retries pending topic sync on app resume (single-flight deduped)', (tester) async {
+      SharedPreferences.setMockInitialValues({pendingTopicSyncKey: true});
+      final prefs = await SharedPreferences.getInstance();
+      final messaging = _FakeFirebaseMessaging();
+      final conn = StreamController<bool>.broadcast();
+      addTearDown(conn.close);
+
+      var syncCalls = 0;
+      Completer<bool>? inFlight;
+      var useFakeSuccess = false;
+
+      late NotifyPlanner planner;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            installEnvProvider.overrideWithValue(_MemoryInstallEnv()),
+            localNotifierProvider.overrideWithValue(_FakeLocalNotifier()),
+            featuresProvider.overrideWithValue(FeatureSettings.defaults),
+            liturgiesProvider.overrideWith((_) => const Stream.empty()),
+            meetingsProvider.overrideWith((_) => const Stream.empty()),
+            seasonsProvider.overrideWith((_) => const Stream.empty()),
+            dailyVersesProvider.overrideWith((_) async => const []),
+            connectivityProvider.overrideWith((_) => conn.stream),
+            topicSyncProvider.overrideWithValue((userPrefs, lang) async {
+              syncCalls++;
+              final active = inFlight;
+              if (active != null) return active.future;
+              if (useFakeSuccess) {
+                messaging.shouldThrow = false;
+                return PushMessaging.updateSubscriptions(
+                  userPrefs,
+                  lang,
+                  messagingInstance: messaging,
+                  sharedPrefs: prefs,
+                );
+              }
+              messaging.shouldThrow = true;
+              return PushMessaging.updateSubscriptions(
+                userPrefs,
+                lang,
+                messagingInstance: messaging,
+                sharedPrefs: prefs,
+              );
+            }),
+          ],
+          child: Consumer(
+            builder: (context, ref, _) {
+              planner = ref.watch(notifyPlannerProvider);
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(syncCalls, 1);
+      expect(planner.hasPendingTopicSyncInMemory, isTrue);
+      expect(prefs.getBool(pendingTopicSyncKey), isTrue);
+
+      // Pause then resume while retry is in flight -> only 1 additional call, deduped on second resume.
+      inFlight = Completer<bool>();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(syncCalls, 2);
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(syncCalls, 2);
+
+      // Finish the in-flight call cleanly (still failing): the second resume arrived while in-flight,
+      // so it triggers ONE follow-up retry (which still fails since useFakeSuccess is false), then stops.
+      inFlight.complete(false);
+      inFlight = null;
+      await tester.pump();
+      expect(syncCalls, 3);
+
+      useFakeSuccess = true;
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.pump();
+
+      expect(syncCalls, 4);
+      expect(planner.hasPendingTopicSyncInMemory, isFalse);
+      expect(prefs.getBool(pendingTopicSyncKey), isNull);
+
+      // Resuming again with nothing pending does NOT trigger another sync.
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(syncCalls, 4);
     });
   });
 }

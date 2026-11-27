@@ -1,6 +1,7 @@
 import 'dart:async';
 
-import 'package:church_portal/core/connectivity_env_io.dart' show isConnectivityOnline;
+import 'package:church_portal/core/connectivity_env.dart';
+import 'package:church_portal/core/connectivity_env_io.dart' as conn_io;
 import 'package:church_portal/core/theme.dart';
 import 'package:church_portal/state/providers.dart';
 import 'package:church_portal/ui/widgets/offline_banner.dart';
@@ -9,20 +10,58 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
+class _FakeConnectivity implements Connectivity {
+  List<ConnectivityResult> nextCheck = const [ConnectivityResult.wifi];
+  int checkCalls = 0;
+  final _controller = StreamController<List<ConnectivityResult>>.broadcast();
+
+  @override
+  Future<List<ConnectivityResult>> checkConnectivity() async {
+    checkCalls++;
+    return nextCheck;
+  }
+
+  @override
+  Stream<List<ConnectivityResult>> get onConnectivityChanged => _controller.stream;
+
+  Future<void> dispose() => _controller.close();
+}
+
+class _RacingConnectivityEnv extends ConnectivityEnv {
+  final bool initialOnline;
+  final Completer<bool> checkCompleter = Completer<bool>();
+  final _controller = StreamController<bool>.broadcast();
+
+  _RacingConnectivityEnv({this.initialOnline = true});
+
+  @override
+  bool get isOnline => initialOnline;
+
+  @override
+  Future<bool> checkOnline() => checkCompleter.future;
+
+  @override
+  Stream<bool> get onOnlineChanged => _controller.stream;
+
+  void emit(bool next) => _controller.add(next);
+
+  Future<void> dispose() => _controller.close();
+}
+
 void main() {
   group('isConnectivityOnline', () {
     test('returns false only when no network interface is present', () {
-      expect(isConnectivityOnline(const []), isFalse);
-      expect(isConnectivityOnline(const [ConnectivityResult.none]), isFalse);
-      expect(isConnectivityOnline(const [ConnectivityResult.none, ConnectivityResult.none]), isFalse);
+      expect(conn_io.isConnectivityOnline(const []), isFalse);
+      expect(conn_io.isConnectivityOnline(const [ConnectivityResult.none]), isFalse);
+      expect(conn_io.isConnectivityOnline(const [ConnectivityResult.none, ConnectivityResult.none]), isFalse);
     });
 
     test('returns true when any real network interface is present', () {
-      expect(isConnectivityOnline(const [ConnectivityResult.wifi]), isTrue);
-      expect(isConnectivityOnline(const [ConnectivityResult.mobile]), isTrue);
-      expect(isConnectivityOnline(const [ConnectivityResult.ethernet]), isTrue);
-      expect(isConnectivityOnline(const [ConnectivityResult.vpn]), isTrue);
-      expect(isConnectivityOnline(const [ConnectivityResult.none, ConnectivityResult.wifi]), isTrue);
+      expect(conn_io.isConnectivityOnline(const [ConnectivityResult.wifi]), isTrue);
+      expect(conn_io.isConnectivityOnline(const [ConnectivityResult.mobile]), isTrue);
+      expect(conn_io.isConnectivityOnline(const [ConnectivityResult.ethernet]), isTrue);
+      expect(conn_io.isConnectivityOnline(const [ConnectivityResult.vpn]), isTrue);
+      expect(conn_io.isConnectivityOnline(const [ConnectivityResult.none, ConnectivityResult.wifi]), isTrue);
     });
   });
 
@@ -108,16 +147,75 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    testWidgets('renders SizedBox.shrink without throwing when ProviderScope is absent', (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: buildTheme(const Locale('en')),
-          home: const Scaffold(body: OfflineBanner()),
-        ),
-      );
+    testWidgets('defaults to hidden while connectivityProvider is loading', (tester) async {
+      final controller = StreamController<bool>();
+      addTearDown(controller.close);
+      await tester.pumpWidget(wrap(stream: controller.stream));
       await tester.pump();
       expect(tester.takeException(), isNull);
       expect(find.byKey(const Key('offlineBanner')), findsNothing);
+    });
+  });
+
+  group('connectivity_env_io resume & connectivityProvider ordering', () {
+    testWidgets('initConnectivityEnv re-checks connectivity on app resume and emits changes', (tester) async {
+      final fake = _FakeConnectivity();
+      addTearDown(() async {
+        await conn_io.resetConnectivityEnvForTest();
+        await fake.dispose();
+      });
+
+      final emitted = <bool>[];
+      final sub = conn_io.getOnOnlineChanged().listen(emitted.add);
+      addTearDown(sub.cancel);
+
+      await conn_io.initConnectivityEnv(connectivity: fake);
+      expect(conn_io.isOnline, isTrue);
+      expect(fake.checkCalls, 1);
+
+      fake.nextCheck = const [ConnectivityResult.none];
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+
+      expect(fake.checkCalls, 2);
+      expect(conn_io.isOnline, isFalse);
+      expect(emitted, [false]);
+      expect(await conn_io.checkOnline(), isFalse);
+    });
+
+    test('connectivityProvider subscribes before initial check and does not let stale check overwrite newer event',
+        () async {
+      final env = _RacingConnectivityEnv(initialOnline: true);
+      addTearDown(env.dispose);
+
+      final container = ProviderContainer(
+        overrides: [connectivityEnvProvider.overrideWithValue(env)],
+      );
+      addTearDown(container.dispose);
+
+      final seen = <bool>[];
+      container.listen<AsyncValue<bool>>(connectivityProvider, (_, next) {
+        if (next.hasValue) seen.add(next.value!);
+      }, fireImmediately: true);
+      await Future<void>.delayed(Duration.zero);
+      expect(seen, [true]);
+
+      // Emit offline while initial checkOnline() is still pending.
+      env.emit(false);
+      await Future<void>.delayed(Duration.zero);
+      expect(container.read(connectivityProvider).value, isFalse);
+      expect(seen, [true, false]);
+
+      // Stale initial check resolves true -> must NOT overwrite the newer false event.
+      env.checkCompleter.complete(true);
+      await Future<void>.delayed(Duration.zero);
+      expect(container.read(connectivityProvider).value, isFalse);
+      expect(seen, [true, false]);
     });
   });
 }
