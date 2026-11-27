@@ -38,11 +38,7 @@ const _rememberMePrefKey = 'admin_remember_me';
 /// [AdminRepository] stay out of `main.dart.js`.
 final adminRepositoryProvider = Provider<AdminRepository?>(
   (ref) => ref.watch(firebaseStatusProvider).available
-      ? AdminRepository(
-          FirebaseFirestore.instance,
-          FirebaseAuth.instance,
-          isOnline: () => ref.read(connectivityEnvProvider).isOnline,
-        )
+      ? AdminRepository(FirebaseFirestore.instance, FirebaseAuth.instance)
       : null,
 );
 

@@ -358,14 +358,24 @@ class NotifyPlanner {
   bool _disposed = false;
   bool _pendingTopicSync = false;
   bool _retryingTopicSync = false;
+  bool _retryPendingReconnect = false;
   Future<void>? _inFlightTopicSync;
   ({PushPrefs prefs, String lang})? _queuedTopicSync;
 
   NotifyPlanner(this.ref) {
     _listen();
     _syncSubscriptions();
-    if (!kIsWeb && !MotionEnv.isTest && defaultTargetPlatform == TargetPlatform.iOS) {
-      _lifecycleListener = AppLifecycleListener(onResume: () => scheduleReplan(Duration.zero));
+    if (!kIsWeb) {
+      try {
+        _lifecycleListener = AppLifecycleListener(
+          onResume: () {
+            if (!MotionEnv.isTest && defaultTargetPlatform == TargetPlatform.iOS) {
+              scheduleReplan(Duration.zero);
+            }
+            unawaited(_retryPendingTopicSync());
+          },
+        );
+      } catch (_) {}
     }
   }
 
@@ -396,18 +406,24 @@ class NotifyPlanner {
           ok = false;
         }
         _pendingTopicSync = !ok;
-        try {
-          if (ok) {
-            await PushMessaging.clearPendingTopicSync();
-          } else {
-            final sp = await SharedPreferences.getInstance();
-            await sp.setBool(pendingTopicSyncKey, true);
-          }
-        } catch (_) {}
+        if (ok) {
+          _retryPendingReconnect = false;
+        }
         final next = _queuedTopicSync;
         _queuedTopicSync = null;
-        if (next == null) break;
-        current = next;
+        if (next != null) {
+          current = next;
+          continue;
+        }
+        if (!ok && _retryPendingReconnect) {
+          _retryPendingReconnect = false;
+          current = (
+            prefs: ref.read(pushPrefsProvider),
+            lang: ref.read(localeProvider).languageCode,
+          );
+          continue;
+        }
+        break;
       }
     }
 
@@ -423,7 +439,12 @@ class NotifyPlanner {
   }
 
   Future<void> _retryPendingTopicSync() async {
-    if (_disposed || _retryingTopicSync || _inFlightTopicSync != null) return;
+    if (_disposed) return;
+    if (_inFlightTopicSync != null) {
+      _retryPendingReconnect = true;
+      return;
+    }
+    if (_retryingTopicSync) return;
     _retryingTopicSync = true;
     try {
       final hasPending = _pendingTopicSync || await PushMessaging.hasPendingTopicSync();

@@ -62,7 +62,7 @@ Future<void> _start() async {
     initLanguageStore(),
     initInstallStore(),
     initPushStore(),
-    initConnectivityEnv(),
+    initConnectivityEnv().timeout(const Duration(milliseconds: 500), onTimeout: () {}),
   ]);
   final seed = results[0] as SeedData;
   final status = results[1] as FirebaseStatus;
