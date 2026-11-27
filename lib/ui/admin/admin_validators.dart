@@ -1,7 +1,8 @@
 // Pure validation / conversion for the admin forms (unit-tested).
+import 'dart:async' show TimeoutException;
+
 import 'package:firebase_core/firebase_core.dart';
 
-import '../../data/admin_repository.dart' show AdminOfflineException;
 import '../../domain/cairo_time.dart';
 import '../../domain/custom_content.dart'
     show
@@ -19,6 +20,7 @@ import '../../domain/media.dart' show MediaImage, MediaSource, isValidImageUrl;
 import '../../domain/push.dart';
 import '../../domain/rules.dart' show normalizeDigits;
 import 'admin_schema.dart';
+import 'admin_strings.dart' show adminStrings;
 
 const _arabicSlugMap = <String, String>{
   'ا': 'a', 'أ': 'a', 'إ': 'a', 'آ': 'a', 'ى': 'a',
@@ -701,9 +703,10 @@ bool isValidVapidKey(String s) => s.isEmpty || RegExp(r'^[A-Za-z0-9_-]{80,100}$'
 
 /// Formats an error for administrative error displays, surfacing structured
 /// Firebase error codes (e.g. `[permission-denied]`) instead of raw/opaque strings.
-String formatAdminError(Object error) {
-  if (error is AdminOfflineException) {
-    return '[offline] لا يوجد اتصال بالإنترنت — No internet connection';
+String formatAdminError(Object error, {bool isAr = true}) {
+  if (error is TimeoutException) {
+    final pair = adminStrings['adminTimeoutError']!;
+    return '[timeout] ${isAr ? pair[0] : pair[1]}';
   }
   if (error is FirebaseException) {
     final code = error.code.trim();

@@ -769,12 +769,12 @@ const Map<String, List<String>> adminStrings = {
   'deviceTestPermDenied': ['الإشعارات مرفوضة في هذا المتصفح؛ اسمح بها من إعدادات الموقع ثم أعد التجربة.', 'Notifications are blocked in this browser; allow them in site settings and try again.'],
   'deviceTestUnsupported': ['هذا المتصفح لا يعرض إشعارات تجريبية.', 'This browser cannot show test notifications.'],
   'adminOfflineBanner': [
-    'لا يوجد اتصال بالإنترنت — التعديل والحفظ متوقفان مؤقتًا',
-    'You are offline — editing and saving are paused'
+    'لا يوجد اتصال بالإنترنت — قد يتعذّر الحفظ حتى يعود الاتصال',
+    'You are offline — saving may fail until connection returns'
   ],
-  'adminOfflineError': [
-    'لا يوجد اتصال بالإنترنت — تحقّق من الاتصال وحاول مرة أخرى.',
-    'No internet connection — check your connection and try again.'
+  'adminTimeoutError': [
+    'تعذّر الحفظ — تأكد من الاتصال بالإنترنت وحاول تاني',
+    'Could not save — check your internet connection and try again.'
   ],
 };
 
