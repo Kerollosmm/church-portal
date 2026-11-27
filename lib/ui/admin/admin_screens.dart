@@ -1255,7 +1255,7 @@ class _AdminsScreenState extends State<AdminsScreen> {
                 value: role,
                 onChanged: self
                     ? null
-                    : (v) => v == null ? null : _guard(context, () => widget.repo.setAdminRole(a, v)),
+                    : (v) => v == null ? null : _changeRole(context, a, role, v),
                 items: [
                   for (final r in AdminRoles.all)
                     DropdownMenuItem(value: r, child: Text(context.tr('role_$r'), overflow: TextOverflow.ellipsis)),
@@ -1343,6 +1343,22 @@ class _AdminsScreenState extends State<AdminsScreen> {
     );
   }
 
+  Future<void> _changeRole(BuildContext context, AdminDoc a, String currentRole, String nextRole) async {
+    if (nextRole == currentRole) return;
+    final rawEmail = '${a.data['email'] ?? ''}'.trim();
+    final who = rawEmail.isNotEmpty ? rawEmail : a.id;
+    final roleLabel = context.tr('role_$nextRole');
+    final ok = await confirmNamedAction(
+      context,
+      summary: '$who\n\n${context.tr('confirmChangeAdminRole', {'role': roleLabel})}',
+      actionLabel: context.tr('changeRoleAction'),
+      destructive: currentRole == AdminRoles.owner && nextRole != AdminRoles.owner,
+    );
+    if (ok && context.mounted) {
+      await _guard(context, () => widget.repo.setAdminRole(a, nextRole));
+    }
+  }
+
   Future<void> _toggleActive(BuildContext context, AdminDoc a, bool next) async {
     final email = '${a.data['email'] ?? a.id}';
     final ok = await confirmNamedAction(
@@ -1411,7 +1427,7 @@ class _AdminsScreenState extends State<AdminsScreen> {
                   controller: email,
                   textDirection: TextDirection.ltr,
                   keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(labelText: 'Email *'),
+                  decoration: InputDecoration(labelText: '${context.tr('emailLabel')} *'),
                   validator: (v) => RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch((v ?? '').trim())
                       ? null
                       : context.tr('errEmail'),

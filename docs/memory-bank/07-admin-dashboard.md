@@ -329,8 +329,8 @@ For each `CollectionDef`:
 
 | Screen id | Collection | Orderable | Has visible | Has sample | Notes |
 |---|---|---|---|---|---|
-| alerts | alerts | – | ✔ | – | title, body, active, starts/ends (Cairo), priority 0–1000 (open in basic form, not collapsed), link (path or URL) |
-| seasons | seasons | – | – | – | key choice, names, starts/ends, active |
+| alerts | alerts | – | ✔ | – | title, body, active (`newBool: false`), starts/ends (Cairo), priority 0–1000 (open in basic form, not collapsed), link (path or URL) |
+| seasons | seasons | – | – | – | key choice, names, starts/ends, active (`newBool: false`) |
 | liturgies | liturgies | – (order field) | ✔ | ✔ | needs weekday **or** one-off date; end may be before start (midnight); checkbox «يحل محل قداسات اليوم المعتادة (قداس العيد)» = `replacesDay` (ADR-050) |
 | meetings | meetings | – (order field) | ✔ | ✔ | stage choice |
 | facilities | facilities | ✔ | ✔ | ✔ | "Public services" |
@@ -490,7 +490,7 @@ link, and rejects empty heading blocks (`BlockTypes.heading`) without Arabic tex
 on each visible entry → delete the category. "Open on site" for a category / page row opens its slug route.
 
 ### Admins (`AdminsScreen`, owners only) → `admins`
-List with role dropdown (owner/editor) and remove button — disabled for yourself ("(you)"). Removing an admin
+List with role dropdown (owner/editor, confirmed via `confirmNamedAction` naming the admin and target role) and remove button — disabled for yourself ("(you)"). Removing an admin
 prompts with named confirmation (`confirmNamedAction`, displaying the admin's email and alert-styled «إزالة المشرف»).
 Since PR #12 they wrap
 under the UID (the role menu ellipsizes) so nothing overflows at 320 px / 200 %. **Add admin** dialog: UID
@@ -575,5 +575,5 @@ Bottom bar anchored to the bottom of the viewport whenever an editor is dirty:
 - **Remember me & 30-minute idle sign-out (`SessionPolicy`, `AdminSessionGuard`, `lib/ui/admin/session_policy.dart`):**
   - `AdminLoginForm` includes «افتكرني (جهاز شخصي)» (`login-remember-me`, persisted via `SharedPreferences` `admin_remember_me`, cleared on sign-out).
   - When unticked (shared office device), `AdminSessionGuard` wraps `AdminDashboard`, resetting the idle timer (`SessionPolicy`: 30 minutes limit, 60-second warning) on both pointer events (`PointerDownEvent`/`PointerMoveEvent`/`PointerSignalEvent`/`PointerPanZoomStartEvent`) and keyboard input (`HardwareKeyboard` + `Focus`).
-  - At 29 minutes idle, an alert banner (`session-idle-warning`) counts down with «خليك مسجّل» (`session-stay-btn`). At 30 minutes, if `unsaved.isDirty` is true, `confirmDiscardChanges` runs before signing out; choosing «متابعة التعديل» resets the idle clock instead of losing unsaved work.
+  - At 29 minutes idle, an alert banner (`session-idle-warning`) counts down with «خليك مسجّل» (`session-stay-btn`). At 30 minutes, if `unsaved.isDirty` is true, `confirmDiscardChanges` runs before signing out; choosing «متابعة التعديل» resets the idle clock instead of losing unsaved work, while leaving the dialog unanswered for 60 seconds (`SessionPolicy.confirmTimeout`) dismisses it and signs out. `AdminSessionGuard` also checks wall-clock elapsed time on app resume and web window focus/visibility so OS sleep cannot defeat the timer.
 - **Deferred admin copy (`admin_strings.dart`):** Admin-only strings live in `lib/ui/admin/admin_strings.dart` and register lazily via `registerAdminStrings()` so `main.dart.js` stays within the public bundle ceiling.

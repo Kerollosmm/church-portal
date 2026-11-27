@@ -450,6 +450,13 @@ void main() {
       for (final c in adminCollections.where((c) => c.name != 'seasons')) {
         expect(c.hasVisible, isTrue, reason: c.id);
       }
+      for (final colId in ['alerts', 'seasons']) {
+        final active = collectionById(colId)!.fields.firstWhere((f) => f.key == 'active');
+        expect(active.newBool, isFalse, reason: colId);
+        expect(active.missingBool, isFalse, reason: colId);
+        expect(active.hintAr, contains('فعّله'), reason: colId);
+        expect(active.hintEn, isNotEmpty, reason: colId);
+      }
       expect({for (final c in adminCollections) c.id}.length, adminCollections.length, reason: 'unique ids');
       for (final c in adminCollections.where((c) => c.orderable)) {
         expect(c.fields.any((f) => f.key == 'order'), isTrue, reason: c.id);
@@ -535,6 +542,44 @@ void main() {
       }
       for (final t in ThemePresets.all.keys) {
         expect(featuresBlock, contains("'$t'"), reason: 'theme $t');
+      }
+    });
+
+    testWidgets('DocEditor defaults active to false with hint on new alerts and seasons without changing missingBool',
+        (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      for (final colId in ['alerts', 'seasons']) {
+        final def = collectionById(colId)!;
+        // New doc starts inactive with the readiness hint
+        await tester.pumpWidget(_app(
+          DocEditor(title: def.labelAr, fields: def.fields, def: def, onSave: (_) async {}),
+          locale: const Locale('ar'),
+        ));
+        await tester.pumpAndSettle();
+        final newEditor = tester.state<DocEditorState>(find.byType(DocEditor));
+        expect(newEditor.collect()['active'], isFalse, reason: '$colId new active');
+        expect(find.textContaining('فعّله'), findsOneWidget, reason: '$colId hint');
+
+        // Existing doc missing `active` keeps missingBool (false)
+        await tester.pumpWidget(KeyedSubtree(
+          key: ValueKey('existing-$colId'),
+          child: _app(
+            DocEditor(
+              title: def.labelAr,
+              fields: def.fields,
+              def: def,
+              data: colId == 'alerts' ? {'titleAr': 'تنويه'} : {'key': 'lent', 'nameAr': 'الصوم'},
+              onSave: (_) async {},
+            ),
+            locale: const Locale('ar'),
+          ),
+        ));
+        await tester.pumpAndSettle();
+        final existingEditor = tester.state<DocEditorState>(find.byType(DocEditor));
+        expect(existingEditor.collect()['active'], isFalse, reason: '$colId missingBool');
       }
     });
   });
@@ -3399,9 +3444,94 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('مالك (يدير المشرفين)').last);
       await tester.pumpAndSettle();
+      expect(find.textContaining('d-ed@church.org'), findsWidgets);
+      await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+      await tester.pumpAndSettle();
       expect(repo.setAdminCalls.last.uid, 'ed1');
       expect(repo.setAdminCalls.last.role, 'owner');
       expect(repo.updates.any((u) => u.id == 'ed1' && u.data.containsKey('expiresAt') && u.data['expiresAt'] == null), isTrue);
+    });
+
+    testWidgets('AdminsScreen confirms role promote/demote with email and role, cancel writes nothing, and add dialog localizes Email label', (tester) async {
+      final ctrl = StreamController<List<AdminDoc>>.broadcast();
+      addTearDown(ctrl.close);
+
+      final repo = _ReactiveAdminBackend(
+        controller: ctrl,
+        initialCollections: {
+          'admins': [
+            AdminDoc('own', {'email': 'a-own@church.org', 'role': 'owner', 'active': true}),
+            AdminDoc('own2', {'email': 'b-own2@church.org', 'role': 'owner', 'active': true}),
+            AdminDoc('ed1', {'email': 'c-ed@church.org', 'role': 'editor', 'active': true}),
+          ],
+        },
+      );
+
+      await tester.pumpWidget(_app(
+        AdminsScreen(repo: repo, selfUid: 'own'),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Add Admin dialog uses localized Email label in Arabic
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pumpAndSettle();
+      expect(find.text('البريد الإلكتروني *'), findsOneWidget);
+      expect(find.text('Email *'), findsNothing);
+      await tester.tap(find.text('إلغاء'));
+      await tester.pumpAndSettle();
+
+      // Promote ed1: cancel must not write and keeps editor role
+      repo.setAdminCalls.clear();
+      repo.updates.clear();
+      await tester.ensureVisible(find.text('محرر'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('محرر'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('مالك (يدير المشرفين)').last);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('c-ed@church.org'), findsWidgets);
+      expect(find.textContaining('مالك (يدير المشرفين)'), findsWidgets);
+      await tester.tap(find.byKey(const ValueKey('confirm-cancel')));
+      await tester.pumpAndSettle();
+      expect(repo.setAdminCalls, isEmpty);
+      expect(repo.updates, isEmpty);
+
+      // Promote ed1: confirm writes new role
+      await tester.tap(find.text('محرر'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('مالك (يدير المشرفين)').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+      await tester.pumpAndSettle();
+      expect(repo.setAdminCalls.last.uid, 'ed1');
+      expect(repo.setAdminCalls.last.role, 'owner');
+
+      // Demote own2: cancel writes nothing, confirm writes editor
+      repo.setAdminCalls.clear();
+      await tester.ensureVisible(find.byKey(const ValueKey('admin-card-own2')));
+      await tester.pumpAndSettle();
+      final own2Dropdown = find.descendant(
+        of: find.byKey(const ValueKey('admin-card-own2')),
+        matching: find.byType(DropdownButton<String>),
+      );
+      await tester.tap(own2Dropdown);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('محرر').last);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('b-own2@church.org'), findsWidgets);
+      await tester.tap(find.byKey(const ValueKey('confirm-cancel')));
+      await tester.pumpAndSettle();
+      expect(repo.setAdminCalls, isEmpty);
+
+      await tester.tap(own2Dropdown);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('محرر').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+      await tester.pumpAndSettle();
+      expect(repo.setAdminCalls.last.uid, 'own2');
+      expect(repo.setAdminCalls.last.role, 'editor');
     });
 
     testWidgets('AdminCheckGate blocks stopped/expired admins, revokes live, handles stream errors, chunks >24d timers, and unlocks when expiry is extended', (tester) async {
@@ -3571,6 +3701,7 @@ void main() {
       const policy = SessionPolicy();
       expect(policy.idleLimit, const Duration(minutes: 30));
       expect(policy.warnBefore, const Duration(seconds: 60));
+      expect(policy.confirmTimeout, const Duration(seconds: 60));
       expect(policy.warnAt, const Duration(minutes: 29));
     });
 
@@ -3740,6 +3871,124 @@ void main() {
       await tester.tap(find.text('تجاهل'));
       await tester.pumpAndSettle();
       expect(signedOut, 1);
+    });
+
+    testWidgets('AdminSessionGuard auto-signs out after 60s when dirty discard dialog goes unanswered', (tester) async {
+      final unsaved = UnsavedGuardRegistry()..register('doc-1');
+      var signedOut = 0;
+
+      await tester.pumpWidget(_app(
+        Scaffold(
+          body: AdminSessionGuard(
+            enabled: true,
+            unsaved: unsaved,
+            onSignOut: () => signedOut++,
+            child: const Center(child: Text('Dirty Form')),
+          ),
+        ),
+        locale: const Locale('ar'),
+      ));
+
+      await tester.pump(const Duration(minutes: 30));
+      await tester.pumpAndSettle();
+      expect(signedOut, 0);
+      expect(find.text('متابعة التعديل'), findsOneWidget);
+
+      // Still waiting before 60s elapses
+      await tester.pump(const Duration(seconds: 58));
+      expect(signedOut, 0);
+      expect(find.text('متابعة التعديل'), findsOneWidget);
+
+      // At 60s unanswered, dialog is dismissed and sign-out fires
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      expect(signedOut, 1);
+      expect(find.text('متابعة التعديل'), findsNothing);
+    });
+
+    testWidgets('AdminSessionGuard checks wall-clock elapsed on app resume across OS sleep', (tester) async {
+      // 1. Clean session sleeping past idleLimit signs out immediately on resume
+      var fakeNow = DateTime.utc(2026, 11, 28, 10, 0, 0);
+      final cleanUnsaved = UnsavedGuardRegistry();
+      var signedOut = 0;
+      await tester.pumpWidget(_app(
+        Scaffold(
+          body: AdminSessionGuard(
+            enabled: true,
+            unsaved: cleanUnsaved,
+            now: () => fakeNow,
+            onSignOut: () => signedOut++,
+            child: const Center(child: Text('Clean')),
+          ),
+        ),
+        locale: const Locale('ar'),
+      ));
+
+      fakeNow = fakeNow.add(const Duration(minutes: 31));
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(signedOut, 1);
+
+      // 2. Sleeping into warning window shows warning with remaining seconds and signs out on remaining timer
+      fakeNow = DateTime.utc(2026, 11, 28, 11, 0, 0);
+      signedOut = 0;
+      await tester.pumpWidget(KeyedSubtree(
+        key: const ValueKey('guard-warn-resume'),
+        child: _app(
+          Scaffold(
+            body: AdminSessionGuard(
+              enabled: true,
+              unsaved: cleanUnsaved,
+              now: () => fakeNow,
+              onSignOut: () => signedOut++,
+              child: const Center(child: Text('Warn')),
+            ),
+          ),
+          locale: const Locale('ar'),
+        ),
+      ));
+
+      fakeNow = fakeNow.add(const Duration(minutes: 29, seconds: 20));
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(find.byKey(const ValueKey('session-idle-warning')), findsOneWidget);
+      expect(find.textContaining('٤٠'), findsOneWidget);
+      expect(signedOut, 0);
+
+      await tester.pump(const Duration(seconds: 40));
+      expect(signedOut, 1);
+
+      // 3. Dirty session sleeping past idleLimit opens discard dialog, then sleeping past confirmTimeout signs out on resume
+      fakeNow = DateTime.utc(2026, 11, 28, 12, 0, 0);
+      final dirtyUnsaved = UnsavedGuardRegistry()..register('doc-2');
+      signedOut = 0;
+      await tester.pumpWidget(KeyedSubtree(
+        key: const ValueKey('guard-dirty-resume'),
+        child: _app(
+          Scaffold(
+            body: AdminSessionGuard(
+              enabled: true,
+              unsaved: dirtyUnsaved,
+              now: () => fakeNow,
+              onSignOut: () => signedOut++,
+              child: const Center(child: Text('Dirty')),
+            ),
+          ),
+          locale: const Locale('ar'),
+        ),
+      ));
+
+      fakeNow = fakeNow.add(const Duration(minutes: 31));
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(signedOut, 0);
+      expect(find.text('متابعة التعديل'), findsOneWidget);
+
+      fakeNow = fakeNow.add(const Duration(seconds: 61));
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(signedOut, 1);
+      expect(find.text('متابعة التعديل'), findsNothing);
     });
   });
 
