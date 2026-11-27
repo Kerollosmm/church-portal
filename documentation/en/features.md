@@ -200,7 +200,7 @@ This document provides a comprehensive, feature-by-feature manual for all 31 cap
 
 ### 29. Web Performance & PageSpeed Optimization
 - **Visitor Experience:** Instantaneous initial paint (≤ 0.8s) and smooth 60fps scrolling across mobile and desktop devices.
-- **Technical Implementation:** Employs static HTML loading shells, CSS-animated ambient layers, font/bundle fingerprinting, `preconnect`/`modulepreload` hints in `web/index.html` for pinned Firebase JS SDK modules (`13.1.0`) and `daily_verses.json`, splash dismissal ungated from `dailyVersesProvider`, and deferred JavaScript execution.
+- **Technical Implementation:** Employs static HTML loading shells, CSS-animated ambient layers, font/bundle fingerprinting, `preconnect`/`modulepreload` hints in `web/index.html` for pinned Firebase JS SDK modules (`13.1.0`), splash dismissal ungated from `dailyVersesProvider`, and deferred JavaScript execution.
 - **ADR-061 / ADR-077 / ADR-088 Web Bundle & Deferred Guard:** Tracks 11 deferred modules (`.part.js`, including `admin_repository`, `admin_strings`, and `app_check_providers`) plus 4 forbidden main-bundle sources (`latest_10y.dart`, `update_banner_io.dart`, `firebase_auth-`, `firebase_app_check-`), verified mechanically in CI (`Flutter 3.50.0`) by `tool/check_web_bundle.mjs` against `main(.<hash>)?.dart.js.map` with `gzip -9 <= 1,399,000 B` ceiling (Linux CI baseline `1,349,161 B` with `+49,839 B` headroom). OpenType fonts (`IBMPlexSansArabic`, `Lalezar`, `ArefRuqaa`) are retained intact (> 20 KB each) to preserve Arabic ligatures and tashkeel diacritics.
 
 ### 30. Accessibility & WCAG 2.2 AA Compliance

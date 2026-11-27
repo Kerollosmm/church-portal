@@ -73,14 +73,13 @@
   <!-- Bundled fonts (no Google Fonts fetch): preload the two faces the first frame uses. -->
   <link rel="preload" href="assets/assets/fonts/IBMPlexSansArabic-Regular.ttf" as="font" type="font/ttf" crossorigin>
   <link rel="preload" href="assets/assets/fonts/Lalezar-Regular.ttf" as="font" type="font/ttf" crossorigin>
-  <!-- Preconnect/preload Firebase JS SDK (pinned to firebase_core_web supportedFirebaseJsSdkVersion) and daily verses JSON (PR 6G). -->
+  <!-- Preconnect/preload Firebase JS SDK (pinned to firebase_core_web supportedFirebaseJsSdkVersion) (PR 6G). -->
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js" crossorigin>
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore-pipelines.js" crossorigin>
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js" crossorigin>
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/13.1.0/firebase-app-check.js" crossorigin>
-  <link rel="preload" href="assets/assets/verses/daily_verses.json" as="fetch" crossorigin>
 
   <title>كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود</title>
   <!-- ADR-046: runs right after <title>, before Flutter / Firebase load.

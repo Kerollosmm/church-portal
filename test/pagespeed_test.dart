@@ -111,14 +111,14 @@ void main() {
       expect(shim, lessThan(html.indexOf('flutter_bootstrap.js')));
     });
 
-    test('preconnections and pinned boot preloads exist (PR 6G)', () {
+    test('preconnections and pinned boot preloads exist without daily_verses.json preload', () {
       expect(html, contains('<link rel="preconnect" href="https://www.gstatic.com" crossorigin>'));
       expect(html, contains('<link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>'));
       expect(html, contains('<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js" crossorigin>'));
       expect(html, contains('<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore-pipelines.js" crossorigin>'));
       expect(html, contains('<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js" crossorigin>'));
       expect(html, contains('<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/13.1.0/firebase-app-check.js" crossorigin>'));
-      expect(html, contains('<link rel="preload" href="assets/assets/verses/daily_verses.json" as="fetch" crossorigin>'));
+      expect(html, isNot(contains('daily_verses.json')));
     });
 
     test('the in-app seal stays small', () {
