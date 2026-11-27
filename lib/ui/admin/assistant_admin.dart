@@ -6,6 +6,7 @@ import '../../domain/features.dart';
 import 'admin_schema.dart';
 import 'admin_screens.dart';
 import 'admin_strings.dart';
+import 'admin_validators.dart';
 import 'state_switch.dart';
 
 /// /admin → AI assistant (ADR-029): the on / off switches (the existing
@@ -48,7 +49,7 @@ class _AssistantSwitchesState extends State<AssistantSwitches> {
 
   Future<void> _save(String path, Map<String, dynamic> data) async {
     final messenger = ScaffoldMessenger.of(context);
-    String failed(Object e) => context.tr('saveFailed', {'e': '$e'});
+    String failed(Object e) => context.tr('saveFailed', {'e': formatAdminError(e)});
     setState(() => _saving = true);
     try {
       await widget.repo.saveDoc(path, data);
@@ -61,7 +62,7 @@ class _AssistantSwitchesState extends State<AssistantSwitches> {
 
   Future<void> _update(String collection, String id, Map<String, dynamic> data) async {
     final messenger = ScaffoldMessenger.of(context);
-    String failed(Object e) => context.tr('saveFailed', {'e': '$e'});
+    String failed(Object e) => context.tr('saveFailed', {'e': formatAdminError(e)});
     setState(() => _saving = true);
     try {
       await widget.repo.update(collection, id, data);

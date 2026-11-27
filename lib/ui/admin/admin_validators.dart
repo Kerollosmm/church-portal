@@ -1,6 +1,7 @@
 // Pure validation / conversion for the admin forms (unit-tested).
 import 'package:firebase_core/firebase_core.dart';
 
+import '../../data/admin_repository.dart' show AdminOfflineException;
 import '../../domain/cairo_time.dart';
 import '../../domain/custom_content.dart'
     show
@@ -701,6 +702,9 @@ bool isValidVapidKey(String s) => s.isEmpty || RegExp(r'^[A-Za-z0-9_-]{80,100}$'
 /// Formats an error for administrative error displays, surfacing structured
 /// Firebase error codes (e.g. `[permission-denied]`) instead of raw/opaque strings.
 String formatAdminError(Object error) {
+  if (error is AdminOfflineException) {
+    return '[offline] لا يوجد اتصال بالإنترنت — No internet connection';
+  }
   if (error is FirebaseException) {
     final code = error.code.trim();
     final message = (error.message ?? '').trim();

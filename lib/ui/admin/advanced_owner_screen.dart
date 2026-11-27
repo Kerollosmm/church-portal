@@ -76,7 +76,7 @@ class _AdvancedOwnerScreenState extends State<AdvancedOwnerScreen> with SingleTi
     } catch (e) {
       messenger
         ?..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', '$e'))));
+        ..showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e)))));
     } finally {
       if (mounted) setState(() => _savingSentry = false);
     }
@@ -130,7 +130,7 @@ class _AdvancedOwnerScreenState extends State<AdvancedOwnerScreen> with SingleTi
     } catch (e) {
       messenger
         ?..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', '$e'))));
+        ..showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e)))));
     } finally {
       if (mounted) setState(() => _savingVapid = false);
     }

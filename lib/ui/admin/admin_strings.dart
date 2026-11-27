@@ -768,6 +768,14 @@ const Map<String, List<String>> adminStrings = {
   'deviceTestSuccess': ['ظهر الإشعار التجريبي على جهازك.', 'The test notification showed on your device.'],
   'deviceTestPermDenied': ['الإشعارات مرفوضة في هذا المتصفح؛ اسمح بها من إعدادات الموقع ثم أعد التجربة.', 'Notifications are blocked in this browser; allow them in site settings and try again.'],
   'deviceTestUnsupported': ['هذا المتصفح لا يعرض إشعارات تجريبية.', 'This browser cannot show test notifications.'],
+  'adminOfflineBanner': [
+    'لا يوجد اتصال بالإنترنت — التعديل والحفظ متوقفان مؤقتًا',
+    'You are offline — editing and saving are paused'
+  ],
+  'adminOfflineError': [
+    'لا يوجد اتصال بالإنترنت — تحقّق من الاتصال وحاول مرة أخرى.',
+    'No internet connection — check your connection and try again.'
+  ],
 };
 
 /// Idempotently registers [adminStrings] in the runtime localization table.
