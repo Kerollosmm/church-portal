@@ -24,6 +24,8 @@ import 'package:church_portal/state/providers.dart';
 import 'package:church_portal/ui/admin/admin_schema.dart';
 import 'package:church_portal/ui/admin/admin_validators.dart';
 import 'package:church_portal/ui/pages/assistant_page.dart';
+import 'package:church_portal/ui/widgets/assistant_gate.dart';
+import 'package:church_portal/ui/widgets/common.dart';
 import 'package:church_portal/ui/widgets/safe_markdown.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -791,6 +793,106 @@ void main() {
       expect(find.byType(ActionChip), findsNothing);
     });
   });
+
+  group('AssistantGate & AssistantPage loading-with-error (#153 / #158)', () {
+    testWidgets('AssistantGate shows ErrorState instead of spinner when settings is loading-with-error, and recovers on Retry',
+        (tester) async {
+      final repo = _FlakySettingsRepo(SeedData(jsonDecode(File('assets/seed/seed.json').readAsStringSync()) as Map<String, dynamic>));
+      final container = ProviderContainer(overrides: [
+        repositoryProvider.overrideWithValue(repo),
+        assistantVisibleProvider.overrideWithValue(true),
+      ]);
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            locale: const Locale('en'),
+            supportedLocales: const [Locale('ar'), Locale('en')],
+            localizationsDelegates: GlobalMaterialLocalizations.delegates,
+            home: Scaffold(
+              body: AssistantGate(builder: (_) => const Text('AssistantLoaded')),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      final errState = container.read(settingsProvider);
+      expect(errState.hasError, isTrue);
+      expect(errState.hasValue, isFalse);
+      expect(errState.isLoading, isTrue);
+      expect(find.byType(ErrorState), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.text('AssistantLoaded'), findsNothing);
+      expect(find.text('Retry'), findsOneWidget);
+
+      await tester.tap(find.text('Retry'));
+      await tester.pumpAndSettle();
+
+      expect(repo.settingsCalls, greaterThanOrEqualTo(2));
+      expect(find.byType(ErrorState), findsNothing);
+      expect(find.text('AssistantLoaded'), findsOneWidget);
+    });
+
+    testWidgets('AssistantPage shows ErrorState instead of spinner when settings is loading-with-error, and recovers on Retry',
+        (tester) async {
+      final repo = _FlakySettingsRepo(SeedData(jsonDecode(File('assets/seed/seed.json').readAsStringSync()) as Map<String, dynamic>));
+      final container = ProviderContainer(overrides: [
+        repositoryProvider.overrideWithValue(repo),
+        assistantVisibleProvider.overrideWithValue(true),
+        firebaseStatusProvider.overrideWithValue(const FirebaseStatus(available: true, appCheckActive: true)),
+        assistantModelProvider.overrideWithValue(_FakeModel()),
+        assistantUsageStoreProvider.overrideWith((ref) async => MemoryUsageStore()),
+      ]);
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            locale: Locale('en'),
+            supportedLocales: [Locale('ar'), Locale('en')],
+            localizationsDelegates: GlobalMaterialLocalizations.delegates,
+            home: Scaffold(body: AssistantPage()),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      final errState = container.read(settingsProvider);
+      expect(errState.hasError, isTrue);
+      expect(errState.hasValue, isFalse);
+      expect(errState.isLoading, isTrue);
+      expect(find.byType(ErrorState), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.text('Retry'), findsOneWidget);
+
+      await tester.tap(find.text('Retry'));
+      await tester.pumpAndSettle();
+
+      expect(repo.settingsCalls, greaterThanOrEqualTo(2));
+      expect(find.byType(ErrorState), findsNothing);
+      expect(find.byKey(const Key('askInput')), findsOneWidget);
+    });
+  });
+}
+
+class _FlakySettingsRepo extends SeedRepository {
+  _FlakySettingsRepo(super.seed);
+  int settingsCalls = 0;
+
+  @override
+  Stream<ChurchSettings> settings() {
+    settingsCalls++;
+    if (settingsCalls == 1) {
+      return Stream<ChurchSettings>.error(Exception('firestore-blocked'));
+    }
+    return Stream.value(_church);
+  }
 }
 
 class _Repo extends SeedRepository {

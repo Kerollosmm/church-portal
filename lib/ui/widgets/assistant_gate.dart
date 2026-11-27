@@ -19,7 +19,17 @@ class AssistantGate extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsProvider);
-    if (settings.isLoading) return const Center(child: CircularProgressIndicator());
+    if (settings.hasError && !settings.hasValue) {
+      setDocumentRouteMeta(path: '/ask', indexable: false);
+      return PageBody(
+        header: CustomizablePageHeader(
+            pageKey: CustomizablePages.ask, title: context.tr('askTitle'), icon: Icons.auto_awesome_rounded),
+        children: [ErrorState(onRetry: () => ref.invalidate(settingsProvider))],
+      );
+    }
+    if (!settings.hasValue && settings.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
     final visible = ref.watch(assistantVisibleProvider);
     setDocumentRouteMeta(path: '/ask', indexable: visible);
     if (!visible) {
