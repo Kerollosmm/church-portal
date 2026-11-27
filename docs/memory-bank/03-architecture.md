@@ -436,7 +436,7 @@ Deferred isolation is mechanically enforced in CI via `python3 tool/fingerprint_
 - Content fields come in pairs (`nameAr`/`nameEn`…); render with `context.pick(ar, en)` — falls back to the other
   language when one is empty. `context.isAr` for conditional logic.
 - Digits: `toArabicDigits` / `normalizeDigits` (`rules.dart`); `localDigits(context, s)` (common.dart).
-  Times are always shown in both systems (`TimeRangeText`: «٠٦:٣٠ ص – ٠٨:٣٠ ص» and "06:30 AM – 08:30 AM").
+  Since PR 6E (ADR-090), `TimeRangeText` / `formatTimeArabic` / `formatRange*` show a single line in Western digits with ص/م in Arabic (`\u206708:00 ص – 09:30 ص\u2069`) and AM/PM in English (`\u206608:00 AM – 09:30 AM\u2069`), wrapped in Unicode bidi isolates to prevent RTL/LTR reversal.
 - Choice labels for stored keys (`opt_<key>`, e.g. `opt_holy_week`) via `choiceLabel` in `doc_editor.dart`.
 - Admin labels live inline in `admin_schema.dart` (`labelAr`, `labelEn`); 418 admin-only UI keys reside in deferred `admin_strings.dart` (`registerAdminStrings()`, ADR-077), and APK update UI strings reside in `update_banner_io.dart`. Public `tr()` / `trOrNull()` coverage is verified by `test/bundle_isolation_test.dart`.
 

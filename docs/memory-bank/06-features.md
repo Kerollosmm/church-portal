@@ -178,7 +178,8 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
 ### `/about` — `about_page.dart` `AboutPage`
 - History card (bishop line + `historyAr/En`) and **altars** grid (main altar gets a gold cross) — section `history`.
 - **«محطات الكنيسة» / "Church milestones"** (ADR-052, key `about-milestones`): the same `MilestoneCard`s as Home
-  "Our story", in `order`, right after the history & altars — section `milestones` AND
+  "Our story", sorted chronologically by `compareMilestonesByYear` (`year` ascending, `null` last, `order` then `id`
+  tie-breaker, ADR-090), right after the history & altars — section `milestones` AND
   `settings/features.aboutMilestones` (default on). Milestone detail Back goes to `/about` while listed here.
 - Patron saints cards (name, feast pills Coptic + Gregorian, bio) — section `saints`.
 - Priests (`PriestCard`: avatar/photo, name (`nameEn` in English if set), rank «قمص/قس», ordination date, hegumen
@@ -210,7 +211,8 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   and 2028 docs sharing a key never cross-attach); equal start times tie-break by `order` (BUG-03). Seasons in effect
   now are listed first, then the rest by `startsAt`; title + date range + "Active now" pill +
   `LiturgyCard(showDate: true)`.
-- `LiturgyCard`: name, both digit systems (`TimeRangeText`), place, audience, weekday/date (no sample badge since ADR-046).
+- `LiturgyCard`: name, single-line Western-digit bidi-isolated time range (`TimeRangeText`), place, audience, weekday/date (no sample badge since ADR-046).
+- **Plain-link WhatsApp share (PR 6E, ADR-090):** `whatsappShareUri` (`lib/domain/share.dart`) creates a clean `https://wa.me/?text=...` link carrying the canonical page URL (`https://maximos-domadios-church.web.app/...`) with zero tracking query parameters; wired on `NextMassCard` (`nextMassWhatsappShare`), `MassSchedulePage` (`scheduleWhatsappShare`), and `ReadingsPage` (`readingsWhatsappShare` / `verseWhatsappShare`).
 
 #### Programme details & parallel services (PR #32, ADR-041)
 
@@ -427,7 +429,9 @@ on); owners can press **Send test error**. Details: `03-architecture.md` → *Er
 - Footer (FR-G-04, PR #13): church name, address (if contactInfo on), clickable church phone numbers
   (`Key('footerPhone-<number>')`, `footer.showPhones` and contactInfo on), official social icon buttons (48 dp,
   tooltips; `Key('footerSocial-whatsappChannel|whatsapp|facebook|youtube|instagram')`, `footer.showSocials` and
-  socials on), quick links (mass, education, contact — enabled ones; `footer.showQuickLinks`), the admin
+  socials on), quick links (mass, education, contact — enabled ones, plus the permanent «حمّل التطبيق» `Key('footerInstallApp')`
+  link on non-standalone web when `installSettings.enabled` paired with `Key('drawerInstallApp')` in `AppShell`'s drawer,
+  loading deferred `apk_install_guide.dart`, PR 6E / ADR-090; `footer.showQuickLinks`), the admin
   note (`footer.noteAr/En`, `Key('footerNote')`), ©, and «تعرض البيانات المحفوظة مع التطبيق» while serving the seed.
   Defaults show phones, socials and quick links; phones and social icons wait for `settings/features`
   (`featuresReadyProvider`) so switched-off ones never flash.
@@ -575,7 +579,8 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
 - Not implemented yet: retention clean-up (12 months).
 
 ### Time formatting (`time_format.dart`)
-`formatTimeLatin("06:30")` → `06:30 AM`; `formatTimeArabic` → `٠٦:٣٠ ص` (ص/م); weekday names AR/EN (ISO index);
+`formatTimeLatin("06:30")` → `06:30 AM`; `formatTimeArabic("06:30")` → `06:30 ص` (Western digits + ص/م since PR 6E / ADR-090);
+`formatRangeArabic` / `formatRangeLatin` wrap non-empty ranges in `\u2067…\u2069` / `\u2066…\u2069`; weekday names AR/EN (ISO index);
 `formatDate` → `6 يناير 2027` (Arabic digits) / `6 Jan 2027`; `formatLooseDate` for priest dates.
 
 ### Katameros Daily Readings (`/readings/<date>`, `readings_page.dart`, ADR-058)

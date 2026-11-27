@@ -20,7 +20,7 @@
 
 ## كيف تعمل تقنيًا
 
-- مجموعة `milestones` (`titleAr/En`، `descAr/En`، `year`، `icon`، `order`، `visible`، `image`…).
+- مجموعة `milestones` (`titleAr/En`، `descAr/En`، `year`، `icon`، `order`، `visible`، `image`…). وتُرتَّب المحطات زمنيًا تصاعديًا حسب السنة عبر `compareMilestonesByYear` (توضع العناصر التي بلا سنة في النهاية، وتُحسم السنوات المتساوية حسب `order` — ADR-090).
 - العرض: `MilestoneCard` في `lib/ui/widgets/milestone_card.dart` (بطاقة واحدة للرئيسية و«عن الكنيسة»، ADR-052)،
   من نفس `milestonesProvider` (بدون مستمع جديد: الانتقال من الرئيسية إلى «عن الكنيسة» لا يقرأ شيئًا إضافيًا). المساعد الذكي يعرف المحطات (الوصف مقصوص إلى 300 حرف).
 
