@@ -420,8 +420,13 @@ class _ContactFormState extends ConsumerState<ContactForm> {
 
   static String _two(int n) => n.toString().padLeft(2, '0');
 
-  static String _cairoToday() {
-    final c = CairoTime.fromInstant(DateTime.now());
+  DateTime _cairoTodayDate() {
+    final c = CairoTime.fromInstant(ref.read(nowProvider).value ?? DateTime.now());
+    return DateTime(c.year, c.month, c.day);
+  }
+
+  String _cairoToday() {
+    final c = _cairoTodayDate();
     return '${c.year}-${_two(c.month)}-${_two(c.day)}';
   }
 
@@ -436,13 +441,16 @@ class _ContactFormState extends ConsumerState<ContactForm> {
   }
 
   Future<void> _pickDate() async {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
+    final today = _cairoTodayDate();
+    final lastDate = DateTime(today.year + 2, 12, 31);
+    final parsed = DateTime.tryParse(_date.text);
+    final initial = parsed == null || parsed.isBefore(today) || parsed.isAfter(lastDate) ? today : parsed;
     final picked = await showDatePicker(
       context: context,
       firstDate: today,
-      lastDate: DateTime(today.year + 2, 12, 31),
-      initialDate: DateTime.tryParse(_date.text) ?? today,
+      currentDate: today,
+      lastDate: lastDate,
+      initialDate: initial,
     );
     if (picked == null || !mounted) return;
     setState(() {

@@ -258,22 +258,20 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
         ]),
       ],
       SectionTitle(context.tr('regularSchedule'), icon: Icons.calendar_month_rounded),
-      SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(children: [
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
           for (final t in ScheduleTab.values)
-            Padding(
-              padding: const EdgeInsetsDirectional.only(end: 8),
-              child: ChoiceChip(
-                label: Text(_tabLabel(t)),
-                selected: _tab == t,
-                showCheckmark: false,
-                labelStyle: TextStyle(
-                    color: _tab == t ? context.pal.onBar : context.pal.primary, fontWeight: FontWeight.w700),
-                onSelected: (_) => setState(() => _tab = t),
-              ),
+            ChoiceChip(
+              label: Text(_tabLabel(t)),
+              selected: _tab == t,
+              showCheckmark: false,
+              labelStyle: TextStyle(
+                  color: _tab == t ? context.pal.onBar : context.pal.primary, fontWeight: FontWeight.w700),
+              onSelected: (_) => setState(() => _tab = t),
             ),
-        ]),
+        ],
       ),
       const SizedBox(height: 12),
       if (list.isEmpty)

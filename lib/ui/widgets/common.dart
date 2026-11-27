@@ -777,6 +777,7 @@ class _FooterState extends ConsumerState<Footer> {
     final primary = context.pal.primary;
     final links = <(String, String)>[
       ('massSchedule', '/mass-schedule'),
+      ('readings', '/readings'),
       ('education', '/church-education'),
       ('contact', '/contact'),
       if (features.pushSettings.enabled) ('notifications', '/notifications'),
