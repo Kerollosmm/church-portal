@@ -23,16 +23,19 @@ enum ContactSubmitStatus { sent, queuedOffline }
 class ContactSubmitResult {
   final ContactSubmitStatus status;
 
+  /// Generated document ID in `contact_messages/{msgId}` for this submission.
+  final String? msgId;
+
   /// When [status] is [ContactSubmitStatus.queuedOffline], completes when
   /// Firestore syncs the queued batch or errors if security rules reject it.
   final Future<void>? pendingCommit;
 
-  const ContactSubmitResult._(this.status, {this.pendingCommit});
+  const ContactSubmitResult._(this.status, {this.msgId, this.pendingCommit});
 
   static const sent = ContactSubmitResult._(ContactSubmitStatus.sent);
 
-  const ContactSubmitResult.queuedOffline({Future<void>? pendingCommit})
-      : this._(ContactSubmitStatus.queuedOffline, pendingCommit: pendingCommit);
+  const ContactSubmitResult.queuedOffline({String? msgId, Future<void>? pendingCommit})
+      : this._(ContactSubmitStatus.queuedOffline, msgId: msgId, pendingCommit: pendingCommit);
 
   bool get isSent => status == ContactSubmitStatus.sent;
   bool get isQueuedOffline => status == ContactSubmitStatus.queuedOffline;
@@ -75,6 +78,10 @@ abstract class ContentRepository {
 
   /// Writes a validated contact message (payload from validateContactForm).
   Future<ContactSubmitResult> submitContact(Map<String, dynamic> payload, {required String lang});
+
+  /// Best-effort check after restart whether previously queued offline writes
+  /// have been flushed to Firestore (returns true only when verified).
+  Future<bool> verifyPendingContactWrites({Duration timeout = const Duration(seconds: 5)});
 }
 
 /// Offline / unconfigured implementation backed by assets/seed/seed.json.
@@ -126,6 +133,9 @@ class SeedRepository implements ContentRepository {
   @override
   Future<ContactSubmitResult> submitContact(Map<String, dynamic> payload, {required String lang}) async =>
       throw ContactUnavailableException();
+
+  @override
+  Future<bool> verifyPendingContactWrites({Duration timeout = const Duration(seconds: 5)}) async => false;
 }
 
 /// Converts Firestore-specific values to plain Dart (Timestamp -> UTC DateTime).
@@ -946,26 +956,50 @@ class FirestoreRepository implements ContentRepository {
     });
     final commitFuture = batch.commit();
     if (isOffline?.call() ?? false) {
-      final outcome = await Future.any<String>([
-        commitFuture.then((_) => 'sent'),
-        _waitForPendingWrite(msgRef).then((_) => 'queued'),
-      ]);
+      var done = false;
+      String outcome;
+      try {
+        outcome = await Future.any<String>([
+          commitFuture.then((_) => 'sent'),
+          _waitForPendingWrite(msgRef, isDone: () => done).then((observed) => observed ? 'queued' : 'unobserved'),
+        ]);
+      } finally {
+        done = true;
+      }
       if (outcome == 'sent') return ContactSubmitResult.sent;
-      return ContactSubmitResult.queuedOffline(pendingCommit: commitFuture);
+      if (outcome == 'queued') {
+        return ContactSubmitResult.queuedOffline(msgId: msgRef.id, pendingCommit: commitFuture);
+      }
     }
     await commitFuture.timeout(const Duration(seconds: 15));
     return ContactSubmitResult.sent;
   }
 
-  static Future<void> _waitForPendingWrite(DocumentReference<Map<String, dynamic>> ref) async {
+  @override
+  Future<bool> verifyPendingContactWrites({Duration timeout = const Duration(seconds: 5)}) async {
+    if (isOffline?.call() ?? false) return false;
+    try {
+      await db.waitForPendingWrites().timeout(timeout);
+      return !(isOffline?.call() ?? false);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<bool> _waitForPendingWrite(
+    DocumentReference<Map<String, dynamic>> ref, {
+    bool Function()? isDone,
+  }) async {
     for (var i = 0; i < 40; i++) {
+      if (isDone?.call() ?? false) return false;
       try {
         final snap = await ref.get(const GetOptions(source: Source.cache));
-        if (snap.exists && snap.metadata.hasPendingWrites) return;
+        if (snap.exists && snap.metadata.hasPendingWrites) return true;
       } catch (_) {
         // Not yet in local persistence cache; poll briefly until queued.
       }
       await Future<void>.delayed(const Duration(milliseconds: 25));
     }
+    return false;
   }
 }

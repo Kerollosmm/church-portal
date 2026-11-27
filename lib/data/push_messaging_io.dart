@@ -37,6 +37,8 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 class PushMessaging {
   const PushMessaging._();
 
+  static const Duration topicSyncTimeout = Duration(seconds: 20);
+
   static void Function(String route)? _onSelectRoute;
   static bool _initializedInMainIsolate = false;
 
@@ -246,12 +248,13 @@ class PushMessaging {
   /// Synchronizes Android topic subscriptions with user PushPrefs and language.
   /// Returns `true` when all topic updates succeed, or persists
   /// [pendingTopicSyncKey] and returns `false` on error so [NotifyPlanner]
-  /// can retry once connectivity returns.
+  /// can retry on reconnect or app resume.
   static Future<bool> updateSubscriptions(
     PushPrefs prefs,
     String lang, {
     FirebaseMessaging? messagingInstance,
     SharedPreferences? sharedPrefs,
+    Duration timeout = topicSyncTimeout,
   }) async {
     if (kIsWeb) return true;
     try {
@@ -261,25 +264,25 @@ class PushMessaging {
 
       // Announcements
       if (prefs.types.contains(NotifyType.announcements)) {
-        await messaging.subscribeToTopic('app_announcements_$effectiveLang');
-        await messaging.unsubscribeFromTopic('app_announcements_$otherLang');
+        await messaging.subscribeToTopic('app_announcements_$effectiveLang').timeout(timeout);
+        await messaging.unsubscribeFromTopic('app_announcements_$otherLang').timeout(timeout);
       } else {
-        await messaging.unsubscribeFromTopic('app_announcements_ar');
-        await messaging.unsubscribeFromTopic('app_announcements_en');
+        await messaging.unsubscribeFromTopic('app_announcements_ar').timeout(timeout);
+        await messaging.unsubscribeFromTopic('app_announcements_en').timeout(timeout);
       }
 
       // Seasons
       if (prefs.types.contains(NotifyType.seasons)) {
-        await messaging.subscribeToTopic('app_seasons_$effectiveLang');
-        await messaging.unsubscribeFromTopic('app_seasons_$otherLang');
+        await messaging.subscribeToTopic('app_seasons_$effectiveLang').timeout(timeout);
+        await messaging.unsubscribeFromTopic('app_seasons_$otherLang').timeout(timeout);
       } else {
-        await messaging.unsubscribeFromTopic('app_seasons_ar');
-        await messaging.unsubscribeFromTopic('app_seasons_en');
+        await messaging.unsubscribeFromTopic('app_seasons_ar').timeout(timeout);
+        await messaging.unsubscribeFromTopic('app_seasons_en').timeout(timeout);
       }
       await clearPendingTopicSync(prefs: sharedPrefs);
       return true;
     } catch (_) {
-      // Persist pending sync flag so reconnect can retry once (no tight loop).
+      // Persist pending sync flag so reconnect or resume can retry (single writer).
       try {
         final sp = sharedPrefs ?? await SharedPreferences.getInstance();
         await sp.setBool(pendingTopicSyncKey, true);

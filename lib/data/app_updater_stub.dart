@@ -10,6 +10,7 @@ PlatformAppUpdater createPlatformAppUpdater({
   dynamic cacheDirectory,
   String? defaultManifestUrl,
   Duration? timeout,
+  Duration? downloadTimeout,
 }) =>
     const PlatformAppUpdater();
 
