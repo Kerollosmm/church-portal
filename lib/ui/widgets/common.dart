@@ -699,9 +699,15 @@ Future<void> launchInstallEntry(
   switch (action) {
     case InstallAction.apk:
       openUrl(resolveInstallUrl(settings.androidUrl, Uri.base));
+      final hasOlder = settings.androidUrl32.trim().isNotEmpty;
       await _loadInstallGuide(
         context,
-        (c) => guide.showApkInstallGuide(c, apkSizeMb: settings.apkSizeMb),
+        (c) => guide.showApkInstallGuide(
+          c,
+          apkSizeMb: settings.apkSizeMb,
+          olderApkSizeMb: hasOlder ? settings.apkSize32Mb : null,
+          onDownloadOlder: hasOlder ? () => openUrl(resolveInstallUrl(settings.androidUrl32, Uri.base)) : null,
+        ),
       );
     case InstallAction.pwaPrompt:
       final shown = await env.promptInstall();
@@ -717,28 +723,39 @@ Future<void> launchInstallEntry(
         final shown = await env.promptInstall();
         if (shown) return;
       }
-      if (settings.androidUrl.trim().isNotEmpty) {
-        openUrl(resolveInstallUrl(settings.androidUrl, Uri.base));
-        if (context.mounted) {
-          await _loadInstallGuide(
-            context,
-            (c) => guide.showApkInstallGuide(c, apkSizeMb: settings.apkSizeMb),
-          );
-        }
-        return;
-      }
       if (context.mounted) {
         await _loadInstallGuide(context, (c) => guide.showAndroidInstallSteps(c));
       }
   }
 }
 
-class Footer extends ConsumerWidget {
+class Footer extends ConsumerStatefulWidget {
   final bool? isWeb;
   const Footer({super.key, this.isWeb});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<Footer> createState() => _FooterState();
+}
+
+class _FooterState extends ConsumerState<Footer> {
+  void Function()? _unlistenInstall;
+
+  @override
+  void initState() {
+    super.initState();
+    _unlistenInstall = ref.read(installEnvProvider).listenInstallChanges(() {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _unlistenInstall?.call();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final s = ref.watch(settingsProvider).value;
     final servingSeed = ref.watch(repositoryProvider).servingSeed;
     final year = DateTime.now().year;
@@ -749,7 +766,7 @@ class Footer extends ConsumerWidget {
       settings: installSettings,
       isStandalone: installEnv.isStandalone,
       installedEventReceived: installEnv.installedEventReceived,
-      isWeb: isWeb ?? kIsWeb,
+      isWeb: widget.isWeb ?? kIsWeb,
     );
     // Until settings/features arrives the defaults are "everything on": wait
     // before showing phones / social links an admin may have switched off.

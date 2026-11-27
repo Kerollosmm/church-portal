@@ -148,6 +148,7 @@ class _AppShellState extends ConsumerState<AppShell> {
   ProviderSubscription<List<Reminder>>? _remindersSub;
   ProviderSubscription<Locale>? _localeSub;
   ProviderSubscription<PushPrefs>? _pushPrefsSub;
+  void Function()? _unlistenInstall;
   dynamic _webPushRepo;
 
   String get location => widget.location;
@@ -155,6 +156,9 @@ class _AppShellState extends ConsumerState<AppShell> {
   @override
   void initState() {
     super.initState();
+    _unlistenInstall = ref.read(installEnvProvider).listenInstallChanges(() {
+      if (mounted) setState(() {});
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final pending = consumePendingNotificationRoute();
@@ -269,6 +273,7 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   @override
   void dispose() {
+    _unlistenInstall?.call();
     _deepLinksSub?.cancel();
     _remindersSub?.close();
     _localeSub?.close();

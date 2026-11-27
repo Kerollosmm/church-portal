@@ -174,6 +174,66 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('NextMassCard uses nextPrayer label when next service is not a mass', (tester) async {
+      final launched = captureLaunched(tester);
+      final now = CairoTime.at(2026, 11, 22, 14 * 60);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            repositoryProvider.overrideWithValue(SeedRepository(SeedData(const {}))),
+            liturgiesProvider.overrideWithValue(
+              const AsyncData([
+                Liturgy(
+                  id: 'v1',
+                  type: 'vespers',
+                  nameAr: 'عشية',
+                  nameEn: 'Vespers',
+                  weekday: 7,
+                  start: '18:00',
+                  end: '19:30',
+                  seasonKey: 'revival_maximus',
+                ),
+              ]),
+            ),
+            seasonsProvider.overrideWithValue(
+              AsyncData([
+                Season(
+                  id: 'rev',
+                  key: 'revival_maximus',
+                  nameAr: 'نهضة',
+                  nameEn: 'Revival',
+                  active: true,
+                  replacesRegular: false,
+                  startsAt: CairoTime.at(2026, 11, 20, 0),
+                  endsAt: CairoTime.at(2026, 11, 25, 23),
+                ),
+              ]),
+            ),
+            nowProvider.overrideWithValue(AsyncData(now)),
+            settingsProvider.overrideWithValue(
+              const AsyncData(ChurchSettings(nameAr: 'كنيسة', nameEn: 'Church', addressAr: 'أ', addressEn: 'A')),
+            ),
+            featuresStreamProvider.overrideWithValue(const AsyncData(FeatureSettings.defaults)),
+          ],
+          child: MaterialApp(
+            locale: const Locale('ar'),
+            supportedLocales: const [Locale('ar'), Locale('en')],
+            localizationsDelegates: GlobalMaterialLocalizations.delegates,
+            theme: buildTheme(const Locale('ar')),
+            home: const Scaffold(body: SingleChildScrollView(child: NextMassCard())),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.byKey(const Key('nextMassWhatsappShare')));
+      await tester.tap(find.byKey(const Key('nextMassWhatsappShare')));
+      await tester.pump();
+
+      final launchedUri = Uri.parse(launched.single);
+      expect(launchedUri.queryParameters['text'], startsWith('الصلاة القادمة — عشية\n'));
+    });
+
     testWidgets('MassSchedulePage shares /mass-schedule without overflow at 320px', (tester) async {
       tester.view.physicalSize = const Size(320, 800);
       tester.view.devicePixelRatio = 1.0;

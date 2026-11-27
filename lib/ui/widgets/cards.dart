@@ -412,7 +412,8 @@ class NextMassCard extends ConsumerWidget {
               color: whatsappGreen,
               onTap: () => openUrl(
                 whatsappShareUri(
-                  title: '${context.tr('nextMass')} — ${context.pick(n.liturgy.nameAr, n.liturgy.nameEn)}',
+                  title:
+                      '${context.tr(n.liturgy.type == 'mass' ? 'nextMass' : 'nextPrayer')} — ${context.pick(n.liturgy.nameAr, n.liturgy.nameEn)}',
                   path: '/mass-schedule',
                 ).toString(),
               ),

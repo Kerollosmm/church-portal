@@ -22,8 +22,17 @@ class _FakeInstallEnv implements InstallEnv {
   bool isStandalone;
   @override
   bool hasDeferredPrompt;
+  @override
+  bool installedEventReceived = false;
   final bool promptResult;
   int promptCalls = 0;
+  final List<void Function()> _listeners = [];
+
+  void emitInstallChange() {
+    for (final fn in List<void Function()>.of(_listeners)) {
+      fn();
+    }
+  }
 
   _FakeInstallEnv({
     this.userAgent = 'Mozilla/5.0 (Linux; Android 14) Chrome/120.0.0.0 Mobile Safari/537.36',
@@ -35,9 +44,6 @@ class _FakeInstallEnv implements InstallEnv {
 
   @override
   int get maxTouchPoints => 5;
-
-  @override
-  bool get installedEventReceived => false;
 
   @override
   void clearInstalledSessionFlag() {}
@@ -58,7 +64,10 @@ class _FakeInstallEnv implements InstallEnv {
   void remove(String key) {}
 
   @override
-  void Function() listenInstallChanges(void Function() onChange) => () {};
+  void Function() listenInstallChanges(void Function() onChange) {
+    _listeners.add(onChange);
+    return () => _listeners.remove(onChange);
+  }
 }
 
 void main() {
@@ -295,12 +304,26 @@ void main() {
       expect(find.text('تثبيت التطبيق من المتصفح'), findsOneWidget);
     });
 
-    testWidgets('tapping footer entry on Desktop opens browser install steps without crash', (tester) async {
+    testWidgets('tapping footer entry on Desktop never downloads Android APK even when androidUrl is set',
+        (tester) async {
+      final launched = <String>[];
+      const channel = MethodChannel('plugins.flutter.io/url_launcher');
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (call) async {
+        final args = call.arguments;
+        if (args is Map && args['url'] is String) launched.add(args['url'] as String);
+        return true;
+      });
+      addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, null));
+
       await tester.pumpWidget(
         wrapScope(
           env: _FakeInstallEnv(
             userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36',
             platform: 'Win32',
+          ),
+          settings: const InstallSettings(
+            enabled: true,
+            androidUrl: 'https://github.com/Kerollosmm/church-portal/releases/download/v1.0.0/app.apk',
           ),
           child: const Scaffold(body: SingleChildScrollView(child: Footer(isWeb: true))),
         ),
@@ -309,7 +332,81 @@ void main() {
       await tester.ensureVisible(find.byKey(const Key('footerInstallApp')));
       await tester.tap(find.byKey(const Key('footerInstallApp')));
       await tester.pumpAndSettle();
+      expect(launched, isEmpty);
       expect(find.text('تثبيت التطبيق من المتصفح'), findsOneWidget);
+    });
+
+    testWidgets('Android guide offers 32-bit androidUrl32 download option when configured', (tester) async {
+      final launched = <String>[];
+      const channel = MethodChannel('plugins.flutter.io/url_launcher');
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (call) async {
+        final args = call.arguments;
+        if (args is Map && args['url'] is String) launched.add(args['url'] as String);
+        return true;
+      });
+      addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, null));
+
+      await tester.pumpWidget(
+        wrapScope(
+          env: _FakeInstallEnv(),
+          settings: const InstallSettings(
+            enabled: true,
+            androidUrl: 'https://github.com/Kerollosmm/church-portal/releases/download/v1.0.0/app-arm64.apk',
+            androidUrl32: 'https://github.com/Kerollosmm/church-portal/releases/download/v1.0.0/app-armeabi.apk',
+            apkSizeMb: 18.4,
+            apkSize32Mb: 17.1,
+          ),
+          child: const Scaffold(body: SingleChildScrollView(child: Footer(isWeb: true))),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.byKey(const Key('footerInstallApp')));
+      await tester.tap(find.byKey(const Key('footerInstallApp')));
+      await tester.pumpAndSettle();
+
+      final olderBtn = find.byKey(const Key('guideOlderPhoneButton'));
+      expect(olderBtn, findsOneWidget);
+      await tester.ensureVisible(olderBtn);
+      await tester.tap(olderBtn);
+      await tester.pump();
+
+      expect(launched, [
+        'https://github.com/Kerollosmm/church-portal/releases/download/v1.0.0/app-arm64.apk',
+        'https://github.com/Kerollosmm/church-portal/releases/download/v1.0.0/app-armeabi.apk',
+      ]);
+    });
+
+    testWidgets('Footer and AppShell drawer react to late appinstalled event via listenInstallChanges',
+        (tester) async {
+      tester.view.physicalSize = const Size(390, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final env = _FakeInstallEnv();
+      await tester.pumpWidget(
+        wrapScope(
+          env: env,
+          child: const AppShell(
+            location: '/',
+            isWeb: true,
+            child: SingleChildScrollView(child: Footer(isWeb: true)),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('footerInstallApp')), findsOneWidget);
+
+      await tester.tap(find.byTooltip('القائمة'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('drawerInstallApp')), findsOneWidget);
+
+      env.installedEventReceived = true;
+      env.emitInstallChange();
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('drawerInstallApp')), findsNothing);
+      expect(find.byKey(const Key('footerInstallApp')), findsNothing);
     });
 
     testWidgets('Footer inside PageBody lays out without overflow across 320(2x)/400/1400 px (AR & EN)',
