@@ -580,7 +580,7 @@ class _DetailView extends ConsumerWidget {
           color: context.pal.bar,
           onTap: () => openUrl(calendar),
         ),
-      if (e.calendarDays.isNotEmpty && e.start.isNotEmpty)
+      if (kind == DetailKind.meeting && e.calendarDays.isNotEmpty && e.start.isNotEmpty)
         Builder(builder: (c) {
           // The earliest coming session over all the item's weekdays (a
           // item may run on several days); today's counts until it starts.
@@ -593,12 +593,8 @@ class _DetailView extends ConsumerWidget {
             if (t.isBefore(cNow)) t = CairoTime.at(cNow.year, cNow.month, cNow.day + daysAhead + 7, sm);
             if (target == null || t.isBefore(target)) target = t;
           }
-          final key = switch (kind) {
-            DetailKind.meeting => EventKey.meeting(id),
-            _ => EventKey.custom(kind.name, id),
-          };
           return RemindMeButton(
-            eventKey: key,
+            eventKey: EventKey.meeting(id),
             title: e.reminderTitle.isNotEmpty ? e.reminderTitle : {'ar': e.title, 'en': e.title},
             startsAt: target!,
             recurring: true,

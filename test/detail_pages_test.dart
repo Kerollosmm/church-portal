@@ -18,6 +18,7 @@ import 'package:church_portal/router.dart';
 import 'package:church_portal/state/providers.dart';
 import 'package:church_portal/ui/widgets/app_shell.dart';
 import 'package:church_portal/ui/widgets/common.dart';
+import 'package:church_portal/ui/widgets/remind_me.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -781,6 +782,28 @@ void main() {
         router.go(e.key);
         await tester.pumpAndSettle();
         expect(find.byKey(const Key('detailDirections')), e.value ? findsOneWidget : findsNothing, reason: e.key);
+      }
+    });
+
+    testWidgets('remind-me renders on meeting detail pages when push reminders are on, never on activities or facilities',
+        (tester) async {
+      final seed = _seed(features: const {
+        'push': true,
+        'pushTypes': ['reminders'],
+        'reminderSources': 'lit,mtg,day',
+      });
+      final (router, _) = await _pump(tester, size: const Size(400, 3000), seed: seed);
+
+      router.go('/church-education/d-meeting');
+      await tester.pumpAndSettle();
+      expect(find.byType(RemindMeButton), findsOneWidget);
+      expect(find.text('Remind me'), findsOneWidget);
+
+      for (final path in ['/church-activities/d-activity', '/public-services/d-facility']) {
+        router.go(path);
+        await tester.pumpAndSettle();
+        expect(find.byType(RemindMeButton), findsNothing, reason: path);
+        expect(find.text('Remind me'), findsNothing, reason: path);
       }
     });
 
