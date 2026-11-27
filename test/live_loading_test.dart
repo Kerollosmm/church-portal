@@ -586,12 +586,14 @@ void main() {
       tester.view.physicalSize = const Size(1280, 2400);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
-      await tester.pumpWidget(MaterialApp(
-        locale: const Locale('ar'),
-        supportedLocales: const [Locale('ar'), Locale('en')],
-        localizationsDelegates: GlobalMaterialLocalizations.delegates,
-        home: AdminDashboard(
-            repo: _Backend(), uid: 'u', email: 'admin@example.org', role: AdminRoles.owner, onSignOut: () {}, initial: 'categories'),
+      await tester.pumpWidget(ProviderScope(
+        child: MaterialApp(
+          locale: const Locale('ar'),
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          home: AdminDashboard(
+              repo: _Backend(), uid: 'u', email: 'admin@example.org', role: AdminRoles.owner, onSignOut: () {}, initial: 'categories'),
+        ),
       ));
       await tester.pump();
       for (final id in ['categories', 'pages', 'contactCats']) {

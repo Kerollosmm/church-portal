@@ -157,6 +157,45 @@ void main() {
       expect(partFile.existsSync(), isFalse);
       expect(await finalFile.readAsBytes(), samplePayload);
     });
+
+    test('downloadUpdate fails with TimeoutException when response stream stalls mid-download', () async {
+      expect(PlatformAppUpdater.downloadIdleTimeout, const Duration(seconds: 30));
+
+      final stalledSockets = <Socket>[];
+      final stalledServer = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      stalledServer.listen((socket) {
+        stalledSockets.add(socket);
+        socket.write(
+          'HTTP/1.1 200 OK\r\n'
+          'Content-Type: application/octet-stream\r\n'
+          'Content-Length: ${samplePayload.length}\r\n'
+          '\r\n',
+        );
+        socket.add(samplePayload.sublist(0, 8));
+        // Deliberately stop sending bytes so the stream idles/stalls.
+      });
+      addTearDown(() async {
+        for (final s in stalledSockets) {
+          s.destroy();
+        }
+        await stalledServer.close();
+      });
+
+      final updater = AppUpdater(
+        cacheDirectory: tempDir,
+        downloadTimeout: const Duration(milliseconds: 120),
+      );
+      final asset = ApkAsset(
+        url: 'http://${stalledServer.address.host}:${stalledServer.port}/church-portal.apk',
+        sha256: sampleSha256,
+        size: samplePayload.length,
+      );
+
+      await expectLater(
+        updater.downloadUpdate(asset, build: 104).drain(),
+        throwsA(isA<TimeoutException>()),
+      );
+    });
   });
 
   group('Dismiss update persistence tests', () {
