@@ -24,8 +24,11 @@ bool isAppCheckConfigured({
 }) =>
     !isWeb || debug || AppConfig.isUsableSiteKey(siteKey);
 
-/// Default on-disk Firestore cache size threshold (40 MB).
+/// Default on-disk Firestore cache size threshold on web (40 MB).
 const int kFirestoreCacheSizeBytes = 40 * 1024 * 1024;
+
+/// On-disk Firestore cache size threshold on native platforms (100 MB).
+const int kNativeFirestoreCacheSizeBytes = 100 * 1024 * 1024;
 
 /// Firestore [Settings] for the current platform.
 ///
@@ -36,11 +39,12 @@ const int kFirestoreCacheSizeBytes = 40 * 1024 * 1024;
 /// failing with `failed-precondition` and poisoning the JS SDK `AsyncQueue`
 /// (`b815`, Sentry `CHURCH-PORTAL-A/B/C/D/E/G/K`).
 ///
-/// On native platforms (`isWeb == false`), [Settings.webPersistentTabManager]
-/// stays `null` so Android/iOS configuration remains unchanged.
+/// On native platforms (`isWeb == false`), raises persistence cache to
+/// [kNativeFirestoreCacheSizeBytes] (100 MB) and keeps
+/// [Settings.webPersistentTabManager] `null` so Android/iOS stay native.
 Settings firestoreSettings({required bool isWeb}) => Settings(
       persistenceEnabled: true,
-      cacheSizeBytes: kFirestoreCacheSizeBytes,
+      cacheSizeBytes: isWeb ? kFirestoreCacheSizeBytes : kNativeFirestoreCacheSizeBytes,
       webPersistentTabManager: isWeb ? const WebPersistentMultipleTabManager() : null,
     );
 

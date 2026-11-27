@@ -6,6 +6,7 @@ import 'package:church_portal/data/image_processing.dart';
 import 'package:church_portal/data/media_repository.dart';
 import 'package:church_portal/data/seed_data.dart';
 import 'package:church_portal/domain/assistant_context.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/features.dart';
 import 'package:church_portal/domain/media.dart';
@@ -51,6 +52,39 @@ class _FakeMedia implements MediaRepository {
     deleted.add(mediaId);
     docs.remove(mediaId);
   }
+}
+
+class _FakeMediaSnap implements DocumentSnapshot<Map<String, dynamic>> {
+  final Map<String, dynamic>? _data;
+  _FakeMediaSnap(this._data);
+  @override
+  Map<String, dynamic>? data() => _data;
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FakeMediaDocRef implements DocumentReference<Map<String, dynamic>> {
+  final List<Source?> calls;
+  final Map<String, dynamic>? Function(GetOptions?) onGet;
+  _FakeMediaDocRef(this.calls, this.onGet);
+  @override
+  Future<DocumentSnapshot<Map<String, dynamic>>> get([GetOptions? options]) async {
+    calls.add(options?.source);
+    return _FakeMediaSnap(onGet(options));
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FakeFirestoreMediaDb implements FirebaseFirestore {
+  final List<Source?> calls;
+  final Map<String, dynamic>? Function(GetOptions?) onGet;
+  _FakeFirestoreMediaDb({required this.calls, required this.onGet});
+  @override
+  DocumentReference<Map<String, dynamic>> doc(String path) => _FakeMediaDocRef(calls, onGet);
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 /// Fake decoded image whose encoded size depends on edge and quality.
@@ -295,6 +329,32 @@ void main() {
       expect(decodeMediaDoc({'dataBase64': 'AQID', 'contentType': 'image/gif'}), isNull);
       expect(decodeMediaDoc({'dataBase64': '!!', 'contentType': 'image/jpeg'}), isNull);
       expect(decodeMediaDoc({'dataBase64': 'AQID', 'contentType': 'image/jpeg'}), [1, 2, 3]);
+    });
+
+    test('ReadOnlyMediaRepository & FirestoreMediaRepository try Source.cache before default source', () async {
+      final calls = <Source?>[];
+      final hitDb = _FakeFirestoreMediaDb(
+        calls: calls,
+        onGet: (opts) => opts?.source == Source.cache
+            ? {'dataBase64': base64Encode([1, 2, 3]), 'contentType': 'image/jpeg'}
+            : throw StateError('should not query server on cache hit'),
+      );
+
+      final ro = ReadOnlyMediaRepository(hitDb);
+      expect(await ro.load('m1'), [1, 2, 3]);
+      expect(calls, [Source.cache]);
+
+      calls.clear();
+      final missDb = _FakeFirestoreMediaDb(
+        calls: calls,
+        onGet: (opts) {
+          if (opts?.source == Source.cache) return null;
+          return {'dataBase64': base64Encode([4, 5]), 'contentType': 'image/jpeg'};
+        },
+      );
+      final rw = FirestoreMediaRepository(missDb, () => 'admin@test');
+      expect(await rw.load('m2'), [4, 5]);
+      expect(calls, [Source.cache, null]);
     });
   });
 

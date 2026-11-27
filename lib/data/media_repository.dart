@@ -53,10 +53,7 @@ class FirestoreMediaRepository implements MediaRepository {
   String get source => MediaSource.inline;
 
   @override
-  Future<Uint8List?> load(String mediaId) async {
-    final d = await db.doc('media/$mediaId').get();
-    return decodeMediaDoc(d.data());
-  }
+  Future<Uint8List?> load(String mediaId) => _loadMediaCacheFirst(db, mediaId);
 
   @override
   Future<MediaImage> upload(EncodedImage img, {String alt = ''}) async {
@@ -76,6 +73,22 @@ class FirestoreMediaRepository implements MediaRepository {
 
   @override
   Future<void> delete(String mediaId) => db.doc('media/$mediaId').delete();
+}
+
+/// Reads inline `media/{mediaId}` from local Firestore cache first, falling
+/// back to the default source only when missing or invalid so offline/lie-fi
+/// boots render cached photos immediately.
+Future<Uint8List?> _loadMediaCacheFirst(FirebaseFirestore db, String mediaId) async {
+  final ref = db.doc('media/$mediaId');
+  try {
+    final cached = await ref.get(const GetOptions(source: Source.cache));
+    final bytes = decodeMediaDoc(cached.data());
+    if (bytes != null && bytes.isNotEmpty) return bytes;
+  } catch (_) {
+    // Cache miss or unavailable throws in persistence mode; fall back to default.
+  }
+  final d = await ref.get();
+  return decodeMediaDoc(d.data());
 }
 
 /// Bytes of a `media/{id}` document, or null when it is not a valid image.
@@ -101,10 +114,7 @@ class ReadOnlyMediaRepository implements MediaRepository {
   String get source => MediaSource.inline;
 
   @override
-  Future<Uint8List?> load(String mediaId) async {
-    final d = await db.doc('media/$mediaId').get();
-    return decodeMediaDoc(d.data());
-  }
+  Future<Uint8List?> load(String mediaId) => _loadMediaCacheFirst(db, mediaId);
 
   @override
   Future<MediaImage> upload(EncodedImage img, {String alt = ''}) =>
