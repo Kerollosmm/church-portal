@@ -162,6 +162,12 @@ void main() {
     test('every lead passed -> null (save disabled)', () {
       expect(initialReminderLead(preferred: 0, leads: leads, startsAt: startsAt, now: DateTime.utc(2027, 1, 1, 10, 1)), isNull);
     });
+    test('recurring: keeps preferred lead even when today\'s lead time has passed (native & web)', () {
+      final near = DateTime.utc(2027, 1, 1, 9, 45); // 15 min before 10:00
+      expect(initialReminderLead(preferred: 60, leads: leads, startsAt: startsAt, now: near, recurring: true, isWeb: false), 60);
+      expect(initialReminderLead(preferred: 60, leads: leads, startsAt: startsAt, now: near, recurring: true, isWeb: true), 60);
+      expect(initialReminderLead(preferred: 1440, leads: leads, startsAt: startsAt, now: DateTime.utc(2027, 1, 1, 10, 1), recurring: true, isWeb: true), 1440);
+    });
   });
 
   group('review follow-ups', () {
