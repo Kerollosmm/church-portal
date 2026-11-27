@@ -6,6 +6,7 @@
 import {
   batchGetDocs,
   getCachedAccessToken,
+  isSoftDeleted,
   listCollection,
   setDocRest,
 } from './firestore_rest.js';
@@ -211,7 +212,7 @@ export async function runPushReminderPlanner(env, options = {}) {
   const features = settingsDocs.get('settings/features')?.data || {};
   const dayEvents = await decodeDayEvents(features.dayEvents || []);
 
-  const isVisible = (d) => d && d.hidden !== true && d.visible !== false;
+  const isVisible = (d) => d && !isSoftDeleted(d) && d.hidden !== true && d.visible !== false;
 
   const isSeasonActiveAtMs = (seasonData, instantMs) => {
     if (!seasonData || seasonData.active !== true || !isVisible(seasonData)) return false;

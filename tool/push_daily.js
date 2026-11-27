@@ -1,7 +1,7 @@
 // Daily Coptic seasons alert evaluator (runs once per Cairo calendar day).
 // Standard Web APIs only (compatible with Cloudflare Workers and Node.js 22+).
 
-import { listCollection } from './firestore_rest.js';
+import { isSoftDeleted, listCollection } from './firestore_rest.js';
 import { toCairoIsoDate } from './push_reminders.js';
 
 /**
@@ -138,7 +138,7 @@ export async function runDailySeasons(
 
   for (const s of seasons) {
     const data = s.data || {};
-    if (data.active === false) continue;
+    if (isSoftDeleted(data) || data.active === false) continue;
 
     // Get start date ISO in Africa/Cairo (admin dates are Cairo wall time stored as UTC)
     const rawStartsAt =
