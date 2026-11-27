@@ -192,7 +192,7 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
 - **Holy Seasons** switch (`holySeasons`): defaults to **on** the first time seasons load only while a season that
   **replaces** the regular schedule is active (`activeSeasonsAt(seasons, now).any((s) => s.replacesRegular)`), so an
   additive evening revival keeps the weekly tabs; once the visitor flips it, their choice wins.
-- Weekly view: `ChoiceChip` tabs **Friday | Sunday | Wednesday | Saturday | Other days** (`ScheduleTab`,
+- Weekly view: wrapping `ChoiceChip` tabs (`Wrap(spacing: 8, runSpacing: 8)`) **Friday | Sunday | Wednesday | Saturday | Other days** (`ScheduleTab`,
   `scheduleTabWeekdays`: other = Mon/Tue/Thu); today's Cairo weekday tab is preselected.
   `regularLiturgiesForTab` = regular (no `seasonKey`, no `date`), weekday in tab, **excluding vespers/praise**;
   then a separate **Vespers & praise** section (`vespersAndPraise(all, now: now)`: weekly ones always, one-off dated
@@ -596,7 +596,8 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
   - `HeroVideo` (`lib/ui/widgets/hero_video_io.dart`) wrapped in `RepaintBoundary` to isolate 60 fps video rendering from ancestor repaint layers.
 - Arabic scripture text (Van Dyck) and English chapter:verse references (`refs-only`).
 - Offline caching via `ReadingsStore` (SharedPreferences on mobile, 8 s HTTP fetch timeout falling back cleanly to cached JSON or `null`, in-memory on web) with automatic pruning of dates older than yesterday; Android additionally registers an unmetered periodic Workmanager job (`church_portal_readings_prefetch`, `ExistingPeriodicWorkPolicy.keep`) executing `prefetchUpcomingDays` for the next 7 `Africa/Cairo` days (`CairoTime` + `isoDate`).
-- Accessible directly via the «اقرأ القراءات» action on the Today card, direct link `/readings/YYYY-MM-DD`, or bare `/readings` (redirects to today's Cairo date `/readings/YYYY-MM-DD`, preserving query parameters).
+- Accessible directly via the «اقرأ القراءات» action on the Today card, permanent «قراءات اليوم» navigation links in the desktop bar, mobile drawer, and footer (`/readings`, redirecting to today's Cairo date `/readings/YYYY-MM-DD`, preserving query parameters), or direct link `/readings/YYYY-MM-DD`.
+- Contact form (`ContactForm._pickDate`) uses the same Cairo date (`CairoTime`) for `firstDate`/`currentDate`/`initialDate` as submit validation.
 
 ### Notification Preferences & Reminders (`/notifications`, `notifications_page.dart`, ADR-057, ADR-064, ADR-065, ADR-067)
 - Screen manages user notification channel subscriptions (`announcements`, `verse_daily`, `katameros_daily`, `seasons`, `feasts`) and personal reminders (`RemindMeButton`, «تذكيراتي»).

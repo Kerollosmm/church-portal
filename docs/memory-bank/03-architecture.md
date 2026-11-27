@@ -391,10 +391,10 @@ Deferred isolation is mechanically enforced in CI via `python3 tool/fingerprint_
 
 ## App shell & navigation (`lib/ui/widgets/app_shell.dart`)
 
-- `navItems`: home, massSchedule, education, activities, publicServices, about, contact; `askNavItem` added
+- `navItems`: home, massSchedule, readings (`/readings`), education, activities, publicServices, about, contact; `askNavItem` added
   when `assistantVisibleProvider`. `visibleNavItems(f, showAsk:)` filters by `f.routeEnabled(path)`.
 - Wide layout evaluated via `shellIsWide(BuildContext context)` (`width / textScale.clamp(1.0, 3.0) >= 1024`; large system text forces the compact bar): text links
-  (home/about/education), a **Services** popup (activities, public services, contact, ask), gold **Mass times**
+  (home/about/readings/custom pages/ask/notifications when `features.routeEnabled('/notifications')`/contact), a **Services** popup (`serviceNavPaths` + custom categories), gold **Mass times**
   highlight button, language toggle (`EN` / `ع`).
 - Narrow: compact 48×48 dp **Mass times** `IconButton` (`_HighlightButton`), ☰ opens an **end
   drawer** (`_AppDrawer`). On mobile viewports (`width < 600`, ADR-064, `INV-APPBAR-01`), the language toggle (`appBarLanguageToggle`)
@@ -409,9 +409,9 @@ Deferred isolation is mechanically enforced in CI via `python3 tool/fingerprint_
   Phone subpages (`location != '/'`) get a leading
   **Back-to-Home** arrow (`Key('backHome')`, `Icons.arrow_back_rounded`, mirrored in RTL) — every in-app link is a
   sibling `context.go`, so there is nothing to pop, and installed PWAs have no browser back button. On an item
-  detail page the arrow is parent-aware (PR #13): `parentRouteOf(location)` (pure, `app_shell.dart`) returns
-  `DetailKind.parentPath` — `/church-education`, `/church-activities`, `/public-services`, `/about`
-  (priests, saints), `/notifications` (for `/notifications/battery`, ADR-062) or `/` (milestones: their cards live on Home) — shown as `Key('backParent')` with the tooltip
+  detail page or section-placed custom page (`/page/<slug>` with `placement == 'section'`) the arrow is parent-aware (PR #13): `parentRouteOf(location, features, pages, categories)` (pure, `app_shell.dart`) returns
+  `DetailKind.parentPath`, the built-in/custom section path (`/section/<slug>` or `BuiltInSections.pathFor`),
+  `/notifications` (for `/notifications/battery`, ADR-062) or `/` (milestones: their cards live on Home) — shown as `Key('backParent')` with the tooltip
   «العودة إلى …» (`backToLabel`); every other route keeps `Key('backHome')` → `/`.
 - **Navigation & Layout Invariants (ADR-062, ADR-064):**
   - **`INV-APPBAR-01`**: On mobile viewports (`width < 600`), `appBarLanguageToggle` is omitted from `AppBar.actions`, ensuring church short title (`appShort`) has >= 130 dp unobstructed width and >= 6 dp clearance from the seal tab. `_AppDrawer` provides `drawerLanguageToggle`. Desktop viewports (`width >= 600`) retain `appBarLanguageToggle`.
