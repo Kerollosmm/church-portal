@@ -24,27 +24,46 @@ Future<bool> debugSimulatePopState() => impl.debugSimulatePopState();
 ///
 /// The primary action button is «متابعة التعديل» (`discard-keep`), returning `false`.
 /// The discard button is «تجاهل» (`discard-confirm`), returning `true`.
-Future<bool> confirmDiscardChanges(BuildContext context) async {
+Future<bool> confirmDiscardChanges(
+  BuildContext context, {
+  void Function(void Function(bool discard) dismiss)? onOpen,
+}) async {
   registerAdminStrings();
-  final res = await showDialog<bool>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      content: Text(context.tr('discardChanges')),
-      actions: [
-        TextButton(
-          key: const ValueKey('discard-confirm'),
-          onPressed: () => Navigator.pop(ctx, true),
-          child: Text(context.tr('discard')),
-        ),
-        FilledButton(
-          key: const ValueKey('discard-keep'),
-          onPressed: () => Navigator.pop(ctx, false),
-          child: Text(context.tr('keepEditing')),
-        ),
-      ],
-    ),
-  );
-  return res == true;
+  BuildContext? dialogCtx;
+  var settled = false;
+  onOpen?.call((discard) {
+    if (settled) return;
+    final ctx = dialogCtx;
+    if (ctx != null && ctx.mounted) {
+      Navigator.of(ctx).pop(discard);
+    }
+  });
+  try {
+    final res = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        dialogCtx = ctx;
+        return AlertDialog(
+          content: Text(context.tr('discardChanges')),
+          actions: [
+            TextButton(
+              key: const ValueKey('discard-confirm'),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(context.tr('discard')),
+            ),
+            FilledButton(
+              key: const ValueKey('discard-keep'),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(context.tr('keepEditing')),
+            ),
+          ],
+        );
+      },
+    );
+    return res == true;
+  } finally {
+    settled = true;
+  }
 }
 
 /// Tracks unsaved / dirty states across embedded admin sections.
