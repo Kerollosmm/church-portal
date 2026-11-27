@@ -135,16 +135,18 @@ String buildReminderIcs({
   return '${foldedLines.join('\r\n')}\r\n';
 }
 
-/// Google Calendar "add event" link for a one-off event.
+/// Google Calendar "add event" link for an event reminder.
 ///
 /// Uses Cairo local wall time with `ctz=Africa/Cairo` so the user's calendar
-/// converts correctly to local time wherever they are.
+/// converts correctly to local time wherever they are. When [recurringWeekly]
+/// is true, includes a weekly `RRULE` on the Cairo start weekday.
 String singleCalendarUrl({
   required String title,
   required DateTime startsAt,
   DateTime? endsAt,
   String details = '',
   String location = '',
+  bool recurringWeekly = false,
 }) {
   final startCairo = CairoTime.fromInstant(startsAt);
   final endCairo = CairoTime.fromInstant(endsAt ?? startsAt.add(const Duration(hours: 1)));
@@ -158,6 +160,7 @@ String singleCalendarUrl({
     'text': title,
     'dates': '$startStamp/$endStamp',
     'ctz': 'Africa/Cairo',
+    if (recurringWeekly) 'recur': 'RRULE:FREQ=WEEKLY;BYDAY=${_rruleDays[startCairo.weekday - 1]}',
     if (details.isNotEmpty) 'details': details,
     if (location.isNotEmpty) 'location': location,
   }).toString();
