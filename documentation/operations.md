@@ -210,13 +210,13 @@
   - مسار يمكن تشغيله يدويًا عند الحاجة (`workflow_dispatch`) من GitHub Actions لتشغيل السكربت الاحتياطي `node tool/push_sender.js` بواسطة Node 22.
 
 ### اختبارات التكامل لوضع عدم الاتصال محليًا (`integration_test/offline_test.dart`)
-- لا يعمل اختبار `integration_test/offline_test.dart` داخل `flutter test` العادي ولا في مسار CI للوحدات لأنه يحتاج إلى جهاز أو متصفح ومحاكي Firestore. لتشغيله محليًا (بوجود Java 11+ و`firebase-tools`):
+- لا يعمل اختبار `integration_test/offline_test.dart` داخل `flutter test` العادي ولا في مسار CI للوحدات لأنه يحتاج إلى جهاز أو متصفح ومحاكي Firestore. لتشغيله محليًا (بوجود Java 21+ لحزمة `firebase-tools ^15`):
 ```bash
-cd tool/rules_test && npm ci && cd ../..
-npx firebase emulators:exec --only firestore --project demo-church-portal --config firebase.json \
-  "FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node tool/seed_firestore.js && \
-   flutter test integration_test/offline_test.dart -d windows"   # or -d macos / an Android emulator
+npm install --prefix tool && npm ci --prefix tool/rules_test
+npx firebase-tools emulators:exec --only firestore --project demo-church-portal --config firebase.json \
+  "node tool/seed_firestore.js --project demo-church-portal && flutter test integration_test/offline_test.dart -d windows"   # or -d macos / an Android emulator
 ```
+- أو استخدم المسار المباشر `./tool/rules_test/node_modules/.bin/firebase` (`tool\rules_test\node_modules\.bin\firebase` على Windows). يضبط `emulators:exec` المتغير `FIRESTORE_EMULATOR_HOST` تلقائيًا فيعمل الأمر كما هو على Windows وmacOS وLinux.
 - وعلى محاكي أندرويد (مثل `emulator-5554`) أضف `--dart-define=FIRESTORE_EMULATOR_HOST=10.0.2.2` (انظر [`integration_test/README.md`](../integration_test/README.md)).
 
 ## 7. مهام تشغيلية مفتوحة (ملخص)

@@ -1,17 +1,20 @@
 // Emulator integration test for PR 6F-2 offline-first reads and queued contact writes.
 //
-// Local run instructions (requires Java 11+ and Firebase CLI):
-//   1. Start the Firestore emulator and seed it:
-//        npx firebase emulators:exec --only firestore --project demo-church-portal \
-//          "FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node tool/seed_firestore.js && \
-//           flutter test integration_test/offline_test.dart -d windows"   # or -d macos / an Android emulator
+// Local run instructions (requires Java 21+, firebase-admin in tool/, and firebase-tools ^15):
+//   1. Install Node dependencies once:
+//        npm install --prefix tool && npm ci --prefix tool/rules_test
+//   2. Start the Firestore emulator, seed it, and run the test:
+//        npx firebase-tools emulators:exec --only firestore --project demo-church-portal --config firebase.json \
+//          "node tool/seed_firestore.js --project demo-church-portal && flutter test integration_test/offline_test.dart -d windows"   # or -d macos / an Android emulator
 //      (Or on Android emulator, pass --dart-define=FIRESTORE_EMULATOR_HOST=10.0.2.2)
+
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:church_portal/core/theme.dart';
 import 'package:church_portal/data/content_repository.dart';
 import 'package:church_portal/data/firebase_bootstrap.dart';
 import 'package:church_portal/data/seed_data.dart';
-import 'package:church_portal/firebase_options.dart';
 import 'package:church_portal/state/providers.dart';
 import 'package:church_portal/ui/pages/contact_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -24,6 +27,42 @@ import 'package:material_ui/material_ui.dart';
 const _emulatorHost = String.fromEnvironment('FIRESTORE_EMULATOR_HOST', defaultValue: '127.0.0.1');
 const _emulatorPort = int.fromEnvironment('FIRESTORE_EMULATOR_PORT', defaultValue: 8080);
 
+Future<void> _seedTestCustomPage() async {
+  final client = HttpClient();
+  try {
+    final uri = Uri(
+      scheme: 'http',
+      host: _emulatorHost,
+      port: _emulatorPort,
+      path: '/v1/projects/demo-church-portal/databases/(default)/documents/pages/offline-test-page',
+    );
+    final req = await client.patchUrl(uri);
+    req.headers.set(HttpHeaders.authorizationHeader, 'Bearer owner');
+    req.headers.contentType = ContentType.json;
+    req.write(jsonEncode({
+      'fields': {
+        'slug': {'stringValue': 'offline-test-page'},
+        'titleAr': {'stringValue': 'صفحة اختبار'},
+        'titleEn': {'stringValue': 'Offline test page'},
+        'subtitleAr': {'stringValue': ''},
+        'subtitleEn': {'stringValue': ''},
+        'placement': {'stringValue': 'link'},
+        'showInNav': {'booleanValue': false},
+        'featured': {'booleanValue': false},
+        'visible': {'booleanValue': true},
+        'order': {'integerValue': '0'},
+      },
+    }));
+    final res = await req.close();
+    await res.drain<void>();
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw StateError('Failed to seed test custom page: HTTP ${res.statusCode}');
+    }
+  } finally {
+    client.close(force: true);
+  }
+}
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
@@ -34,23 +73,18 @@ void main() {
   setUpAll(() async {
     seed = await SeedData.load();
     if (Firebase.apps.isEmpty) {
-      final options = DefaultFirebaseOptions.currentPlatformOrNull;
-      if (options != null) {
-        await Firebase.initializeApp(options: options);
-      } else {
-        await Firebase.initializeApp(
-          options: const FirebaseOptions(
-            apiKey: 'demo-key',
-            appId: '1:000000000000:web:demo',
-            messagingSenderId: '000000000000',
-            projectId: 'demo-church-portal',
-          ),
-        );
-      }
+      await Firebase.initializeApp(
+        options: const FirebaseOptions(
+          apiKey: 'demo-key',
+          appId: '1:000000000000:web:demo',
+          messagingSenderId: '000000000000',
+          projectId: 'demo-church-portal',
+        ),
+      );
     }
     db = FirebaseFirestore.instance;
-    db.useFirestoreEmulator(_emulatorHost, _emulatorPort);
     db.settings = firestoreSettings(isWeb: false);
+    db.useFirestoreEmulator(_emulatorHost, _emulatorPort);
   });
 
   tearDown(() async {
@@ -62,14 +96,15 @@ void main() {
       (tester) async {
     final repo = FirestoreRepository(db, seed, isOffline: () => offline);
 
-    // 1. Warm Firestore persistence cache while network is enabled.
+    // 1. Seed a valid custom page and warm Firestore persistence cache while network is enabled.
+    await _seedTestCustomPage();
     await db.enableNetwork();
     final warmSettings = await repo.settings().first;
     final warmLiturgies = await repo.liturgies().first;
     final warmPages = await repo.pages().first;
     expect(warmSettings.nameAr, isNotEmpty);
-    expect(warmLiturgies, isNotNull);
-    expect(warmPages, isNotNull);
+    expect(warmLiturgies, isNotEmpty);
+    expect(warmPages, isNotEmpty);
 
     // 2. Disable network -> cached reads resolve immediately without 8 s stalls.
     offline = true;
@@ -119,14 +154,33 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('contactQueuedStatus')), findsOneWidget);
-    expect(find.text('هيتبعت أول ما النت يرجع'), findsOneWidget);
+    expect(find.text('محفوظة وهتتبعت أول ما النت يرجع — خلي التطبيق مفتوح'), findsOneWidget);
     expect(tester.widget<FilledButton>(find.byKey(const Key('contactSendButton'))).onPressed, isNull);
 
     // 4. Re-enable network -> queued batch syncs and clears pending state.
     offline = false;
     await db.enableNetwork();
-    await tester.pumpAndSettle(const Duration(seconds: 2));
+    await db.waitForPendingWrites().timeout(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
 
     expect(find.text('تم إرسال رسالتك. شكرًا لك، سنتواصل معك قريبًا.'), findsOneWidget);
+  });
+
+  testWidgets('empty custom collection keeps intentional settle patience while offline', (tester) async {
+    final repo = FirestoreRepository(db, seed, isOffline: () => offline);
+
+    await db.enableNetwork();
+    final warmCategories = await repo.categories().first;
+    expect(warmCategories, isEmpty);
+
+    offline = true;
+    await db.disableNetwork();
+
+    final sw = Stopwatch()..start();
+    final offlineCategories = await repo.categories().first;
+    sw.stop();
+
+    expect(offlineCategories, isEmpty);
+    expect(sw.elapsedMilliseconds, greaterThanOrEqualTo(7500));
   });
 }
