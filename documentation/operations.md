@@ -215,7 +215,7 @@
 cd tool/rules_test && npm ci && cd ../..
 npx firebase emulators:exec --only firestore --project demo-church-portal --config firebase.json \
   "FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node tool/seed_firestore.js && \
-   flutter test integration_test/offline_test.dart -d linux"
+   flutter test integration_test/offline_test.dart -d windows"   # or -d macos / an Android emulator
 ```
 - وعلى محاكي أندرويد (مثل `emulator-5554`) أضف `--dart-define=FIRESTORE_EMULATOR_HOST=10.0.2.2` (انظر [`integration_test/README.md`](../integration_test/README.md)).
 

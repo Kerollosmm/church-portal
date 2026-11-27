@@ -277,7 +277,7 @@ The remote scheduled push delivery and readings synchronization infrastructure r
 cd tool/rules_test && npm ci && cd ../..
 npx firebase emulators:exec --only firestore --project demo-church-portal --config firebase.json \
   "FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node tool/seed_firestore.js && \
-   flutter test integration_test/offline_test.dart -d linux"
+   flutter test integration_test/offline_test.dart -d windows"   # or -d macos / an Android emulator
 ```
 - For Android emulators, add `--dart-define=FIRESTORE_EMULATOR_HOST=10.0.2.2` (see [`integration_test/README.md`](../../integration_test/README.md)).
 

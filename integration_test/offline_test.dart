@@ -4,7 +4,7 @@
 //   1. Start the Firestore emulator and seed it:
 //        npx firebase emulators:exec --only firestore --project demo-church-portal \
 //          "FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node tool/seed_firestore.js && \
-//           flutter test integration_test/offline_test.dart -d linux"
+//           flutter test integration_test/offline_test.dart -d windows"   # or -d macos / an Android emulator
 //      (Or on Android emulator, pass --dart-define=FIRESTORE_EMULATOR_HOST=10.0.2.2)
 
 import 'package:church_portal/core/theme.dart';
