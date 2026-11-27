@@ -55,7 +55,7 @@ DateTime? nextLiturgyOccurrence(Liturgy l, DateTime now, {bool skipToday = false
 }
 
 /// Card for one liturgy on the schedule page.
-class LiturgyCard extends StatelessWidget {
+class LiturgyCard extends ConsumerWidget {
   final Liturgy liturgy;
   final bool showWeekday;
   final bool showDate;
@@ -94,8 +94,9 @@ class LiturgyCard extends StatelessWidget {
       };
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l = liturgy;
+    final now = ref.watch(nowProvider).value ?? DateTime.now();
     final dayText = showDate && l.date != null
         ? formatDate(CairoTime.calendarDate(l.date!), arabic: context.isAr)
         : (showWeekday || showDate) ? weekdayLabel(context, l.weekday) : '';
@@ -139,7 +140,7 @@ class LiturgyCard extends StatelessWidget {
               IconLine(Icons.place_outlined, context.pick(l.placeAr, l.placeEn)),
               IconLine(Icons.people_outline, context.pick(l.audienceAr, l.audienceEn)),
               ProgramDetails(l.program, parallelText: parallelText),
-              if (nextLiturgyOccurrence(l, CairoTime.now(), skipToday: notHeldToday, heldOn: heldOn) case final next?)
+              if (nextLiturgyOccurrence(l, now, skipToday: notHeldToday, heldOn: heldOn) case final next?)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: RemindMeButton(

@@ -10,6 +10,7 @@ import 'package:church_portal/state/providers.dart';
 import 'package:church_portal/ui/pages/mass_schedule_page.dart';
 import 'package:church_portal/ui/widgets/cards.dart';
 import 'package:church_portal/ui/widgets/common.dart';
+import 'package:church_portal/ui/widgets/remind_me.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -190,5 +191,43 @@ void main() {
     expect(find.byType(ErrorState), findsNWidgets(2));
     expect(find.byKey(const Key('noCurrentSeasons')), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('LiturgyCard computes RemindMeButton.startsAt from nowProvider', (tester) async {
+    const sundayMass = Liturgy(
+      id: 'sun-1',
+      type: 'mass',
+      nameAr: 'قداس الأحد',
+      nameEn: 'Sunday Mass',
+      weekday: 7,
+      start: '08:00',
+      end: '10:00',
+    );
+    final clock = StreamController<DateTime>.broadcast();
+    addTearDown(clock.close);
+
+    final overrides = [
+      repositoryProvider.overrideWithValue(SeedRepository(sampleSeed)),
+      nowProvider.overrideWith((_) => clock.stream),
+      settingsProvider.overrideWithValue(
+          const AsyncData(ChurchSettings(nameAr: 'كنيسة', nameEn: 'Church', addressAr: 'أ', addressEn: 'A'))),
+      featuresStreamProvider.overrideWithValue(const AsyncData(FeatureSettings.defaults)),
+    ];
+
+    await tester.pumpWidget(wrap(const LiturgyCard(liturgy: sundayMass), overrides));
+    clock.add(CairoTime.at(2026, 11, 22, 7 * 60)); // Sunday 07:00 Cairo -> today 08:00
+    await tester.pump();
+    await tester.pump();
+
+    var btn = tester.widget<RemindMeButton>(find.byType(RemindMeButton));
+    expect(btn.startsAt, CairoTime.at(2026, 11, 22, 8 * 60));
+
+    // Minute ticker moves past 08:00 -> rolls forward to next Sunday 2026-11-29 08:00.
+    clock.add(CairoTime.at(2026, 11, 22, 9 * 60));
+    await tester.pump();
+    await tester.pump();
+
+    btn = tester.widget<RemindMeButton>(find.byType(RemindMeButton));
+    expect(btn.startsAt, CairoTime.at(2026, 11, 29, 8 * 60));
   });
 }

@@ -21,6 +21,7 @@ import 'package:church_portal/ui/admin/admin_schema.dart';
 import 'package:church_portal/ui/admin/admin_screens.dart';
 import 'package:church_portal/ui/admin/admin_validators.dart';
 import 'package:church_portal/ui/admin/advanced_owner_screen.dart';
+import 'package:church_portal/ui/admin/assistant_admin.dart';
 import 'package:church_portal/ui/admin/collection_list.dart';
 import 'package:church_portal/ui/admin/contact_admin.dart';
 import 'package:church_portal/ui/admin/doc_editor.dart';
@@ -8217,6 +8218,76 @@ void main() {
       expect(saved!.containsKey('installApkBuild'), isFalse);
       expect(saved!.containsKey('installApkSizeMb'), isFalse);
       expect(saved!.containsKey('installPrompt'), isFalse);
+    });
+  });
+
+  group('Audit #158: formatted stream errors & AssistantSwitches error state', () {
+    testWidgets('ContactCategoriesScreen, FeaturesScreen, and AdvancedOwnerScreen format stream errors with formatAdminError',
+        (tester) async {
+      final err = FirebaseException(plugin: 'cloud_firestore', code: 'permission-denied', message: 'Missing permissions');
+
+      final contactRepo = _SilentOverviewBackend(
+        onWatchDoc: (path) => path == 'settings/contact' ? Stream<AdminDoc?>.error(err) : null,
+      );
+      await tester.pumpWidget(_app(Scaffold(body: ContactCategoriesScreen(repo: contactRepo))));
+      await tester.pumpAndSettle();
+      expect(find.text('[permission-denied] Missing permissions'), findsOneWidget);
+
+      final featuresRepo = _SilentOverviewBackend(
+        onWatchDoc: (path) => path == 'settings/features' ? Stream<AdminDoc?>.error(err) : null,
+      );
+      await tester.pumpWidget(_app(Scaffold(body: FeaturesScreen(repo: featuresRepo))));
+      await tester.pumpAndSettle();
+      expect(find.text('[permission-denied] Missing permissions'), findsOneWidget);
+
+      final advRepo = _SilentOverviewBackend(
+        onWatchDoc: (path) => path == 'settings/features' ? Stream<AdminDoc?>.error(err) : null,
+      );
+      await tester.pumpWidget(
+        _app(Scaffold(body: AdvancedOwnerScreen(repo: advRepo, onSendTestError: () async => true))),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('[permission-denied] Missing permissions'), findsOneWidget);
+    });
+
+    testWidgets('AssistantSwitches shows error state with retry on stream error instead of default ON/OFF switches',
+        (tester) async {
+      var failFeatures = true;
+      final repo = _SilentOverviewBackend(
+        initialDocs: {
+          'settings/church': {'assistantEnabled': true},
+          'settings/features': {
+            'sections': {'assistant': false},
+          },
+        },
+        onWatchDoc: (path) {
+          if (path == 'settings/features' && failFeatures) {
+            return Stream<AdminDoc?>.error(
+              FirebaseException(plugin: 'cloud_firestore', code: 'unavailable', message: 'Backend offline'),
+            );
+          }
+          return null;
+        },
+      );
+
+      await tester.pumpWidget(_app(Scaffold(body: AssistantSwitches(repo: repo))));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('assistantSwitchesError')), findsOneWidget);
+      expect(find.text('[unavailable] Backend offline'), findsOneWidget);
+      expect(find.byKey(const Key('assistantSectionSwitch')), findsNothing);
+      expect(find.byKey(const Key('assistantEnabledSwitch')), findsNothing);
+
+      // Retry after stream recovers renders switches with actual values (section=false, enabled=true).
+      failFeatures = false;
+      await tester.tap(find.byKey(const Key('assistantSwitchesRetry')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('assistantSwitchesError')), findsNothing);
+      final sectionSwitch = tester.widget<AdminStateSwitch>(find.byKey(const Key('assistantSectionSwitch')));
+      final enabledSwitch = tester.widget<AdminStateSwitch>(find.byKey(const Key('assistantEnabledSwitch')));
+      expect(sectionSwitch.value, isFalse);
+      expect(enabledSwitch.value, isTrue);
     });
   });
 }

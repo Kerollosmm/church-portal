@@ -291,7 +291,7 @@ class _InstallBannerState extends ConsumerState<InstallBanner> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           ),
           icon: const Icon(Icons.download, size: 18),
-          label: Text(context.tr('installDownloadApk')),
+          label: Text(context.tr('installPwa')),
           onPressed: () async {
             // The deferred prompt is single-use: hide the banner for this
             // session once it has been shown (installed or declined).

@@ -358,6 +358,7 @@ const Map<String, List<String>> _strings = {
   'installAppTitle': ['تطبيق الكنيسة على هاتفك', 'Church app on your phone'],
   'installAppBody': ['تابع القداسات والصلوات والمواسم وتلقّ التنبيهات بسهولة من هاتفك.', 'Follow liturgies, prayers and seasons with easy updates on your phone.'],
   'installDownloadApk': ['تحميل التطبيق', 'Download app'],
+  'installPwa': ['ثبّت التطبيق', 'Install app'],
   'installOlderPhone': ['هاتف قديم؟', 'Older phone?'],
   'installLater': ['لاحقًا', 'Later'],
   'installDismiss': ['إغلاق', 'Close'],

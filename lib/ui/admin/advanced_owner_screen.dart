@@ -232,7 +232,12 @@ class _AdvancedOwnerScreenState extends State<AdvancedOwnerScreen> with SingleTi
       stream: _featuresStream,
       builder: (context, snap) {
         if (snap.hasError) {
-          return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('${snap.error}')));
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(formatAdminError(snap.error!, isAr: context.isAr)),
+            ),
+          );
         }
         if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
           return const Center(child: CircularProgressIndicator());

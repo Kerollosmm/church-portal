@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
+import '../../core/theme.dart';
 import '../../data/admin_repository.dart';
 import '../../domain/features.dart';
 import 'admin_schema.dart';
@@ -73,6 +74,13 @@ class _AssistantSwitchesState extends State<AssistantSwitches> {
     }
   }
 
+  void _retry() {
+    setState(() {
+      _church = widget.repo.watchDoc('settings/church');
+      _features = widget.repo.watchDoc('settings/features');
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     registerAdminStrings();
@@ -83,6 +91,42 @@ class _AssistantSwitchesState extends State<AssistantSwitches> {
         key: ObjectKey(_features),
         stream: _features,
         builder: (context, features) {
+          if (church.hasError || features.hasError) {
+            final err = (church.error ?? features.error)!;
+            return Card(
+              key: const Key('assistantSwitchesError'),
+              margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.error_outline, color: context.pal.alert),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            formatAdminError(err, isAr: context.isAr),
+                            style: TextStyle(color: context.pal.alert),
+                          ),
+                        ),
+                      ],
+                    ),
+                    Align(
+                      alignment: AlignmentDirectional.centerEnd,
+                      child: TextButton.icon(
+                        key: const Key('assistantSwitchesRetry'),
+                        onPressed: _retry,
+                        icon: const Icon(Icons.refresh, size: 18),
+                        label: Text(context.tr('retry')),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
           final enabled = church.data?.data['assistantEnabled'] == true;
           final rawSections = features.data?.data['sections'];
           // A missing key = on (FeatureSettings.enabled).

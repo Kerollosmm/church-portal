@@ -68,7 +68,7 @@ class _FeaturesScreenState extends State<FeaturesScreen> {
       key: ObjectKey(_stream),
       stream: _stream,
       builder: (context, snap) {
-        if (snap.hasError) return Center(child: Text('${snap.error}'));
+        if (snap.hasError) return Center(child: Text(formatAdminError(snap.error!, isAr: context.isAr)));
         if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
