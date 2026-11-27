@@ -2,7 +2,9 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/app_config.dart';
+import '../domain/cairo_time.dart';
 import '../domain/readings.dart';
+import '../domain/reminders.dart';
 
 /// Manages fetching, caching, and pruning of Katameros daily readings.
 ///
@@ -11,6 +13,7 @@ import '../domain/readings.dart';
 /// and prunes days older than yesterday.
 class ReadingsStore {
   static const String prefix = 'church_portal_readings_';
+  static const Duration fetchTimeout = Duration(seconds: 8);
   final http.Client _client;
   final String _baseUrl;
   final Map<String, DayReadings> _memoryCache = {};
@@ -54,7 +57,7 @@ class ReadingsStore {
       final url = Uri.parse('$_baseUrl/data/readings/$dateIso.json');
       final res = await _client.get(url, headers: {
         'Accept': 'application/json',
-      });
+      }).timeout(fetchTimeout);
 
       if (res.statusCode == 200) {
         final body = utf8.decode(res.bodyBytes);
@@ -116,5 +119,22 @@ class ReadingsStore {
       }
     }
     return removed;
+  }
+
+  /// Prefetches [days] starting at Cairo today (skipping already cached days)
+  /// and prunes cached days older than yesterday in Africa/Cairo time.
+  Future<void> prefetchUpcomingDays({
+    DateTime? todayCairo,
+    int days = 7,
+  }) async {
+    CairoTime.ensureInitialized();
+    final base = todayCairo == null ? CairoTime.now() : CairoTime.fromInstant(todayCairo);
+    final today = CairoTime.startOfDay(base);
+    for (var i = 0; i < days; i++) {
+      final target = CairoTime.at(today.year, today.month, today.day + i);
+      await getReadings(isoDate(target));
+    }
+    final yesterday = CairoTime.at(today.year, today.month, today.day - 1);
+    await pruneOldReadings(isoDate(yesterday));
   }
 }

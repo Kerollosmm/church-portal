@@ -14,6 +14,7 @@ import 'package:workmanager/workmanager.dart';
 import '../core/motion_env.dart';
 import '../data/local_notifications.dart';
 import '../data/push_messaging.dart';
+import '../data/readings_store.dart';
 import '../domain/cairo_time.dart';
 import '../domain/daily_verse.dart';
 import '../domain/features.dart';
@@ -34,6 +35,12 @@ const notifySnapshotStorageKey = 'church_portal_notify_snapshot';
 
 /// SharedPreferences key for recording the last background replenishment timestamp.
 const notifyDiagLastReplenishKey = 'church_portal_diag_last_replenish';
+
+/// Unique Workmanager job name for unmetered 7-day readings prefetch.
+const readingsPrefetchUniqueName = 'church_portal_readings_prefetch';
+
+/// Workmanager task name dispatched to prefetch upcoming Katameros readings.
+const readingsPrefetchTaskName = 'readingsPrefetch';
 
 /// Daily verse configuration provider derived from [featuresProvider].
 final dailyVerseConfigProvider = Provider<DailyVerseConfig>((ref) {
@@ -488,12 +495,31 @@ class NotifyPlanner {
   }
 }
 
-/// WorkManager top-level callback dispatcher for background notification replenishment.
+/// WorkManager top-level callback dispatcher for background replenishment and
+/// unmetered 7-day readings prefetch.
 @pragma('vm:entry-point')
 void notificationReplenishCallbackDispatcher() {
   Workmanager().executeTask((taskName, inputData) async {
+    if (taskName == readingsPrefetchTaskName) {
+      return await executeReadingsPrefetchTask();
+    }
     return await executeReplenishmentTask();
   });
+}
+
+/// Prefetches the next 7 Cairo days of Katameros readings and prunes days
+/// older than yesterday in Africa/Cairo time.
+Future<bool> executeReadingsPrefetchTask({
+  DateTime? now,
+  ReadingsStore? store,
+}) async {
+  CairoTime.ensureInitialized();
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.linux) {
+    return true;
+  }
+  final target = store ?? ReadingsStore();
+  await target.prefetchUpcomingDays(todayCairo: now);
+  return true;
 }
 
 /// Executes daily replenishment check and re-schedules local notifications if needed.
