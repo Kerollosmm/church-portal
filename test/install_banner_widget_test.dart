@@ -231,4 +231,32 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('الخطوة ٢ من ٥'), findsOneWidget);
   });
+
+  testWidgets('InstallBanner PWA prompt button uses install label instead of Download app (AR & EN)', (tester) async {
+    const pwaSettings = InstallSettings(
+      enabled: true,
+      titleAr: 'تطبيق الكنيسة',
+      titleEn: 'Church App',
+      bodyAr: 'ثبّت التطبيق للمتابعة',
+      bodyEn: 'Install the app',
+      androidUrl: '',
+    );
+
+    for (final (locale, expectedLabel, unexpectedLabel) in [
+      (const Locale('ar'), 'ثبّت التطبيق', 'تحميل التطبيق'),
+      (const Locale('en'), 'Install app', 'Download app'),
+    ]) {
+      final env = FakeInstallEnv(hasDeferredPrompt: true);
+      await tester.pumpWidget(buildTestable(
+        child: const InstallBanner(currentPath: '/', delay: Duration.zero, isWeb: true),
+        installEnv: env,
+        installSettings: pwaSettings,
+        locale: locale,
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text(expectedLabel), findsOneWidget);
+      expect(find.text(unexpectedLabel), findsNothing);
+    }
+  });
 }
