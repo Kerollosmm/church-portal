@@ -178,7 +178,7 @@ class UrlImageCache {
     final req = http.Request('GET', uri);
     final streamed = await httpClient.send(req).timeout(timeout);
     if (streamed.statusCode != 200) {
-      await streamed.stream.drain<void>();
+      await streamed.stream.listen(null).cancel();
       return null;
     }
     final ct = streamed.headers['content-type']?.split(';').first.trim().toLowerCase() ?? '';
@@ -186,12 +186,12 @@ class UrlImageCache {
         !ct.startsWith('image/') &&
         ct != 'application/octet-stream' &&
         ct != 'binary/octet-stream') {
-      await streamed.stream.drain<void>();
+      await streamed.stream.listen(null).cancel();
       return null;
     }
     final contentLen = streamed.contentLength;
     if (contentLen != null && (contentLen <= 0 || contentLen > maxSingleFileBytes)) {
-      await streamed.stream.drain<void>();
+      await streamed.stream.listen(null).cancel();
       return null;
     }
 
@@ -199,10 +199,10 @@ class UrlImageCache {
     final deadline = DateTime.now().add(timeout);
     await for (final chunk in streamed.stream.timeout(timeout)) {
       if (DateTime.now().isAfter(deadline)) return null;
-      builder.add(chunk);
-      if (builder.length > maxSingleFileBytes) {
+      if (builder.length + chunk.length > maxSingleFileBytes) {
         return null;
       }
+      builder.add(chunk);
     }
 
     final bytes = builder.takeBytes();

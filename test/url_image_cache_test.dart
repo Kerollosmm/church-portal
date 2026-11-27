@@ -171,6 +171,128 @@ void main() {
       expect(streamedRead, isTrue); // MockClient evaluates stream arg, real socket skips reading body.
     });
 
+    test('rejects > 5 MB streamed response without Content-Length and cancels stream early', () async {
+      const url = 'https://example.org/chunked-huge.jpg';
+      const chunkSize = 1024 * 1024; // 1 MB
+      const totalChunks = 8; // 8 MB > 5 MB default cap
+      const totalBytes = chunkSize * totalChunks;
+
+      var chunksPulled = 0;
+      var bytesPulled = 0;
+      var cancelled = false;
+      var calls = 0;
+      final smallJpeg = Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xE0, 1]);
+
+      Stream<List<int>> oversizedStream() async* {
+        try {
+          for (var i = 0; i < totalChunks; i++) {
+            chunksPulled++;
+            bytesPulled += chunkSize;
+            final chunk = Uint8List(chunkSize);
+            if (i == 0) chunk.setAll(0, [0xFF, 0xD8, 0xFF]);
+            yield chunk;
+          }
+        } finally {
+          cancelled = true;
+        }
+      }
+
+      final cache = UrlImageCache(
+        directory: tempDir,
+        client: MockClient.streaming((req, _) async {
+          calls++;
+          if (calls == 1) {
+            return http.StreamedResponse(
+              oversizedStream(),
+              200,
+              headers: {'content-type': 'image/jpeg'},
+            );
+          }
+          return http.StreamedResponse(
+            Stream<List<int>>.value(smallJpeg),
+            200,
+            contentLength: smallJpeg.length,
+            headers: {'content-type': 'image/jpeg'},
+          );
+        }),
+      );
+
+      expect(await cache.get(url), isNull);
+      expect(cancelled, isTrue);
+      expect(chunksPulled, lessThan(totalChunks));
+      expect(bytesPulled, lessThan(totalBytes));
+
+      final digest = sha256.convert(utf8.encode(url)).toString();
+      expect(File('${tempDir.path}/$digest.bin').existsSync(), isFalse);
+
+      // Nothing was stored in the memory cache either; subsequent get hits network again.
+      expect(await cache.get(url), smallJpeg);
+      expect(calls, 2);
+    });
+
+    test('rejected responses (non-200, wrong content-type, oversized Content-Length) do not consume body', () async {
+      Future<void> verifyNotConsumed({
+        required String url,
+        required int statusCode,
+        required Map<String, String> headers,
+        int? contentLength,
+      }) async {
+        var bytesConsumed = 0;
+        var cancelled = false;
+        late StreamController<List<int>> controller;
+        controller = StreamController<List<int>>(
+          onListen: () {
+            Future<void>.microtask(() {
+              if (cancelled || controller.isClosed) return;
+              final chunk = Uint8List(128)..setAll(0, [0xFF, 0xD8, 0xFF]);
+              bytesConsumed += chunk.length;
+              controller.add(chunk);
+              controller.close();
+            });
+          },
+          onCancel: () {
+            cancelled = true;
+          },
+        );
+
+        final cache = UrlImageCache(
+          directory: tempDir,
+          maxSingleFileBytes: 64,
+          client: MockClient.streaming((req, _) async {
+            return http.StreamedResponse(
+              controller.stream,
+              statusCode,
+              contentLength: contentLength,
+              headers: headers,
+            );
+          }),
+        );
+
+        expect(await cache.get(url), isNull);
+        expect(cancelled, isTrue);
+        expect(bytesConsumed, 0);
+        final digest = sha256.convert(utf8.encode(url)).toString();
+        expect(File('${tempDir.path}/$digest.bin').existsSync(), isFalse);
+      }
+
+      await verifyNotConsumed(
+        url: 'https://example.org/not-found.jpg',
+        statusCode: 404,
+        headers: {'content-type': 'image/jpeg'},
+      );
+      await verifyNotConsumed(
+        url: 'https://example.org/wrong-type.jpg',
+        statusCode: 200,
+        headers: {'content-type': 'text/html'},
+      );
+      await verifyNotConsumed(
+        url: 'https://example.org/oversized-header.jpg',
+        statusCode: 200,
+        contentLength: 128,
+        headers: {'content-type': 'image/jpeg'},
+      );
+    });
+
     test('deduplicates concurrent requests for the same URL', () async {
       const url = 'https://example.org/hero.jpg';
       final completer = Completer<http.Response>();
