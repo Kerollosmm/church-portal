@@ -225,6 +225,88 @@ void main() {
         expect(src.hasListener, isFalse);
       });
     });
+
+    test('isOffline + non-empty provisional cache emits immediately (0 ms)', () {
+      fakeAsync((async) {
+        final got = <List<int>>[];
+        final sub = settleFirst<List<int>>(
+          source: src.stream,
+          patience: const Duration(seconds: 8),
+          isOffline: () => true,
+          isNonEmpty: (v) => v.isNotEmpty,
+        ).listen(got.add);
+
+        src.add(_r([7, 8], cache: true));
+        async.flushMicrotasks();
+        expect(got, [
+          [7, 8]
+        ]);
+
+        // Live update still replaces it if connectivity returns.
+        src.add(_r([7, 8, 9]));
+        async.flushMicrotasks();
+        expect(got.last, [7, 8, 9]);
+        sub.cancel();
+      });
+    });
+
+    test('isOffline + empty provisional cache keeps full 8 s patience', () {
+      fakeAsync((async) {
+        final got = <List<int>>[];
+        final sub = settleFirst<List<int>>(
+          source: src.stream,
+          patience: const Duration(seconds: 8),
+          isOffline: () => true,
+          isNonEmpty: (v) => v.isNotEmpty,
+        ).listen(got.add);
+
+        src.add(_r([], cache: true));
+        async.elapse(const Duration(seconds: 7));
+        expect(got, isEmpty);
+
+        async.elapse(const Duration(seconds: 1));
+        expect(got, [<int>[]]);
+        sub.cancel();
+      });
+    });
+
+    test('non-empty provisional cache settles after nonEmptyCachePatience (1.5 s); empty keeps 8 s', () {
+      fakeAsync((async) {
+        final gotNonEmpty = <List<int>>[];
+        final sub1 = settleFirst<List<int>>(
+          source: src.stream,
+          patience: const Duration(seconds: 8),
+          nonEmptyCachePatience: const Duration(milliseconds: 1500),
+          isNonEmpty: (v) => v.isNotEmpty,
+        ).listen(gotNonEmpty.add);
+
+        src.add(_r([5], cache: true));
+        async.elapse(const Duration(milliseconds: 1499));
+        expect(gotNonEmpty, isEmpty);
+        async.elapse(const Duration(milliseconds: 1));
+        expect(gotNonEmpty, [
+          [5]
+        ]);
+        sub1.cancel();
+
+        final emptySrc = StreamController<LiveReading<List<int>>>();
+        final gotEmpty = <List<int>>[];
+        final sub2 = settleFirst<List<int>>(
+          source: emptySrc.stream,
+          patience: const Duration(seconds: 8),
+          nonEmptyCachePatience: const Duration(milliseconds: 1500),
+          isNonEmpty: (v) => v.isNotEmpty,
+        ).listen(gotEmpty.add);
+
+        emptySrc.add(_r([], cache: true));
+        async.elapse(const Duration(milliseconds: 1500));
+        expect(gotEmpty, isEmpty);
+        async.elapse(const Duration(seconds: 6, milliseconds: 500));
+        expect(gotEmpty, [<int>[]]);
+        sub2.cancel();
+        emptySrc.close();
+      });
+    });
   });
 
   group('guardSeeded: custom content waits, settings docs prove themselves', () {

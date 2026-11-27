@@ -134,9 +134,12 @@ Map<String, dynamic> normalizeDoc(Map<String, dynamic>? data) =>
 /// seeding check that timed out on a slow cold start.
 @visibleForTesting
 class SeedGate {
-  SeedGate(this._read);
+  SeedGate(this._read, {Future<bool?> Function()? readCache}) : _readCache = readCache;
   final Future<bool> Function() _read;
+  final Future<bool?> Function()? _readCache;
   Future<bool>? _pending;
+  Future<bool?>? _cachePending;
+  Future<void>? _refreshPending;
   bool _seeded = false;
   bool _markerAbsent = false;
   final Completer<void> _seededSignal = Completer<void>();
@@ -158,8 +161,34 @@ class SeedGate {
     if (!_seededSignal.isCompleted) _seededSignal.complete();
   }
 
+  void _triggerBackgroundRefresh() {
+    if (_refreshPending != null) return;
+    _refreshPending = () async {
+      try {
+        await _read();
+      } catch (e) {
+        debugPrint('settings/church background refresh skipped: $e');
+      }
+    }();
+    unawaited(_refreshPending);
+  }
+
   Future<bool> check() async {
     if (_seeded) return true;
+    if (_readCache != null && _pending == null) {
+      try {
+        final cached = await (_cachePending ??= _readCache());
+        _cachePending = null;
+        if (_seeded) return true;
+        if (cached == true) {
+          markSeeded();
+          _triggerBackgroundRefresh();
+          return true;
+        }
+      } catch (_) {
+        _cachePending = null;
+      }
+    }
     try {
       // A proof from the settings/church listener ([markSeeded]) answers at
       // once instead of waiting for this read's timeout (ADR-038).
@@ -377,16 +406,28 @@ Stream<T> settleFirst<T>({
   required Stream<LiveReading<T>> source,
   required Duration patience,
   Future<T?> Function()? onTimeout,
+  bool Function()? isOffline,
+  Duration nonEmptyCachePatience = const Duration(milliseconds: 1500),
+  bool Function(T v)? isNonEmpty,
 }) {
   late final StreamController<T> out;
   StreamSubscription<LiveReading<T>>? sub;
   Timer? timer;
+  Timer? nonEmptyTimer;
   var emitted = false;
   var closed = false;
   LiveReading<T>? held;
+
+  void cancelTimers() {
+    timer?.cancel();
+    timer = null;
+    nonEmptyTimer?.cancel();
+    nonEmptyTimer = null;
+  }
+
   void emit(T v) {
     if (closed) return;
-    timer?.cancel();
+    cancelTimers();
     emitted = true;
     out.add(v);
   }
@@ -416,6 +457,15 @@ Stream<T> settleFirst<T>({
             if (r.changed) emit(r.value);
           } else if (r.provisional) {
             held = r;
+            final nonEmpty = isNonEmpty?.call(r.value);
+            if ((isOffline?.call() ?? false) && (nonEmpty ?? true)) {
+              emit(r.value);
+            } else if (nonEmpty == true) {
+              nonEmptyTimer ??= Timer(nonEmptyCachePatience, onPatience);
+            } else if (nonEmpty == false) {
+              nonEmptyTimer?.cancel();
+              nonEmptyTimer = null;
+            }
           } else {
             emit(r.value);
           }
@@ -424,7 +474,7 @@ Stream<T> settleFirst<T>({
           if (!closed) out.addError(e, st);
         },
         onDone: () {
-          timer?.cancel();
+          cancelTimers();
           final h = held;
           if (!emitted && h != null) emit(h.value);
           closed = true;
@@ -436,7 +486,7 @@ Stream<T> settleFirst<T>({
     onResume: () => sub?.resume(),
     onCancel: () async {
       closed = true;
-      timer?.cancel();
+      cancelTimers();
       await sub?.cancel();
     },
   );
@@ -597,7 +647,8 @@ Stream<List<T>> guardTimeSensitive<T>({
 class FirestoreRepository implements ContentRepository {
   final FirebaseFirestore db;
   final SeedData seed;
-  FirestoreRepository(this.db, this.seed);
+  final bool Function()? isOffline;
+  FirestoreRepository(this.db, this.seed, {this.isOffline});
 
   @override
   bool get isLive => true;
@@ -617,9 +668,20 @@ class FirestoreRepository implements ContentRepository {
     _servingSeed.value = _fallbackStreams.isNotEmpty;
   }
 
-  /// `settings/church` existence check (the "database is seeded" marker).
+  /// `settings/church` existence check (the "database is seeded" marker),
+  /// probing local persistence first when cached while firing an immediate
+  /// background server refresh.
   late final SeedGate _gate = SeedGate(
-      () => db.doc('settings/church').get().timeout(const Duration(seconds: 8)).then((d) => d.exists));
+    () => db
+        .doc('settings/church')
+        .get(const GetOptions(source: Source.server))
+        .timeout(const Duration(seconds: 8))
+        .then((d) => d.exists),
+    readCache: () async {
+      final d = await db.doc('settings/church').get(const GetOptions(source: Source.cache)).timeout(customCacheRead);
+      return d.exists ? true : null;
+    },
+  );
 
   Stream<T> _guard<T>(String key, Stream<T> Function() live, T fallback,
           {bool Function(T v)? confirms, Duration? fallbackDelay}) =>
@@ -674,6 +736,8 @@ class FirestoreRepository implements ContentRepository {
                   changed: snap.docChanges.isNotEmpty,
                 )),
             patience: customPatience,
+            isOffline: isOffline,
+            isNonEmpty: (list) => list.isNotEmpty,
             onTimeout: () async =>
                 _docs(await col.get(const GetOptions(source: Source.cache)).timeout(customCacheRead), f),
           );
@@ -773,6 +837,13 @@ class FirestoreRepository implements ContentRepository {
                 .timeout(customCacheRead);
             if (!d.exists) return null;
             return FeatureSettings.fromMap(normalizeDoc(d.data()));
+          },
+          refreshServer: () async {
+            final d = await db
+                .doc('settings/features')
+                .get(const GetOptions(source: Source.server))
+                .timeout(streamWatchdogTimeout);
+            return d.exists ? FeatureSettings.fromMap(normalizeDoc(d.data())) : seed.features;
           },
           fallback: seed.features,
           onFallback: (onFallback) => _markFallback('features_watchdog', onFallback),
