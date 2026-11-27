@@ -63,25 +63,43 @@ void main() {
       expect(noServing, contains('/about/priests/departed'));
     });
 
-    test('custom sections and pages: public ones only, nav-hidden pages stay indexable, switches respected', () {
+    test('custom sections and pages: only non-empty public categories, nav-hidden pages stay indexable, switches respected', () {
       final cats = [
         CustomCategory.fromMap('k1', {'slug': 'youth', 'nameAr': 'الشباب'}),
+        CustomCategory.fromMap('k-empty', {'slug': 'empty-cat', 'nameAr': 'قسم فارغ'}),
+        CustomCategory.fromMap('k-page', {'slug': 'guides', 'nameAr': 'أدلة'}),
         CustomCategory.fromMap('k2', {'slug': 'hidden', 'nameAr': 'مخفي', 'visible': false}),
         CustomCategory.fromMap('k3', {'slug': 'Bad Slug', 'nameAr': 'خطأ'}),
         CustomCategory.fromMap('k4', {'slug': 'youth', 'nameAr': 'مكرر', 'order': 5}),
+      ];
+      final entries = [
+        CategoryEntry.fromMap('e1', {'categoryId': 'k1', 'titleAr': 'نشاط'}),
+        CategoryEntry.fromMap('e-hidden', {'categoryId': 'k-empty', 'titleAr': 'مخفي', 'visible': false}),
       ];
       final pages = [
         CustomPage.fromMap('g1', {'slug': 'donate', 'titleAr': 'تبرع', 'showInNav': false}),
         CustomPage.fromMap('g2', {'slug': 'draft', 'titleAr': 'مسودة', 'visible': false}),
         CustomPage.fromMap('g3', {'slug': 'no-title'}),
+        CustomPage.fromMap('g4', {'slug': 'guide-1', 'titleAr': 'دليل', 'placement': 'section', 'categoryId': 'k-page'}),
+        CustomPage.fromMap('g5', {'slug': 'guide-hidden', 'titleAr': 'مخفي', 'placement': 'section', 'categoryId': 'k-empty', 'visible': false}),
       ];
-      final paths = sitemapPaths(SitemapContent(features: _features(), categories: cats, pages: pages));
-      expect(paths.where((p) => p.startsWith('/section/')), ['/section/youth']);
-      expect(paths.where((p) => p.startsWith('/page/')), ['/page/donate']);
+      final paths = sitemapPaths(SitemapContent(features: _features(), categories: cats, entries: entries, pages: pages));
+      expect(paths.where((p) => p.startsWith('/section/')), ['/section/youth', '/section/guides']);
+      expect(paths.where((p) => p.startsWith('/page/')), ['/page/donate', '/page/guide-1']);
+
+      // When customPages is off, a category whose only content is a section page is empty and excluded.
+      final noPages = sitemapPaths(SitemapContent(
+          features: _features({Sections.customPages: false}),
+          categories: cats,
+          entries: entries,
+          pages: pages));
+      expect(noPages.where((p) => p.startsWith('/section/')), ['/section/youth']);
+      expect(noPages.where((p) => p.startsWith('/page/')), isEmpty);
 
       final off = sitemapPaths(SitemapContent(
           features: _features({Sections.customSections: false, Sections.customPages: false}),
           categories: cats,
+          entries: entries,
           pages: pages));
       expect(off.where((p) => p.startsWith('/section/') || p.startsWith('/page/')), isEmpty);
     });
@@ -137,7 +155,11 @@ void main() {
         'saints': [],
         'milestones': [],
         'categories': [
-          {'id': 'k', 'data': {'slug': 'youth', 'nameAr': 'الشباب'}}
+          {'id': 'k', 'data': {'slug': 'youth', 'nameAr': 'الشباب'}},
+          {'id': 'k-empty', 'data': {'slug': 'empty', 'nameAr': 'فارغ'}},
+        ],
+        'entries': [
+          {'id': 'e1', 'data': {'categoryId': 'k', 'titleAr': 'نشاط'}},
         ],
         'pages': [
           {'id': 'g', 'data': {'slug': 'donate', 'titleAr': 'تبرع'}}
@@ -145,6 +167,7 @@ void main() {
       })) as Map<String, dynamic>;
       final paths = sitemapPaths(sitemapContentFromExport(export, seedFeatures: seedFeatures));
       expect(paths, containsAll(['/church-education/m1', '/section/youth', '/page/donate']));
+      expect(paths, isNot(contains('/section/empty')));
       expect(paths.where((p) => p.startsWith('/clinics')), isEmpty);
       // A stored doc wins over the seed.
       export['features'] = {
@@ -169,11 +192,18 @@ void main() {
         'priests': [],
         'saints': [],
         'milestones': [],
-        'categories': [],
+        'categories': [
+          {'id': 'k1', 'data': {'slug': 'youth', 'nameAr': 'الشباب'}},
+        ],
+        'entries': [
+          {'id': 'e1', 'data': {'categoryId': 'k1', 'titleAr': 'عنصر محذوف', 'deletedAt': '2026-11-14T10:00:00.000Z'}},
+        ],
         'pages': [],
       };
       final content = sitemapContentFromExport(export);
       expect(content.meetings.map((m) => m.id), ['m1']);
+      expect(content.entries, isEmpty);
+      expect(sitemapPaths(content), isNot(contains('/section/youth')));
     });
   });
 }

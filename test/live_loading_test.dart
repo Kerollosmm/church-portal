@@ -21,6 +21,7 @@ import 'package:church_portal/domain/custom_content.dart';
 import 'package:church_portal/router.dart';
 import 'package:church_portal/state/providers.dart';
 import 'package:church_portal/ui/admin/admin_page.dart';
+import 'package:church_portal/ui/widgets/common.dart' show NotFoundPage;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -502,11 +503,12 @@ void main() {
   });
 
   group('public pages', () {
-    testWidgets('cold link to a custom section: loading (never "not available") until the data arrives, then its items',
+    testWidgets('cold link to a custom section: loading (never "not available" or 404) until the data arrives, then its items',
         (tester) async {
       final repo = _LateRepo();
       await _pumpApp(tester, repo, '/section/hark-test');
       expect(find.byKey(const Key('categoryUnavailable')), findsNothing);
+      expect(find.byType(NotFoundPage), findsNothing);
       repo.cats.add(const [_cat]);
       await tester.pump();
       await tester.pump();
@@ -518,14 +520,16 @@ void main() {
       expect(find.byKey(const Key('entry-e9')), findsOneWidget);
       expect(find.text('Shown at last'), findsOneWidget);
       expect(find.byKey(const Key('categoryUnavailable')), findsNothing);
+      expect(find.byType(NotFoundPage), findsNothing);
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('cold link to a custom page: loading first, then the page; an unknown slug only after loading',
+    testWidgets('cold link to a custom page: loading first, then the page; an unknown slug shows 404 only after loading',
         (tester) async {
       final repo = _LateRepo();
       final router = await _pumpApp(tester, repo, '/page/hark-page');
       expect(find.byKey(const Key('pageUnavailable')), findsNothing);
+      expect(find.byType(NotFoundPage), findsNothing);
       repo.pagesCtl.add(const [_page]);
       await tester.pump();
       await tester.pump();
@@ -534,7 +538,9 @@ void main() {
       router.go('/page/nope');
       await tester.pump();
       await tester.pump();
-      expect(find.byKey(const Key('pageUnavailable')), findsOneWidget);
+      expect(find.byKey(const Key('pageNotFound')), findsOneWidget);
+      expect(find.byType(NotFoundPage), findsOneWidget);
+      expect(find.byKey(const Key('pageUnavailable')), findsNothing);
     });
 
     testWidgets('contact form lists the admin-managed types once settings/contact arrives (stable ids, anonymous rules)',
