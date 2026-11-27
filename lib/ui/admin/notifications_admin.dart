@@ -426,7 +426,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
       });
       _snack(context.tr('nm_settingsSaved'));
     } catch (e) {
-      if (mounted) _snack(context.tr('nm_saveFailed', {'e': '$e'}), error: true);
+      if (mounted) _snack(context.tr('nm_saveFailed', {'e': formatAdminError(e)}), error: true);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -680,7 +680,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
         });
       }
     } catch (e) {
-      if (mounted) _snack(context.tr('nm_saveFailed', {'e': '$e'}), error: true);
+      if (mounted) _snack(context.tr('nm_saveFailed', {'e': formatAdminError(e)}), error: true);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -716,7 +716,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
     } on _UserFacing catch (e) {
       if (mounted) _snack(context.tr(e.key), error: true);
     } catch (e) {
-      if (mounted) _snack(context.tr('nm_saveFailed', {'e': '$e'}), error: true);
+      if (mounted) _snack(context.tr('nm_saveFailed', {'e': formatAdminError(e)}), error: true);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -735,7 +735,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
       await widget.repo.saveDoc('settings/notifications', {'sentLog': <String>[]});
       if (mounted) _snack(context.tr('nm_logCleared'));
     } catch (e) {
-      if (mounted) _snack(context.tr('nm_saveFailed', {'e': '$e'}), error: true);
+      if (mounted) _snack(context.tr('nm_saveFailed', {'e': formatAdminError(e)}), error: true);
     } finally {
       if (mounted) setState(() => _saving = false);
     }

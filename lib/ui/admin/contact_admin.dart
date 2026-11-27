@@ -5,6 +5,7 @@ import '../../core/theme.dart';
 import '../../data/admin_repository.dart';
 import '../../domain/contact_categories.dart';
 import 'admin_strings.dart';
+import 'admin_validators.dart';
 import 'confirm_named.dart';
 import 'doc_editor.dart' show choiceLabel;
 import 'screen_header.dart';
@@ -73,7 +74,7 @@ class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
         });
       }
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', '$e'))));
+      messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e)))));
     } finally {
       if (mounted) setState(() => _saving = false);
     }

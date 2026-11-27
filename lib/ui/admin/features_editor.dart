@@ -353,7 +353,7 @@ class FeaturesEditorState extends State<FeaturesEditor> {
         });
       }
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', '$e'))));
+      messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e)))));
     } finally {
       if (mounted) {
         setState(() => _saving = false);
