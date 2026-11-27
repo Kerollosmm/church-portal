@@ -148,7 +148,12 @@ class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
           stream: _stream,
           builder: (context, snap) {
             if (snap.hasError) {
-              return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('${snap.error}')));
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(formatAdminError(snap.error!, isAr: context.isAr)),
+                ),
+              );
             }
             if (snap.connectionState == ConnectionState.waiting && _cats == null) {
               return const Center(child: CircularProgressIndicator());
