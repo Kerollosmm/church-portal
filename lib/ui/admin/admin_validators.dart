@@ -3,6 +3,7 @@ import 'dart:async' show TimeoutException;
 
 import 'package:firebase_core/firebase_core.dart';
 
+import '../../data/admin_repository.dart';
 import '../../domain/cairo_time.dart';
 import '../../domain/custom_content.dart'
     show
@@ -17,6 +18,7 @@ import '../../domain/custom_content.dart'
         listItemMax,
         slugMaxLength;
 import '../../domain/media.dart' show MediaImage, MediaSource, isValidImageUrl;
+import '../../domain/models.dart' show isSoftDeleted, parseDate;
 import '../../domain/push.dart';
 import '../../domain/rules.dart' show normalizeDigits;
 import 'admin_schema.dart';
@@ -472,7 +474,12 @@ String? invalidImageUrl(Object? image) {
   return isValidImageUrl(url) ? null : url.trim();
 }
 
-String? validateDocument(CollectionDef? def, Map<String, dynamic> data) {
+String? validateDocument(
+  CollectionDef? def,
+  Map<String, dynamic> data, {
+  List<AdminDoc> existingDocs = const [],
+  String? docId,
+}) {
   if (def != null && def.requireAnyOf.isNotEmpty && def.requireAnyOf.every((k) => data[k] == null || data[k] == '')) {
     return 'needWeekdayOrDate';
   }
@@ -488,6 +495,35 @@ String? validateDocument(CollectionDef? def, Map<String, dynamic> data) {
   }
   final s = data['startsAt'], e = data['endsAt'];
   if (s is DateTime && e is DateTime && !e.isAfter(s)) return 'endBeforeStart';
+  if (def?.name == 'seasons') {
+    final startsAt = parseDate(s);
+    final endsAt = parseDate(e);
+    final replaceDates = data['replaceDates'];
+    if (replaceDates is List && (startsAt != null || endsAt != null)) {
+      final startDay = startsAt == null ? null : CairoTime.calendarDate(startsAt);
+      final endDay = endsAt == null ? null : CairoTime.calendarDate(endsAt);
+      for (final raw in replaceDates) {
+        if (raw is! String) continue;
+        final trimmed = raw.trim();
+        if (!isValidDate(trimmed)) continue;
+        final m = dateRe.firstMatch(trimmed)!;
+        final day = DateTime(int.parse(m[1]!), int.parse(m[2]!), int.parse(m[3]!));
+        if ((startDay != null && day.isBefore(startDay)) || (endDay != null && day.isAfter(endDay))) {
+          return 'seasonReplaceDateOutsideWindow';
+        }
+      }
+    }
+    final key = data['key'] is String ? (data['key'] as String).trim() : '';
+    // Same key is fine across years (nativity-2027 / nativity-2028); only
+    // active seasons whose windows overlap would double-match the same days.
+    if (key.isNotEmpty && data['active'] != false) {
+      for (final other in overlappingActiveSeasons(data, existingDocs: existingDocs, docId: docId)) {
+        if ('${other.data['key'] ?? ''}'.trim() == key) {
+          return 'seasonDuplicateActiveKey';
+        }
+      }
+    }
+  }
   // App & notifications (ADR-057): the default lead must be one of the
   // offered leads (firestore.rules denies the save otherwise).
   final leads = data['reminderLeads'], lead = data['reminderDefaultLead'];
@@ -534,6 +570,31 @@ String? validateDocument(CollectionDef? def, Map<String, dynamic> data) {
   // it is never dropped silently.
   if (invalidImageUrl(data['image']) != null) return 'invalidCoverImage';
   return null;
+}
+
+/// Active, non-deleted sibling seasons in [existingDocs] whose `[startsAt, endsAt]`
+/// window overlaps [data]'s window (when [data] itself is active).
+List<AdminDoc> overlappingActiveSeasons(
+  Map<String, dynamic> data, {
+  List<AdminDoc> existingDocs = const [],
+  String? docId,
+}) {
+  if (data['active'] == false) return const [];
+  final s1 = parseDate(data['startsAt']);
+  final e1 = parseDate(data['endsAt']);
+  if (s1 != null && e1 != null && !e1.isAfter(s1)) return const [];
+  final out = <AdminDoc>[];
+  for (final other in existingDocs) {
+    if (docId != null && other.id == docId) continue;
+    if (isSoftDeleted(other.data) || other.data['active'] == false) continue;
+    final s2 = parseDate(other.data['startsAt']);
+    final e2 = parseDate(other.data['endsAt']);
+    if (s2 != null && e2 != null && !e2.isAfter(s2)) continue;
+    final overlaps = (s1 == null || e2 == null || s1.isBefore(e2)) &&
+        (s2 == null || e1 == null || s2.isBefore(e1));
+    if (overlaps) out.add(other);
+  }
+  return out;
 }
 
 /// Deep equality for collected form values (lists, maps, DateTime, scalars).

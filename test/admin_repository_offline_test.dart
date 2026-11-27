@@ -127,6 +127,11 @@ class _AllowingBatch implements WriteBatch {
   }
 
   @override
+  void delete(DocumentReference<Object?> document) {
+    db.touches++;
+  }
+
+  @override
   Future<void> commit() async {
     db.touches++;
   }
@@ -234,6 +239,13 @@ void main() {
       await repo.saveDocsFresh(['settings/features'], (_) => {'settings/features': {'heroMotion': false}});
       await repo.update('liturgies', 'l1', {'visible': false});
       await repo.delete('liturgies', 'l1');
+      await repo.batchWrite(
+        updates: {
+          ('entries', 'e1'): {'visible': false},
+          ('pages', 'p1'): {'placement': 'link', 'categoryId': ''},
+        },
+        deletes: const [('categories', 'k1')],
+      );
       await repo.reorder('liturgies', ['l1', 'l2']);
       await repo.setAdmin('u1', email: 'a@b.c', role: AdminRoles.editor);
       await repo.removeAdmin('u1');
