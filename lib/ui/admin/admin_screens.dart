@@ -1071,12 +1071,13 @@ class _MessagesScreenState extends State<MessagesScreen> {
   Future<void> _update(BuildContext context, AdminDoc d, Map<String, dynamic> data) async {
     final messenger = ScaffoldMessenger.of(context);
     final failed = context.tr('saveFailed', {'e': '{e}'});
+    final isAr = context.isAr;
     try {
       await widget.repo.update('contact_messages', d.id, data);
     } catch (e) {
       _undo.showSnack(
         messenger,
-        SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e)))),
+        SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e, isAr: isAr)))),
         deferWhileUndo: true,
       );
     }
@@ -1375,11 +1376,12 @@ class _AdminsScreenState extends State<AdminsScreen> {
     final messenger = ScaffoldMessenger.of(context);
     final ok = context.tr('saved');
     final failed = context.tr('saveFailed', {'e': '{e}'});
+    final isAr = context.isAr;
     try {
       await op();
       messenger.showSnackBar(SnackBar(content: Text(ok)));
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e)))));
+      messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e, isAr: isAr)))));
     }
   }
 

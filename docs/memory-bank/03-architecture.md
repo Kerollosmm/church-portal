@@ -233,9 +233,9 @@ flowchart LR
 - **Settings docs prove themselves (PR #23):** `settings/features`, `settings/contact` and `settings/assistant`
   have `confirms: !identical(v, <code default>)` like `settings/church`: a stored doc replaces the default even while
   the seeding check cannot answer (before, `/contact` kept the four default types in that case).
-- **Custom content waits for loaded data (PR #23, ADR-033, PR 6F-1 / ADR-091):** `categories`, `entries` and `pages` have no bundled
+- **Custom content waits for loaded data (PR #23, ADR-033, PR 6F-1 / ADR-091, PR 6F-2 / ADR-092):** `categories`, `entries` and `pages` have no bundled
   copy, so `FirestoreRepository._custom` (a) listens with `includeMetadataChanges: true` through `settleFirst`
-  (`LiveReading {value, provisional: isFromCache, changed: docChanges.isNotEmpty}`): empty cache readings wait up to `customPatience` (8 s), while non-empty cache readings settle in `nonEmptyCachePatience` (1.5 s) before emitting the held reading or `Source.cache` fallback (with an optional `isOffline` `0 ms` hook prepared on `settleFirst`/`FirestoreRepository` for PR 6F-2 `ConnectivityEnv` wiring), after which only readings that changed something pass;
+  (`LiveReading {value, provisional: isFromCache, changed: docChanges.isNotEmpty}`): empty cache readings wait up to `customPatience` (8 s), while non-empty cache readings settle in `nonEmptyCachePatience` (1.5 s) before emitting the held reading or `Source.cache` fallback (and PR 6F-2 wired `FirestoreRepository(..., isOffline: () => !connectivity.isOnline)` in `lib/main.dart` via `ConnectivityEnv` so offline + non-empty cache settles at `0 ms`), after which only readings that changed something pass;
   and (b) calls `guardSeeded(..., fallbackDelay: customFallbackDelay)` (13 s: longer than the 8 s patience + the 4 s
   `customCacheRead`, so the held / cached list always reaches the guard first), so an unanswered seeding check no
   longer emits the empty fallback at once; the delayed fallback is also deferred while a live value's seeding
@@ -275,6 +275,9 @@ flowchart LR
 | `assistantVisibleProvider` | `Provider<bool>` | `features.enabled(assistant) && fb.available && fb.appCheckActive && settings.assistantEnabled` |
 | `languageStoreProvider` | `Provider<LanguageStore>` | `PlatformLanguageStore` (`lib/core/locale_storage.dart`): `window.localStorage['church_portal_lang']` on web via `package:web` (conditional import, errors swallowed), no-op on Android/iOS; overridden in tests |
 | `localeProvider` | `NotifierProvider<LocaleNotifier, Locale>` | initial = `LocaleNotifier.initialLocale(Uri.base, saved)`: explicit `?lang=en`/`?lang=ar` → saved choice → `ar`; `toggle()`/`set()` = visitor's choice (URL follows, choice saved in the `LanguageStore`), `syncFromUrl()` = the URL asked (no rewrite, not saved), `consumeUserChange()` read once by the router. A saved English choice on a parameter-free URL makes the first redirect add `?lang=en` |
+| `connectivityEnvProvider` | `Provider<ConnectivityEnv>` | overridden in `main` (`connectivity_env_web.dart` via `window.navigator.onLine` + `online`/`offline` events; `connectivity_env_io.dart` via `connectivity_plus`; `connectivity_env_stub.dart` fallback) — PR 6F-2 / ADR-092 |
+| `connectivityProvider` | `StreamProvider<bool>` | emits `connectivityEnv.isOnline` then live `onOnlineChanged` transitions (`OfflineBanner`, admin write guard hint, FCM retry trigger) |
+| `contactQueueProvider` | `NotifierProvider<ContactQueueNotifier, ContactQueueState>` | tracks queued/failed offline contact submissions, persists a minimal `msgId` + `timestamp` restart marker (`contactPendingMarkerKey`, never PII/message text), verifies pending writes via `verifyPendingContactWrites()` (`hasUnverifiedPrevious`), preserves `ContactDraft`, surfaces late security-rule rejections (`pendingCommit`), and blocks duplicate Send while `hasPendingWrites` |
 | `routerProvider` | `Provider<GoRouter>` (in `router.dart`) | |
 
 ## Routing (`lib/router.dart`)
@@ -356,8 +359,8 @@ indexable:)`, which applies the spec through the conditional import (`document_l
 `errorBuilder` (`indexable: false`). `?lang=` sync (`_syncLangQuery`, `resolveLangSync`'s `lang=ar` branch) keeps
 the URL `#fragment`.
 
-**Deferred modules & isolation** (PR 3, ADR-058, ADR-060, ADR-061, ADR-077):
-To protect the web initial load budget (`main.dart.js` gzip -9 ceiling <= 1,399,000 B), secondary modules are deferred (`deferred as`) and non-public dependencies are excluded from the main entrypoint. The CI sourcemap guard (`tool/check_web_bundle.mjs`) tracks 11 deferred modules plus 4 forbidden main-bundle sources:
+**Deferred modules & isolation** (PR 3, ADR-058, ADR-060, ADR-061, ADR-077, ADR-092):
+To protect the web initial load budget (`main.dart.js` gzip -9 ceiling <= 1,399,000 B), secondary modules are deferred (`deferred as`) and non-public dependencies are excluded from the main entrypoint. The CI sourcemap guard (`tool/check_web_bundle.mjs`) tracks 11 deferred modules plus 7 forbidden main-bundle sources:
 1. `ui/admin/admin_page.dart` (`admin_page`): full admin dashboard (declares `adminRepositoryProvider` inside `/admin`, keeping `firebase_auth` out of `main.dart.js`).
 2. `data/admin_repository.dart`: authenticated Firestore admin repository & `firebase_auth` wrapper (chunk `/admin`).
 3. `ui/admin/admin_strings.dart`: admin-only UI string table (`registerAdminStrings()`, chunk `/admin`).
@@ -373,7 +376,7 @@ To protect the web initial load budget (`main.dart.js` gzip -9 ceiling <= 1,399,
 The desktop hero also defers `ui/widgets/hero_video.dart` and `ui/widgets/hero_ambient.dart` (ADR-068). `hero_motion_flag.dart` stays in the main bundle (`heroAmbientInDom`). `HeroStage` loads those two libraries only when the desktop web hero will play; the poster stays up until the chunks arrive. Phones never load them, so mobile web does not download the mp4 or the CSS ambient layer. Also `CairoTime` loads only the generated `Africa/Cairo` tzdb chunk (`cairo_tzdata.dart`), `UpdateBanner` conditionally exports `update_banner_stub.dart` on web, and public startup uses read-only `ReadOnlyMediaRepository` (`createPublicMediaRepository`).
 
 The routes build `DeferredLoader(loadLibrary: x.loadLibrary, builder: (_) => x.Page())`. Sibling path transitions (e.g. between `/readings/date1` and `/readings/date2`) recreate the routed page subtree via `key: ValueKey(s.uri.path)` on `FeatureGate` in `_page` (`lib/router.dart`), with `DeferredLoader.didUpdateWidget` serving as an in-place fallback if a parent preserves the loader state. `DeferredLoader` shows a live-region accessible spinner («جارٍ تحميل الصفحة…») and an `ErrorState` with Retry on network failure. All chunk loading failures report telemetry via `ErrorReporting.capture(e, st, section: 'deferred_chunk')`.
-Deferred isolation is mechanically enforced in CI via `python3 tool/fingerprint_web_bundle.py build/web && node tool/check_web_bundle.mjs build/web`, which fingerprints ONLY `main.dart.js` → `main.<hash>.dart.js` (+ `.map`, updating `flutter_bootstrap.js` and leaving `main.dart.js_<N>.part.js` untouched — ADR-088), then parses `main.<hash>.dart.js.map` (or unhashed `main.dart.js.map`) to assert 0 sourcemap leaks from any of the 11 tracked deferred modules or 4 forbidden main sources (`data/latest_10y.dart`, `ui/widgets/update_banner_io.dart`, `firebase_auth-`, `firebase_app_check-`), verifies at least 6 `.part.js` chunks, and checks OpenType font integrity. The hero chunks are extra part files; the guard tracks the 11 modules above.
+Deferred isolation is mechanically enforced in CI via `python3 tool/fingerprint_web_bundle.py build/web && node tool/check_web_bundle.mjs build/web`, which fingerprints ONLY `main.dart.js` → `main.<hash>.dart.js` (+ `.map`, updating `flutter_bootstrap.js` and leaving `main.dart.js_<N>.part.js` untouched — ADR-088), then parses `main.<hash>.dart.js.map` (or unhashed `main.dart.js.map`) to assert 0 sourcemap leaks from any of the 11 tracked deferred modules or 7 forbidden main sources (`data/latest_10y.dart`, `ui/widgets/update_banner_io.dart`, `data/url_image_cache_io.dart`, `core/connectivity_env_io.dart`, `connectivity_plus` — ignoring only Flutter's generated `web_plugin_registrant.dart` web stubs, `firebase_auth-`, `firebase_app_check-`), verifies at least 6 `.part.js` chunks, and checks OpenType font integrity. The hero chunks are extra part files; the guard tracks the 11 modules above.
 
 **Web Push Permission Architecture & Guidance (ADR-065):**
 - **User-Gesture Requirement:** Strict enforcement of zero automatic `Notification.requestPermission()` calls on initial page load. Browser notification permission is requested exclusively via user interactions: either by clicking the primary action card («السماح بإشعارات المتصفح» / "Allow browser notifications") when `permission == 'default'`, or reactively when the visitor toggles any notification channel switch.
@@ -417,9 +420,9 @@ Deferred isolation is mechanically enforced in CI via `python3 tool/fingerprint_
 - **Mobile Performance & Native Splash Invariants (ADR-062, ADR-064):**
   - **`INV-PERF-01` (ADR-068)**: Zero continuous ambient tickers in `HeroStage` on mobile platforms (Android, iOS) and viewports (`width < 600`) (`heroAmbientLoopAllowed() == false`). Ken Burns, haze, and `HeroAmbientLayer` stay off there. The hero video is desktop web only (`heroVideoPlatformAllowed`): the widget is not built, so mobile web does not request the mp4. Below 600 px the 14 blurred rays are omitted and the home hero is the existing poster (`hero_poster_tall.webp` / `hero_poster.webp`) in a `RepaintBoundary`. Wider Android/iOS surfaces keep one static ray paint and no decoder. Continuous tickers in `_PulseDot` and `SkeletonBox` stay off on mobile. `Reveal` skips its opacity layer on mobile. Desktop web at width >= 600 keeps the clip and the CSS ambient layer. The clock also stops when the app is paused.
   - **`INV-SPLASH-01`**: Native Android launch window background locked to cream `#FBF3E4` (`@color/splash_cream`) across drawables and styles (including `values-v31` Android 12+ Splash API).
-- **Today layer (PR #31, ADR-039/040):** the shell body is `Column[CopticDateStrip(location), LiveStreamBanner,
-  Expanded(page)]` over the `WarmBackdrop` (`lib/ui/widgets/today_widgets.dart`): the Coptic date strip
-  (`copticStrip` all / home / off) and, while live, the red «بث مباشر الآن من الكنيسة» bar, on every page.
+- **Today & connectivity layer (PR #31, ADR-039/040, PR 6F-2 / ADR-092):** the shell body is `Column[OfflineBanner(), CopticDateStrip(location), LiveStreamBanner,
+  Expanded(page)]` over the `WarmBackdrop` (`lib/ui/widgets/today_widgets.dart`, `lib/ui/widgets/offline_banner.dart`): `OfflineBanner` (direct `ConsumerWidget`) renders a warm hairline notice strip when `connectivityProvider` hints offline, and web-only `/admin` `AdminDashboard` renders an admin-specific `adminOfflineBanner` hint (no connectivity write lock; server-ack timeouts remain the guard). Below it sit the Coptic date strip
+  (`copticStrip` all / home / off), and, while live, the red «بث مباشر الآن من الكنيسة» bar, on every page.
 - `PageBody` (common.dart) = width-capped (`kMaxContentWidth = 1100`) scroll view + `Footer`.
 
 ## i18n — Arabic-first RTL + English (`lib/core/l10n.dart`)
@@ -500,8 +503,8 @@ Deferred isolation is mechanically enforced in CI via `python3 tool/fingerprint_
 
 ## Platform-specific bits
 
-- Conditional imports `*_stub.dart` / `*_web.dart` (`if (dart.library.js_interop)`): `document_lang`, `map_embed`
-  (iframe `HtmlElementView` on web, tappable static card elsewhere).
+- Conditional imports `*_stub.dart` / `*_web.dart` / `*_io.dart` (`if (dart.library.js_interop)` / `if (dart.library.io)`): `document_lang`, `map_embed`
+  (iframe `HtmlElementView` on web, tappable static card elsewhere), `connectivity_env` (`window.navigator.onLine` + `online`/`offline` listeners on web, `connectivity_plus` isolated inside `connectivity_env_io.dart` off web).
 - `ChurchMap` uses keyless Google Maps embed `maps.google.com/maps?q=<mapsQuery>&output=embed&hl=<ar|en>`
   (`mapsEmbedUrl(settings, lang:)` follows the UI language);
   "Open in Google Maps" (`mapsSearchUrl`) and GPS "Directions" (`mapsDirectionsUrl`, `travelmode=driving`).

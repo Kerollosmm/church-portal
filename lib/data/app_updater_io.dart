@@ -19,29 +19,39 @@ PlatformAppUpdater createPlatformAppUpdater({
   dynamic clientFactory,
   dynamic cacheDirectory,
   String? defaultManifestUrl,
+  Duration? timeout,
+  Duration? downloadTimeout,
 }) =>
     PlatformAppUpdater(
       channel: channel,
       clientFactory: clientFactory as HttpClient Function()?,
       cacheDirectory: cacheDirectory as Directory?,
       defaultManifestUrl: defaultManifestUrl ?? 'https://maximos-domadios-church.web.app/app/android/version.json',
+      timeout: timeout ?? PlatformAppUpdater.manifestTimeout,
+      downloadTimeout: downloadTimeout ?? PlatformAppUpdater.downloadIdleTimeout,
     );
 
 /// Service managing in-app APK updates on Android.
 class PlatformAppUpdater {
   static const MethodChannel _defaultChannel = MethodChannel('church_portal/installer');
   static const String dismissedKey = 'church_portal_update_dismissed';
+  static const Duration manifestTimeout = Duration(seconds: 8);
+  static const Duration downloadIdleTimeout = Duration(seconds: 30);
 
   final MethodChannel channel;
   final HttpClient Function()? clientFactory;
   final Directory? cacheDirectory;
   final String defaultManifestUrl;
+  final Duration timeout;
+  final Duration downloadTimeout;
 
   PlatformAppUpdater({
     MethodChannel? channel,
     this.clientFactory,
     this.cacheDirectory,
     this.defaultManifestUrl = 'https://maximos-domadios-church.web.app/app/android/version.json',
+    this.timeout = manifestTimeout,
+    this.downloadTimeout = downloadIdleTimeout,
   }) : channel = channel ?? _defaultChannel;
 
   /// True when running on native Android.
@@ -132,19 +142,23 @@ class PlatformAppUpdater {
 
     try {
       final client = clientFactory != null ? clientFactory!() : HttpClient();
+      client.connectionTimeout = timeout;
       try {
-        final uri = Uri.parse(targetUrl);
-        final request = await client.getUrl(uri);
-        request.headers.set(HttpHeaders.acceptHeader, 'application/json');
-        final response = await request.close();
-        if (response.statusCode == HttpStatus.ok) {
-          final body = await response.transform(utf8.decoder).join();
-          final json = jsonDecode(body) as Map<String, dynamic>;
-          manifest = UpdateManifest.fromJson(json);
-        }
+        manifest = await () async {
+          final uri = Uri.parse(targetUrl);
+          final request = await client.getUrl(uri);
+          request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+          final response = await request.close();
+          if (response.statusCode == HttpStatus.ok) {
+            final body = await response.transform(utf8.decoder).join();
+            final json = jsonDecode(body) as Map<String, dynamic>;
+            return UpdateManifest.fromJson(json);
+          }
+          return null;
+        }().timeout(timeout);
       } finally {
         if (clientFactory == null) {
-          client.close();
+          client.close(force: true);
         }
       }
     } catch (_) {
@@ -213,11 +227,12 @@ class PlatformAppUpdater {
     }
 
     final client = clientFactory != null ? clientFactory!() : HttpClient();
+    client.connectionTimeout = timeout;
     client.autoUncompress = true;
 
     try {
       final uri = Uri.parse(asset.url);
-      final request = await client.getUrl(uri);
+      final request = await client.getUrl(uri).timeout(timeout);
       request.followRedirects = true;
 
       final bool isResume = existingBytes > 0;
@@ -225,7 +240,7 @@ class PlatformAppUpdater {
         request.headers.add(HttpHeaders.rangeHeader, 'bytes=$existingBytes-');
       }
 
-      final response = await request.close();
+      final response = await request.close().timeout(timeout);
 
       final bool serverAcceptsRange = response.statusCode == HttpStatus.partialContent;
       if (response.statusCode != HttpStatus.ok && response.statusCode != HttpStatus.partialContent) {
@@ -258,7 +273,7 @@ class PlatformAppUpdater {
       }
 
       try {
-        await for (final chunk in response) {
+        await for (final chunk in response.timeout(downloadTimeout)) {
           hashInput.add(chunk);
           fileSink.add(chunk);
           downloadedBytes += chunk.length;
@@ -305,7 +320,7 @@ class PlatformAppUpdater {
       );
     } finally {
       if (clientFactory == null) {
-        client.close();
+        client.close(force: true);
       }
     }
   }

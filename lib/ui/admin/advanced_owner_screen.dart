@@ -67,6 +67,7 @@ class _AdvancedOwnerScreenState extends State<AdvancedOwnerScreen> with SingleTi
     final messenger = ScaffoldMessenger.maybeOf(context);
     final savedText = context.tr('saved');
     final failed = context.tr('saveFailed', {'e': '{e}'});
+    final isAr = context.isAr;
     setState(() => _savingSentry = true);
     try {
       await widget.repo.saveDoc('settings/features', {'errorReporting': value});
@@ -76,7 +77,7 @@ class _AdvancedOwnerScreenState extends State<AdvancedOwnerScreen> with SingleTi
     } catch (e) {
       messenger
         ?..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', '$e'))));
+        ..showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e, isAr: isAr)))));
     } finally {
       if (mounted) setState(() => _savingSentry = false);
     }
@@ -106,6 +107,7 @@ class _AdvancedOwnerScreenState extends State<AdvancedOwnerScreen> with SingleTi
     final messenger = ScaffoldMessenger.maybeOf(context);
     final savedText = context.tr('adv_vapidSaved');
     final failed = context.tr('saveFailed', {'e': '{e}'});
+    final isAr = context.isAr;
     setState(() {
       _savingVapid = true;
       _vapidError = null;
@@ -130,7 +132,7 @@ class _AdvancedOwnerScreenState extends State<AdvancedOwnerScreen> with SingleTi
     } catch (e) {
       messenger
         ?..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', '$e'))));
+        ..showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e, isAr: isAr)))));
     } finally {
       if (mounted) setState(() => _savingVapid = false);
     }

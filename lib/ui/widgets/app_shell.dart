@@ -23,6 +23,7 @@ import 'common.dart' show launchInstallEntry;
 import 'coptic_cross.dart';
 import 'golden.dart';
 import 'install_banner.dart';
+import 'offline_banner.dart';
 import 'today_widgets.dart';
 import 'update_banner.dart';
 
@@ -159,6 +160,8 @@ class _AppShellState extends ConsumerState<AppShell> {
     _unlistenInstall = ref.read(installEnvProvider).listenInstallChanges(() {
       if (mounted) setState(() {});
     });
+    // Trigger best-effort verification of any previous offline contact marker on startup.
+    ref.read(contactQueueProvider);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final pending = consumePendingNotificationRoute();
@@ -542,6 +545,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         if (!kIsWeb) const UpdateBanner(),
+                        const OfflineBanner(),
                         const LiveStreamBanner(),
                       ],
                     ),

@@ -989,12 +989,14 @@ void main() {
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
       final repo = _FakeBackend(docs: {'settings/features': <String, dynamic>{}});
-      await tester.pumpWidget(MaterialApp(
-        locale: const Locale('en'),
-        supportedLocales: const [Locale('ar'), Locale('en')],
-        localizationsDelegates: GlobalMaterialLocalizations.delegates,
-        home: AdminDashboard(
-            repo: repo, uid: 'u', email: 'admin@example.org', role: AdminRoles.owner, onSignOut: () {}, initial: 'today'),
+      await tester.pumpWidget(ProviderScope(
+        child: MaterialApp(
+          locale: const Locale('en'),
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          home: AdminDashboard(
+              repo: repo, uid: 'u', email: 'admin@example.org', role: AdminRoles.owner, onSignOut: () {}, initial: 'today'),
+        ),
       ));
       await tester.pumpAndSettle();
       expect(find.textContaining('Venues / halls'), findsNothing);
@@ -1756,18 +1758,20 @@ void main() {
             ],
             collectionFilter: 'saints',
           );
-          await tester.pumpWidget(MaterialApp(
-            locale: Locale(lang),
-            supportedLocales: const [Locale('ar'), Locale('en')],
-            localizationsDelegates: GlobalMaterialLocalizations.delegates,
-            theme: buildTheme(Locale(lang), primary: AppColors.burgundy),
-            home: AdminDashboard(
-              repo: repo,
-              uid: 'u',
-              email: 'admin@example.org',
-              role: AdminRoles.owner,
-              onSignOut: () {},
-              initial: 'saints',
+          await tester.pumpWidget(ProviderScope(
+            child: MaterialApp(
+              locale: Locale(lang),
+              supportedLocales: const [Locale('ar'), Locale('en')],
+              localizationsDelegates: GlobalMaterialLocalizations.delegates,
+              theme: buildTheme(Locale(lang), primary: AppColors.burgundy),
+              home: AdminDashboard(
+                repo: repo,
+                uid: 'u',
+                email: 'admin@example.org',
+                role: AdminRoles.owner,
+                onSignOut: () {},
+                initial: 'saints',
+              ),
             ),
           ));
           await tester.pumpAndSettle();
@@ -1854,18 +1858,20 @@ void main() {
             ],
             collectionFilter: 'saints',
           );
-          await tester.pumpWidget(MaterialApp(
-            locale: Locale(lang),
-            supportedLocales: const [Locale('ar'), Locale('en')],
-            localizationsDelegates: GlobalMaterialLocalizations.delegates,
-            theme: buildTheme(Locale(lang), primary: AppColors.burgundy),
-            home: AdminDashboard(
-              repo: repo,
-              uid: 'u',
-              email: 'admin@example.org',
-              role: AdminRoles.owner,
-              onSignOut: () {},
-              initial: 'saints',
+          await tester.pumpWidget(ProviderScope(
+            child: MaterialApp(
+              locale: Locale(lang),
+              supportedLocales: const [Locale('ar'), Locale('en')],
+              localizationsDelegates: GlobalMaterialLocalizations.delegates,
+              theme: buildTheme(Locale(lang), primary: AppColors.burgundy),
+              home: AdminDashboard(
+                repo: repo,
+                uid: 'u',
+                email: 'admin@example.org',
+                role: AdminRoles.owner,
+                onSignOut: () {},
+                initial: 'saints',
+              ),
             ),
           ));
           await tester.pumpAndSettle();
@@ -1908,19 +1914,21 @@ void main() {
             ],
             collectionFilter: 'categories',
           );
-          await tester.pumpWidget(MaterialApp(
-            locale: Locale(lang),
-            supportedLocales: const [Locale('ar'), Locale('en')],
-            localizationsDelegates: GlobalMaterialLocalizations.delegates,
-            theme: buildTheme(Locale(lang), primary: AppColors.burgundy),
-            home: AdminDashboard(
-              key: const ValueKey('categories-dashboard'),
-              repo: catRepo,
-              uid: 'u',
-              email: 'admin@example.org',
-              role: AdminRoles.owner,
-              onSignOut: () {},
-              initial: 'categories',
+          await tester.pumpWidget(ProviderScope(
+            child: MaterialApp(
+              locale: Locale(lang),
+              supportedLocales: const [Locale('ar'), Locale('en')],
+              localizationsDelegates: GlobalMaterialLocalizations.delegates,
+              theme: buildTheme(Locale(lang), primary: AppColors.burgundy),
+              home: AdminDashboard(
+                key: const ValueKey('categories-dashboard'),
+                repo: catRepo,
+                uid: 'u',
+                email: 'admin@example.org',
+                role: AdminRoles.owner,
+                onSignOut: () {},
+                initial: 'categories',
+              ),
             ),
           ));
           await tester.pumpAndSettle();

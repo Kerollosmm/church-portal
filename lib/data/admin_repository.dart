@@ -75,10 +75,13 @@ abstract class AdminBackend {
 }
 
 /// Content editing for signed-in admins (admins/{uid} must exist; enforced
-/// by firestore.rules).
+/// by firestore.rules). Admin lives on web only; offline connectivity is shown
+/// via [OfflineBanner] as a hint, while Firestore server-ack timeouts remain
+/// the guard against stalled writes.
 class AdminRepository implements AdminBackend {
   final FirebaseFirestore db;
   final FirebaseAuth auth;
+
   AdminRepository(this.db, this.auth);
 
   @override

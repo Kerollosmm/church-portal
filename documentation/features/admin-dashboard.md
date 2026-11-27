@@ -132,7 +132,7 @@
 - الأمان والتحقق ومفاتيح الحالة: `confirm_named.dart` (نوافذ التأكيد المسماة)، و`unsaved_guard.dart` (حماية التعديلات و`PopScope` و`beforeunload`)،
   و`pending_delete.dart` (مؤقت التراجع ١٠ ثوانٍ)، و`unsaved_bar.dart` (شريط الحفظ الثابت)، و`state_switch.dart` (مفاتيح الحالة المكتوبة `AdminStateSwitch`).
 - المنطق المجرّد: `lib/domain/schedule.dart` (`liturgiesHiddenBy` لحساب القداسات المستبدلة).
-- الكتابة عبر `lib/data/admin_repository.dart` (حفظ الحقول المتغيرة فقط مع ختم الوقت والمشرف).
+- الكتابة عبر `lib/data/admin_repository.dart` (حفظ الحقول المتغيرة فقط مع ختم الوقت والمشرف). لوحة التحكم للويب فقط، ويعرض `AdminDashboard` شريط التنبيه الإرشادي `OfflineBanner` (`adminOfflineBanner`: «لا يوجد اتصال بالإنترنت — قد يتعذّر الحفظ حتى يعود الاتصال») **كمجرد تنبيه إرشادي وليس قفلًا للكتابة** (بسبب إيجابيات `navigator.onLine` الكاذبة)، وتبقى مهل تأكيد الخادم (timeouts) هي الحارس الفعلي مع ترجمة `TimeoutException` في `formatAdminError` عبر `adminTimeoutError` («تعذّر الحفظ — تأكد من الاتصال بالإنترنت وحاول تاني»).
 - اللوحة جزء JavaScript منفصل (deferred) لا يحمّله الزوار.
 
 ## الحدود والمشاكل المعروفة

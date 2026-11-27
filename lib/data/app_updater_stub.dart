@@ -9,6 +9,8 @@ PlatformAppUpdater createPlatformAppUpdater({
   dynamic clientFactory,
   dynamic cacheDirectory,
   String? defaultManifestUrl,
+  Duration? timeout,
+  Duration? downloadTimeout,
 }) =>
     const PlatformAppUpdater();
 

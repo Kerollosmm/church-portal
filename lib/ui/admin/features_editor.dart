@@ -341,6 +341,7 @@ class FeaturesEditorState extends State<FeaturesEditor> {
     final messenger = ScaffoldMessenger.of(context);
     final ok = context.tr('saved');
     final failed = context.tr('saveFailed', {'e': '{e}'});
+    final isAr = context.isAr;
     setState(() => _saving = true);
     try {
       final collected = collect();
@@ -353,7 +354,7 @@ class FeaturesEditorState extends State<FeaturesEditor> {
         });
       }
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', '$e'))));
+      messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e, isAr: isAr)))));
     } finally {
       if (mounted) {
         setState(() => _saving = false);

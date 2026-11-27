@@ -6,15 +6,18 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/app_updater.dart';
 import '../domain/app_update.dart';
 
+import '../core/connectivity_env.dart';
 import '../core/content_ready.dart';
 import '../core/install_env.dart';
 import '../core/locale_storage.dart';
 import '../core/push_env.dart';
 import '../data/content_repository.dart';
+import '../data/error_reporting.dart';
 import '../data/firebase_bootstrap.dart';
 import '../data/media_repository.dart';
 import '../data/reminder_store.dart';
@@ -25,11 +28,83 @@ import '../domain/contact_categories.dart';
 import '../domain/coptic_calendar.dart';
 import '../domain/custom_content.dart';
 import '../domain/daily_verse.dart';
+import '../domain/error_privacy.dart';
 import '../domain/features.dart';
 import '../domain/models.dart';
 import '../domain/reminders.dart';
 import '../domain/schedule.dart' show activeSeasonsAt;
 import '../domain/today.dart';
+
+/// Connectivity environment provider (overridable in tests).
+final connectivityEnvProvider = Provider<ConnectivityEnv>((ref) => const PlatformConnectivityEnv());
+
+/// Live connectivity hint stream (true when a network interface or browser
+/// connection is active, false only when offline).
+final connectivityProvider = StreamProvider<bool>((ref) {
+  final env = ref.watch(connectivityEnvProvider);
+  late final StreamController<bool> controller;
+  StreamSubscription<bool>? sub;
+  var latest = env.isOnline;
+  var sawEvent = false;
+  var checkDone = false;
+  var streamDone = false;
+  var disposed = false;
+
+  void maybeClose() {
+    if (checkDone && streamDone && !disposed && !controller.isClosed) {
+      controller.close();
+    }
+  }
+
+  void emit(bool next) {
+    if (disposed || controller.isClosed || next == latest) return;
+    latest = next;
+    controller.add(next);
+  }
+
+  controller = StreamController<bool>(
+    onListen: () {
+      controller.add(latest);
+      sub = env.onOnlineChanged.listen(
+        (next) {
+          sawEvent = true;
+          emit(next);
+        },
+        onError: (Object e, StackTrace st) {
+          if (!disposed && !controller.isClosed) controller.addError(e, st);
+        },
+        onDone: () {
+          streamDone = true;
+          maybeClose();
+        },
+      );
+      unawaited(
+        env.checkOnline().then(
+          (checked) {
+            checkDone = true;
+            if (!sawEvent) emit(checked);
+            maybeClose();
+          },
+          onError: (Object _) {
+            checkDone = true;
+            maybeClose();
+          },
+        ),
+      );
+    },
+    onCancel: () async {
+      disposed = true;
+      await sub?.cancel();
+      if (!controller.isClosed) await controller.close();
+    },
+  );
+  ref.onDispose(() {
+    disposed = true;
+    unawaited(sub?.cancel());
+    if (!controller.isClosed) unawaited(controller.close());
+  });
+  return controller.stream;
+});
 
 /// Overridden in main() after bootstrapping.
 final firebaseStatusProvider = Provider<FirebaseStatus>((ref) => FirebaseStatus.unavailable);
@@ -598,5 +673,251 @@ class ReaderFocusModeNotifier extends Notifier<bool> {
 
   void setFocus(bool active) {
     if (state != active) state = active;
+  }
+}
+
+// ------------------- Offline Contact Queue (PR 6F-2) -------------------
+
+/// SharedPreferences key storing ONLY `{msgId, timestamp}` when a contact
+/// submission is queued offline (never message text/name/phone per ADR-034).
+const contactPendingMarkerKey = 'church_portal_contact_pending_marker';
+
+/// Preserved form draft for an offline-queued contact message so a later
+/// Firestore rules/throttle rejection in the current session keeps the
+/// visitor's text.
+@immutable
+class ContactDraft {
+  final String name;
+  final String phone;
+  final String email;
+  final String message;
+  final String preferredDate;
+  final String? slot;
+  final String bookingType;
+  final bool anonymous;
+  final bool consented;
+
+  const ContactDraft({
+    this.name = '',
+    this.phone = '',
+    this.email = '',
+    this.message = '',
+    this.preferredDate = '',
+    this.slot,
+    this.bookingType = '',
+    this.anonymous = false,
+    this.consented = false,
+  });
+}
+
+enum ContactQueuePhase { idle, pending, sent, failed }
+
+@immutable
+class ContactQueueState {
+  final ContactQueuePhase phase;
+  final ContactDraft? draft;
+  final bool hasPendingWrites;
+  final bool hasUnverifiedPrevious;
+  final Object? error;
+
+  const ContactQueueState({
+    this.phase = ContactQueuePhase.idle,
+    this.draft,
+    this.hasPendingWrites = false,
+    this.hasUnverifiedPrevious = false,
+    this.error,
+  });
+
+  ContactQueueState copyWith({
+    ContactQueuePhase? phase,
+    ContactDraft? draft,
+    bool clearDraft = false,
+    bool? hasPendingWrites,
+    bool? hasUnverifiedPrevious,
+    Object? error,
+    bool clearError = false,
+  }) =>
+      ContactQueueState(
+        phase: phase ?? this.phase,
+        draft: clearDraft ? null : (draft ?? this.draft),
+        hasPendingWrites: hasPendingWrites ?? this.hasPendingWrites,
+        hasUnverifiedPrevious: hasUnverifiedPrevious ?? this.hasUnverifiedPrevious,
+        error: clearError ? null : (error ?? this.error),
+      );
+}
+
+/// Coordinates contact submission, persists a minimal restart marker
+/// (`msgId` + `timestamp` only) for offline-queued sends, and watches queued
+/// offline batch commits so server rejections surface a persistent notice.
+final contactQueueProvider =
+    NotifierProvider<ContactQueueNotifier, ContactQueueState>(ContactQueueNotifier.new);
+
+class ContactQueueNotifier extends Notifier<ContactQueueState> {
+  int _generation = 0;
+  bool _verifyingMarker = false;
+  bool _markerWrittenInSession = false;
+
+  @override
+  ContactQueueState build() {
+    ref.listen<AsyncValue<bool>>(connectivityProvider, (prev, next) {
+      if (prev?.value == false &&
+          next.value == true &&
+          state.hasUnverifiedPrevious &&
+          state.phase == ContactQueuePhase.idle) {
+        unawaited(_restoreAndVerifyMarker());
+      }
+    });
+    unawaited(_restoreAndVerifyMarker());
+    return const ContactQueueState();
+  }
+
+  static Future<void> _savePendingMarker(String? msgId) async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      await sp.setString(
+        contactPendingMarkerKey,
+        jsonEncode(<String, Object>{
+          'msgId': msgId ?? '',
+          'timestamp': DateTime.now().toUtc().millisecondsSinceEpoch,
+        }),
+      );
+    } catch (_) {}
+  }
+
+  static Future<void> _clearPendingMarker() async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      await sp.remove(contactPendingMarkerKey);
+    } catch (_) {}
+  }
+
+  static Future<bool> _hasPendingMarker() async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      final raw = sp.getString(contactPendingMarkerKey);
+      return raw != null && raw.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _restoreAndVerifyMarker() async {
+    if (_verifyingMarker) return;
+    _verifyingMarker = true;
+    final gen = _generation;
+    try {
+      final hasMarker = await _hasPendingMarker();
+      if (!ref.mounted || gen != _generation || !hasMarker) return;
+      if (state.phase == ContactQueuePhase.idle && !state.hasUnverifiedPrevious) {
+        state = state.copyWith(hasUnverifiedPrevious: true);
+      }
+
+      bool online;
+      try {
+        online = await ref.read(connectivityEnvProvider).checkOnline();
+      } catch (_) {
+        online = false;
+      }
+      if (!ref.mounted || gen != _generation || !online) return;
+
+      final verified = await ref.read(repositoryProvider).verifyPendingContactWrites();
+      if (!ref.mounted || gen != _generation || !verified) return;
+
+      bool stillOnline;
+      try {
+        stillOnline = await ref.read(connectivityEnvProvider).checkOnline();
+      } catch (_) {
+        stillOnline = false;
+      }
+      if (!ref.mounted || gen != _generation || !stillOnline) return;
+
+      await _clearPendingMarker();
+      if (!ref.mounted || gen != _generation) return;
+      if (state.phase == ContactQueuePhase.idle) {
+        state = state.copyWith(hasUnverifiedPrevious: false);
+      }
+    } finally {
+      _verifyingMarker = false;
+    }
+  }
+
+  Future<void> dismissUnverifiedNotice() async {
+    await _clearPendingMarker();
+    if (!ref.mounted) return;
+    state = state.copyWith(hasUnverifiedPrevious: false);
+  }
+
+  void clearNotice() {
+    if (state.phase == ContactQueuePhase.pending) return;
+    state = ContactQueueState(hasUnverifiedPrevious: state.hasUnverifiedPrevious);
+  }
+
+  Future<ContactSubmitResult> submit({
+    required Map<String, dynamic> payload,
+    required String lang,
+    required ContactDraft draft,
+    VoidCallback? onSynced,
+    VoidCallback? onRejected,
+  }) async {
+    final gen = ++_generation;
+    final result = await ref.read(repositoryProvider).submitContact(payload, lang: lang);
+    if (!ref.mounted || gen != _generation) return result;
+
+    if (result.isSent) {
+      if (_markerWrittenInSession || state.hasUnverifiedPrevious) {
+        await _clearPendingMarker();
+        _markerWrittenInSession = false;
+      } else {
+        unawaited(_clearPendingMarker());
+      }
+      onSynced?.call();
+      if (!ref.mounted || gen != _generation) return result;
+      state = const ContactQueueState(phase: ContactQueuePhase.sent);
+      return result;
+    }
+
+    _markerWrittenInSession = true;
+    await _savePendingMarker(result.msgId);
+    if (!ref.mounted || gen != _generation) return result;
+
+    state = ContactQueueState(
+      phase: ContactQueuePhase.pending,
+      draft: draft,
+      hasPendingWrites: true,
+      hasUnverifiedPrevious: false,
+    );
+
+    final pending = result.pendingCommit;
+    if (pending != null) {
+      unawaited(
+        pending.then<void>(
+          (_) async {
+            await _clearPendingMarker();
+            if (!ref.mounted || gen != _generation) return;
+            onSynced?.call();
+            state = const ContactQueueState(phase: ContactQueuePhase.sent);
+          },
+          onError: (Object e, StackTrace st) async {
+            await _clearPendingMarker();
+            ErrorReporting.capture(
+              ContactSubmitFailure(e.runtimeType.toString(), scrubText('$e')),
+              st,
+              section: 'contact',
+              source: '$e'.contains('permission-denied') ? 'permission-denied' : null,
+            );
+            onRejected?.call();
+            if (!ref.mounted || gen != _generation) return;
+            state = ContactQueueState(
+              phase: ContactQueuePhase.failed,
+              draft: draft,
+              hasPendingWrites: false,
+              error: e,
+            );
+          },
+        ),
+      );
+    }
+
+    return result;
   }
 }

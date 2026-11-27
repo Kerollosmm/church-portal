@@ -317,7 +317,7 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
     final done = context.tr('saved');
     final conflict = context.tr('presetConflict');
     final replaceChanged = context.tr('presetReplaceChanged');
-    String failed(Object e) => context.tr('saveFailed', {'e': formatAdminError(e)});
+    String failed(Object e) => context.tr('saveFailed', {'e': formatAdminError(e, isAr: context.isAr)});
     setState(() => _saving = true);
     try {
       final seasonPath = 'seasons/$seasonId';

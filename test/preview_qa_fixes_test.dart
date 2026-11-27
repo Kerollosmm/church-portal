@@ -78,10 +78,11 @@ class _TestContactRepository extends SeedRepository {
   _TestContactRepository(super.seed);
 
   @override
-  Future<void> submitContact(Map<String, dynamic> payload, {required String lang}) async {
+  Future<ContactSubmitResult> submitContact(Map<String, dynamic> payload, {required String lang}) async {
     lastPayload = payload;
     if (shouldTimeout) throw TimeoutException('Simulated contact submit timeout');
     if (!shouldSucceed) throw Exception('Simulated submit failure');
+    return ContactSubmitResult.sent;
   }
 }
 

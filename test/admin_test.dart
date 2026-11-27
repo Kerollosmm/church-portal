@@ -1368,14 +1368,16 @@ void main() {
       final repo = _TestAdminBackend(initialDocs: {
         'settings/church': {'nameAr': 'كنيسة'},
       });
-      await tester.pumpWidget(_app(AdminDashboard(
-        repo: repo,
-        uid: 'u1',
-        email: 'test@church.org',
-        role: AdminRoles.owner,
-        onSignOut: () {},
-        initial: 'church',
-      )));
+      await tester.pumpWidget(ProviderScope(
+        child: _app(AdminDashboard(
+          repo: repo,
+          uid: 'u1',
+          email: 'test@church.org',
+          role: AdminRoles.owner,
+          onSignOut: () {},
+          initial: 'church',
+        )),
+      ));
       await tester.pumpAndSettle();
 
       // Make dirty

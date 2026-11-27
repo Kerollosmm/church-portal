@@ -1325,6 +1325,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     final messenger = _messenger;
     final msg = context.tr(visible ? 'nowVisible' : 'nowHidden');
     final failed = context.tr('saveFailed', {'e': '{e}'});
+    final isAr = context.isAr;
     setState(() {
       _togglingVisibility.add(k);
       _optimisticVisible[k] = visible;
@@ -1362,7 +1363,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       });
       _undo.showSnack(
         messenger,
-        SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e)))),
+        SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e, isAr: isAr)))),
         deferWhileUndo: true,
       );
     }
@@ -1382,6 +1383,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     final messenger = _messenger;
     final ok = context.tr('orderSaved');
     final failed = context.tr('saveFailed', {'e': '{e}'});
+    final isAr = context.isAr;
     try {
       await widget.repo.reorder(def.name, ids, base: reorderBase(def, status: movedStatus));
       if (!mounted) return;
@@ -1394,7 +1396,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       if (!mounted) return;
       _undo.showSnack(
         messenger,
-        SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e)))),
+        SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e, isAr: isAr)))),
         deferWhileUndo: true,
       );
     }
@@ -1441,12 +1443,13 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     final messenger = _messenger;
     final failedMsg = context.tr('deleteFailed', {'e': '{e}'});
     final deletedMsg = context.tr('catDeleted');
+    final isAr = context.isAr;
     List<AdminDoc> entries;
     try {
       entries = await widget.repo.watch('entries').first.timeout(const Duration(seconds: 15));
     } catch (e) {
       if (!mounted) return;
-      _undo.showSnack(messenger, SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
+      _undo.showSnack(messenger, SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e, isAr: isAr)))));
       return;
     }
     final inCat = entries.where((e) => e.data['categoryId'] == d.id).length;
@@ -1476,7 +1479,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       _undo.showSnack(messenger, SnackBar(content: Text(deletedMsg)));
     } catch (e) {
       if (!mounted) return;
-      _undo.showSnack(messenger, SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
+      _undo.showSnack(messenger, SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e, isAr: isAr)))));
     }
   }
 

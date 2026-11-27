@@ -21,11 +21,15 @@ class AppUpdater {
     dynamic clientFactory,
     dynamic cacheDirectory,
     String? defaultManifestUrl,
+    Duration? timeout,
+    Duration? downloadTimeout,
   }) : _impl = impl.createPlatformAppUpdater(
           channel: channel,
           clientFactory: clientFactory,
           cacheDirectory: cacheDirectory,
           defaultManifestUrl: defaultManifestUrl,
+          timeout: timeout,
+          downloadTimeout: downloadTimeout,
         );
 
   /// True when running on native Android.

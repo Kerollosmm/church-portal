@@ -15,6 +15,7 @@ import '../../domain/contact_categories.dart';
 import '../../domain/models.dart';
 import '../../state/providers.dart';
 import '../widgets/coptic_cross.dart';
+import '../widgets/offline_banner.dart';
 import 'admin_access.dart';
 import 'admin_schema.dart';
 import 'admin_screens.dart';
@@ -953,15 +954,22 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ],
             ),
             drawer: wide ? null : Drawer(child: _nav(context, inDrawer: true)),
-            body: wide
-                ? Row(
-                    children: [
-                      SizedBox(width: 270, child: _nav(context, inDrawer: false)),
-                      const VerticalDivider(width: 1),
-                      Expanded(child: _screen()),
-                    ],
-                  )
-                : _screen(),
+            body: Column(
+              children: [
+                OfflineBanner(message: context.tr('adminOfflineBanner')),
+                Expanded(
+                  child: wide
+                      ? Row(
+                          children: [
+                            SizedBox(width: 270, child: _nav(context, inDrawer: false)),
+                            const VerticalDivider(width: 1),
+                            Expanded(child: _screen()),
+                          ],
+                        )
+                      : _screen(),
+                ),
+              ],
+            ),
           ),
         ),
       ),

@@ -59,6 +59,11 @@ final notifyPlannerProvider = Provider<NotifyPlanner>((ref) {
   return planner;
 });
 
+/// FCM topic subscription updater (overridable in tests).
+final topicSyncProvider = Provider<Future<bool> Function(PushPrefs prefs, String lang)>(
+  (ref) => PushMessaging.updateSubscriptions,
+);
+
 /// Loads the currently stored plan from SharedPreferences.
 Future<List<PlannedNotification>> loadStoredPlan({SharedPreferences? prefs}) async {
   final sp = prefs ?? await SharedPreferences.getInstance();
@@ -350,38 +355,131 @@ class NotifyPlanner {
   List<PlannedNotification> _currentPlan = const [];
   bool _isPlanning = false;
   bool _needsAnotherReplan = false;
+  bool _disposed = false;
+  bool _pendingTopicSync = false;
+  bool _retryingTopicSync = false;
+  bool _retryPendingReconnect = false;
+  Future<void>? _inFlightTopicSync;
+  ({PushPrefs prefs, String lang})? _queuedTopicSync;
 
   NotifyPlanner(this.ref) {
     _listen();
     _syncSubscriptions();
-    if (!kIsWeb && !MotionEnv.isTest && defaultTargetPlatform == TargetPlatform.iOS) {
-      _lifecycleListener = AppLifecycleListener(onResume: () => scheduleReplan(Duration.zero));
+    if (!kIsWeb) {
+      try {
+        _lifecycleListener = AppLifecycleListener(
+          onResume: () {
+            if (!MotionEnv.isTest && defaultTargetPlatform == TargetPlatform.iOS) {
+              scheduleReplan(Duration.zero);
+            }
+            unawaited(_retryPendingTopicSync());
+          },
+        );
+      } catch (_) {}
     }
   }
 
   List<PlannedNotification> get currentPlan => _currentPlan;
   bool get hasActiveDebounce => _debounceTimer?.isActive ?? false;
+  @visibleForTesting
+  bool get hasPendingTopicSyncInMemory => _pendingTopicSync;
 
   void _syncSubscriptions() {
     final prefs = ref.read(pushPrefsProvider);
     final lang = ref.read(localeProvider).languageCode;
-    PushMessaging.updateSubscriptions(prefs, lang);
+    unawaited(_runTopicSync(prefs, lang));
+  }
+
+  Future<void> _runTopicSync(PushPrefs prefs, String lang) async {
+    if (_disposed) return;
+    if (_inFlightTopicSync != null) {
+      _queuedTopicSync = (prefs: prefs, lang: lang);
+      return _inFlightTopicSync!;
+    }
+    Future<void> run() async {
+      var current = (prefs: prefs, lang: lang);
+      while (!_disposed) {
+        var ok = false;
+        try {
+          ok = await ref.read(topicSyncProvider)(current.prefs, current.lang);
+        } catch (_) {
+          ok = false;
+        }
+        _pendingTopicSync = !ok;
+        if (ok) {
+          _retryPendingReconnect = false;
+        }
+        final next = _queuedTopicSync;
+        _queuedTopicSync = null;
+        if (next != null) {
+          current = next;
+          continue;
+        }
+        if (!ok && _retryPendingReconnect) {
+          _retryPendingReconnect = false;
+          current = (
+            prefs: ref.read(pushPrefsProvider),
+            lang: ref.read(localeProvider).languageCode,
+          );
+          continue;
+        }
+        break;
+      }
+    }
+
+    final future = run();
+    _inFlightTopicSync = future;
+    try {
+      await future;
+    } finally {
+      if (identical(_inFlightTopicSync, future)) {
+        _inFlightTopicSync = null;
+      }
+    }
+  }
+
+  Future<void> _retryPendingTopicSync() async {
+    if (_disposed) return;
+    if (_inFlightTopicSync != null) {
+      _retryPendingReconnect = true;
+      return;
+    }
+    if (_retryingTopicSync) return;
+    _retryingTopicSync = true;
+    try {
+      final hasPending = _pendingTopicSync || await PushMessaging.hasPendingTopicSync();
+      if (!hasPending || _disposed) return;
+      final prefs = ref.read(pushPrefsProvider);
+      final lang = ref.read(localeProvider).languageCode;
+      await _runTopicSync(prefs, lang);
+    } finally {
+      _retryingTopicSync = false;
+    }
   }
 
   void _listen() {
     ref.listen<PushPrefs>(pushPrefsProvider, (prev, next) {
       scheduleReplan();
       final lang = ref.read(localeProvider).languageCode;
-      PushMessaging.updateSubscriptions(next, lang);
+      unawaited(_runTopicSync(next, lang));
     });
     ref.listen<Locale>(localeProvider, (prev, next) {
       final prefs = ref.read(pushPrefsProvider);
       if (prefs.lang != next.languageCode) {
         Future.microtask(() {
-          ref.read(pushPrefsProvider.notifier).setLang(next.languageCode);
+          if (!_disposed) {
+            ref.read(pushPrefsProvider.notifier).setLang(next.languageCode);
+          }
         });
       }
-      PushMessaging.updateSubscriptions(prefs, next.languageCode);
+      unawaited(_runTopicSync(prefs, next.languageCode));
+    });
+    ref.listen<AsyncValue<bool>>(connectivityProvider, (prev, next) {
+      final wasOnline = prev?.value;
+      final isOnline = next.value;
+      if (wasOnline == false && isOnline == true) {
+        unawaited(_retryPendingTopicSync());
+      }
     });
     ref.listen<FeatureSettings>(featuresProvider, (prev, next) => scheduleReplan());
     ref.listen<AsyncValue<List<Liturgy>>>(liturgiesProvider, (prev, next) => scheduleReplan());
@@ -490,6 +588,7 @@ class NotifyPlanner {
   }
 
   void dispose() {
+    _disposed = true;
     _debounceTimer?.cancel();
     _lifecycleListener?.dispose();
   }
