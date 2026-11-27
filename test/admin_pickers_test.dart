@@ -188,9 +188,9 @@ void main() {
       expect(MediaQuery.of(tester.element(dialog)).alwaysUse24HourFormat, isFalse);
       expect(find.descendant(of: dialog, matching: find.text('ص')), findsWidgets);
       expect(find.descendant(of: dialog, matching: find.text('م')), findsWidgets);
-      await enterTimeInOpenPicker(tester, 18, 30); // ٦:٣٠ م
+      await enterTimeInOpenPicker(tester, 18, 30); // 6:30 PM
       expect(_text(tester, 'start'), '18:30');
-      expect(find.text('٠٦:٣٠ م'), findsOneWidget, reason: 'Arabic 12-hour reading');
+      expect(find.text('06:30 م'), findsOneWidget, reason: 'Arabic 12-hour reading');
     });
   });
 
@@ -428,7 +428,7 @@ void main() {
       await tester.enterText(find.byKey(const ValueKey('field-start')), '٠٩:٣٠');
       await tester.pump();
       expect(find.byType(TimePickerDialog), findsNothing);
-      expect(find.text('٠٩:٣٠ ص'), findsOneWidget);
+      expect(find.text('09:30 ص'), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('editor-save')));
       await tester.pump();
@@ -508,7 +508,7 @@ void main() {
       await tester.enterText(find.byKey(const ValueKey('field-startsAt')), '٢٠٢٧-٠١-٠٦ ٢٠:٠٠');
       await tester.enterText(find.byKey(const ValueKey('field-endsAt')), '٢٠٢٧-٠١-٠٧ ٢٠:٠٠');
       await tester.pump();
-      expect(find.textContaining('٠٨:٠٠ م'), findsWidgets);
+      expect(find.textContaining('08:00 م'), findsWidgets);
 
       await tester.tap(find.byKey(const Key('editor-save')));
       await tester.pumpAndSettle();

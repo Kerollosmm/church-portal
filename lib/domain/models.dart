@@ -827,6 +827,24 @@ class Milestone implements Hideable {
       );
 }
 
+/// Sorts milestones chronologically by [Milestone.year] ascending (`null` last),
+/// breaking ties stably by [Milestone.order] then [Milestone.id].
+int compareMilestonesByYear(Milestone a, Milestone b) {
+  final ay = a.year;
+  final by = b.year;
+  if (ay != null && by != null) {
+    final cmp = ay.compareTo(by);
+    if (cmp != 0) return cmp;
+  } else if (ay == null && by != null) {
+    return 1;
+  } else if (ay != null && by == null) {
+    return -1;
+  }
+  final orderCmp = a.order.compareTo(b.order);
+  if (orderCmp != 0) return orderCmp;
+  return a.id.compareTo(b.id);
+}
+
 class Saint implements Hideable {
 
   /// Shown on the public site (false = hidden by an admin, not deleted).

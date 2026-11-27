@@ -637,10 +637,8 @@ class IconLine extends StatelessWidget {
   }
 }
 
-/// "٠٦:٣٠ ص – ٠٨:٣٠ ص" with the Latin-digit version underneath in Arabic
-/// (spec: both digit systems for Arabic readers); Latin digits only on the
-/// English site (live check 4 Nov 2026, ADR-038: Arabic digits there read as
-/// untranslated text).
+/// Single-line time range using Western digits: "\u206706:30 ص – 08:30 ص\u2069"
+/// in Arabic and "\u206606:30 AM – 08:30 AM\u2069" in English (Phase 6 Q2).
 class TimeRangeText extends StatelessWidget {
   final String start, end;
   final bool large;
@@ -650,27 +648,11 @@ class TimeRangeText extends StatelessWidget {
   Widget build(BuildContext context) {
     // No time set: nothing (no empty line reserving space).
     if (start.trim().isEmpty) return const SizedBox.shrink();
-    final latin = formatRangeLatin(start, end);
-    final primary = context.isAr ? formatRangeArabic(start, end) : latin;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          primary,
-          style: displayStyle(context, size: large ? 28 : 21, color: context.pal.primary, height: 1.3),
-        ),
-        // Arabic mode: the Latin secondary line keeps its own script's base
-        // direction (BUG-10).
-        if (context.isAr)
-          Directionality(
-            textDirection: TextDirection.ltr,
-            child: Text(
-              latin,
-              style: TextStyle(fontSize: large ? 14 : 12, color: context.pal.muted),
-            ),
-          ),
-      ],
+    final text = context.isAr ? formatRangeArabic(start, end) : formatRangeLatin(start, end);
+    return Text(
+      text,
+      textDirection: context.isAr ? TextDirection.rtl : TextDirection.ltr,
+      style: displayStyle(context, size: large ? 28 : 21, color: context.pal.primary, height: 1.3),
     );
   }
 }

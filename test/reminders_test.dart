@@ -346,7 +346,7 @@ void main() {
       expect(cairo.minute, 0);
 
       final hm = '${cairo.hour.toString().padLeft(2, '0')}:${cairo.minute.toString().padLeft(2, '0')}';
-      expect(formatTimeArabic(hm), '٠٧:٠٠ ص');
+      expect(formatTimeArabic(hm), '07:00 ص');
     });
   });
 }

@@ -385,7 +385,7 @@ void main() {
 
     test('Arabic-only admin entries are never blank', () {
       final t = build();
-      expect(t, contains('Friday: قداس الجمعة [mass] 07:00 AM – 09:00 AM at الكنيسة الكبرى - للشباب'));
+      expect(t, contains('Friday: قداس الجمعة [mass] \u206607:00 AM – 09:00 AM\u2069 at الكنيسة الكبرى - للشباب'));
       expect(t, contains('Directions: آخر شارع 45'));
       expect(t, contains('اجتماع الشباب [youth]'));
       expect(t, contains('at قاعة البابا'));
@@ -403,7 +403,7 @@ void main() {
       expect(t, contains('### نهضة الأنبا موسى'));
       // ADR-050: the label says what the schedule shows today.
       expect(t, contains('[ADDITIVE — regular services continue]'));
-      expect(t, contains('- Friday: عشية النهضة [other] 06:00 PM – 08:00 PM at مذبح الأنبا موسى'));
+      expect(t, contains('- Friday: عشية النهضة [other] \u206606:00 PM – 08:00 PM\u2069 at مذبح الأنبا موسى'));
       final off = build(seasons: [
         Season(id: 'rm', key: 'revival_moses', nameAr: 'x', nameEn: 'x', active: false, replacesRegular: false),
       ]);
@@ -593,9 +593,9 @@ void main() {
       expect(formatTimeLatin('06:30'), '06:30 AM');
       expect(formatTimeLatin('18:30'), '06:30 PM');
       expect(formatTimeLatin('00:15'), '12:15 AM');
-      expect(formatTimeArabic('06:30'), '٠٦:٣٠ ص');
-      expect(formatTimeArabic('18:30'), '٠٦:٣٠ م');
-      expect(formatRangeLatin('06:30', '08:30'), '06:30 AM – 08:30 AM');
+      expect(formatTimeArabic('06:30'), '06:30 ص');
+      expect(formatTimeArabic('18:30'), '06:30 م');
+      expect(formatRangeLatin('06:30', '08:30'), '\u206606:30 AM – 08:30 AM\u2069');
       expect(weekdayName(5, arabic: true), 'الجمعة');
       expect(normalizeDigits('٢٠٢٦'), '2026');
     });

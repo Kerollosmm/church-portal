@@ -313,7 +313,7 @@ void main() {
       expect(p, contains('[ADDITIVE — some regular services are NOT held today'));
       expect(p, contains("[REPLACES the day's regular masses]"));
       expect(p, contains('- Today 2027-08-22 (Sunday), NOT held (the season replaces them): '));
-      expect(p, contains('Service reg-sun-1 (خدمة reg-sun-1) 07:00 AM – 09:00 AM'));
+      expect(p, contains('Service reg-sun-1 (خدمة reg-sun-1) \u206607:00 AM – 09:00 AM\u2069'));
       expect(p, isNot(contains('- Today 2027-08-22 (Sunday): Service reg-sun-1')));
     });
 
@@ -327,11 +327,11 @@ void main() {
   });
 
   group('issue 15: the «يُقام الآن» box shows the end time', () {
-    testWidgets('Easter night 00:30: «حتى ٠٣:٣٠ ص» (12-hour ص/م, next morning)', (tester) async {
+    testWidgets('Easter night 00:30: «حتى 03:30 ص» (12-hour ص/م, next morning)', (tester) async {
       await pump(tester, const NextMassCard(), cairo(2027, 5, 2, 0, 30), p2, [pascha27],
           theme: ThemePresets.resurrection);
       expect(find.byKey(const Key('happeningNowBox')), findsOneWidget);
-      expect(find.text('حتى ٠٣:٣٠ ص'), findsOneWidget);
+      expect(find.text('حتى 03:30 ص'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -341,10 +341,10 @@ void main() {
       expect(find.text('Until 03:00 PM'), findsOneWidget);
     });
 
-    testWidgets('a service without an end runs its 120 minutes: «حتى ٠٩:٠٠ ص»', (tester) async {
+    testWidgets('a service without an end runs its 120 minutes: «حتى 09:00 ص»', (tester) async {
       final noEnd = [lit('x', weekday: 2, start: '07:00', end: '')];
       await pump(tester, const NextMassCard(), cairo(2027, 3, 16, 7, 30), noEnd, const []);
-      expect(find.text('حتى ٠٩:٠٠ ص'), findsOneWidget);
+      expect(find.text('حتى 09:00 ص'), findsOneWidget);
     });
 
     testWidgets('P3 18:45: the now box leads with the real revival, its speaker and topic', (tester) async {
@@ -354,7 +354,7 @@ void main() {
       expect(find.descendant(of: box, matching: find.textContaining('خدمة revival')), findsOneWidget);
       expect(find.descendant(of: box, matching: find.textContaining('القمص أنطونيوس')), findsOneWidget);
       expect(find.descendant(of: box, matching: find.textContaining('خدمة rev-moses-3')), findsNothing);
-      expect(find.descendant(of: box, matching: find.text('حتى ٠٩:٠٠ م')), findsOneWidget);
+      expect(find.descendant(of: box, matching: find.text('حتى 09:00 م')), findsOneWidget);
     });
   });
 

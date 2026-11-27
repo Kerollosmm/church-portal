@@ -224,7 +224,7 @@ void main() {
         facilities: const [],
         now: cairo(2027, 5, 2, 0, 30),
       );
-      expect(ctx, contains('10:30 PM – 03:30 AM (ends the next morning, after midnight)'));
+      expect(ctx, contains('\u206610:30 PM – 03:30 AM\u2069 (ends the next morning, after midnight)'));
     });
 
     test('Kiahk 21:00–05:30 then the 05:30–07:30 liturgy (additive), across the 18:00 shift', () {
@@ -464,7 +464,7 @@ void main() {
     expect(find.text('خدمة sat-night'), findsOneWidget);
     // It starts later (00:00, the next date) while sat-night runs: named
     // with its time, not «في نفس الوقت» (ADR-053, sims r2 P2 O-a).
-    expect(find.text('وبعدها ١٢:٠٠ ص: خدمة sun-early — القاعة السفلية (شباب)'), findsOneWidget);
+    expect(find.text('وبعدها 12:00 ص: خدمة sun-early — القاعة السفلية (شباب)'), findsOneWidget);
     expect(find.textContaining('وفي نفس الوقت'), findsNothing);
     expect(tester.takeException(), isNull);
   });
