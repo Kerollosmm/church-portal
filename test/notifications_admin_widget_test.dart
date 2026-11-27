@@ -361,7 +361,7 @@ void main() {
     await pump(tester);
     expect(tester.takeException(), isNull);
     expect(find.byKey(const ValueKey('save-settings')), findsNothing);
-    expect(find.textContaining('٨:٠٠'), findsWidgets);
+    expect(find.textContaining('08:00 ص'), findsWidgets);
     await tapKey(tester, 'customize-seasons');
     expect(find.text('اسم الموسم'), findsWidgets);
     expect(find.text('{season}'), findsNothing);
