@@ -24,7 +24,11 @@ import 'home_page.dart' show PhoneRow;
 var _rateLimiter = ContactRateLimiter();
 
 @visibleForTesting
-void resetContactRateLimiterForTest() => _rateLimiter = ContactRateLimiter();
+void resetContactRateLimiterForTest({
+  Duration minInterval = const Duration(seconds: 60),
+  int maxPerWindow = 3,
+}) =>
+    _rateLimiter = ContactRateLimiter(minInterval: minInterval, maxPerWindow: maxPerWindow);
 
 class ContactPage extends ConsumerWidget {
   const ContactPage({super.key});
@@ -188,27 +192,71 @@ class _ContactFormState extends ConsumerState<ContactForm> {
   bool _consented = false;
   String? _status;
   _ContactStatusTone _statusTone = _ContactStatusTone.error;
+  ContactDraft? _queuedDraftBaseline;
+  int _formRevision = 0;
+  int? _queuedRevision;
+  bool _suppressRevisionBump = false;
+
+  void _bumpRevision() {
+    if (!_suppressRevisionBump) {
+      _formRevision++;
+    }
+  }
+
+  void _runWithoutRevisionBump(void Function() fn) {
+    final prev = _suppressRevisionBump;
+    _suppressRevisionBump = true;
+    try {
+      fn();
+    } finally {
+      _suppressRevisionBump = prev;
+    }
+  }
 
   @override
   void initState() {
     super.initState();
+    for (final c in [_name, _phone, _email, _message, _date]) {
+      c.addListener(_bumpRevision);
+    }
     final queue = ref.read(contactQueueProvider);
     if (queue.draft != null) {
-      _restoreDraft(queue.draft!);
+      _runWithoutRevisionBump(() => _restoreDraft(queue.draft!));
+      _queuedDraftBaseline = queue.draft;
+      _queuedRevision = _formRevision;
     }
   }
 
   void _restoreDraft(ContactDraft draft) {
-    _name.text = draft.name;
-    _phone.text = draft.phone;
-    _email.text = draft.email;
-    _message.text = draft.message;
-    _date.text = draft.preferredDate;
-    _slot = draft.slot;
-    _bookingType = draft.bookingType;
-    _anonymous = draft.anonymous;
-    _consented = draft.consented;
-    _resetCount++;
+    final base = _queuedDraftBaseline;
+    bool canRestoreText(String current, String baseVal) =>
+        base != null ? current == baseVal : current.isEmpty;
+
+    if (canRestoreText(_name.text, base?.name ?? '')) _name.text = draft.name;
+    if (canRestoreText(_phone.text, base?.phone ?? '')) _phone.text = draft.phone;
+    if (canRestoreText(_email.text, base?.email ?? '')) _email.text = draft.email;
+    if (canRestoreText(_message.text, base?.message ?? '')) _message.text = draft.message;
+    if (canRestoreText(_date.text, base?.preferredDate ?? '')) _date.text = draft.preferredDate;
+
+    var slotChanged = false;
+    if (base != null ? _slot == base.slot : _slot == null) {
+      if (_slot != draft.slot) {
+        _slot = draft.slot;
+        slotChanged = true;
+      }
+    }
+    if (base != null ? _bookingType == base.bookingType : _bookingType.isEmpty) {
+      _bookingType = draft.bookingType;
+    }
+    if (base != null ? _anonymous == base.anonymous : !_anonymous) {
+      _anonymous = draft.anonymous;
+    }
+    if (base != null ? _consented == base.consented : !_consented) {
+      _consented = draft.consented;
+    }
+    if (slotChanged || base == null) {
+      _resetCount++;
+    }
   }
 
   ContactDraft _collectDraft() => ContactDraft(
@@ -225,6 +273,9 @@ class _ContactFormState extends ConsumerState<ContactForm> {
 
   @override
   void dispose() {
+    for (final c in [_name, _phone, _email, _message, _date]) {
+      c.removeListener(_bumpRevision);
+    }
     for (final c in [_name, _phone, _email, _message, _honeypot, _date]) {
       c.dispose();
     }
@@ -300,6 +351,7 @@ class _ContactFormState extends ConsumerState<ContactForm> {
     );
     ref.read(contactQueueProvider.notifier).clearNotice();
     final draft = _collectDraft();
+    final submittedRevision = _formRevision;
     setState(() => _sending = true);
     try {
       final result = await ref.read(contactQueueProvider.notifier).submit(
@@ -307,12 +359,14 @@ class _ContactFormState extends ConsumerState<ContactForm> {
             lang: lang,
             draft: draft,
             onSynced: () => _rateLimiter.recordSubmission(DateTime.now()),
+            onRejected: () => _rateLimiter.recordSubmission(DateTime.now()),
           );
       if (result.isQueuedOffline) {
+        _queuedDraftBaseline = draft;
+        _queuedRevision = submittedRevision;
         _done(msgs.queuedOffline, _ContactStatusTone.queued);
       } else {
-        _rateLimiter.recordSubmission(now);
-        _done(msgs.sent, _ContactStatusTone.success);
+        _done(msgs.sent, _ContactStatusTone.success, clearForm: _formRevision == submittedRevision);
       }
     } on TimeoutException {
       // Not confirmed in time. Firestore may still deliver the queued batch
@@ -334,30 +388,34 @@ class _ContactFormState extends ConsumerState<ContactForm> {
     }
   }
 
-  void _done(String msg, _ContactStatusTone tone) {
+  void _done(String msg, _ContactStatusTone tone, {bool clearForm = true}) {
     if (!mounted) return;
     setState(() {
       _sending = false;
       _status = msg;
       _statusTone = tone;
-      if (tone == _ContactStatusTone.success) {
+      if (tone == _ContactStatusTone.success && clearForm) {
         _clearFormFields();
       }
     });
   }
 
   void _clearFormFields() {
-    _name.clear();
-    _phone.clear();
-    _email.clear();
-    _message.clear();
-    _date.clear();
-    _bookingType = '';
-    _slot = null;
-    _resetCount++;
-    _anonymous = false;
-    _consented = false; // each message needs its own consent
-    TextInput.finishAutofillContext(shouldSave: true);
+    _runWithoutRevisionBump(() {
+      _queuedDraftBaseline = null;
+      _queuedRevision = null;
+      _name.clear();
+      _phone.clear();
+      _email.clear();
+      _message.clear();
+      _date.clear();
+      _bookingType = '';
+      _slot = null;
+      _resetCount++;
+      _anonymous = false;
+      _consented = false; // each message needs its own consent
+      TextInput.finishAutofillContext(shouldSave: true);
+    });
   }
 
   static String _two(int n) => n.toString().padLeft(2, '0');
@@ -402,14 +460,21 @@ class _ContactFormState extends ConsumerState<ContactForm> {
           _sending = false;
           _status = context.tr('sent');
           _statusTone = _ContactStatusTone.success;
-          _clearFormFields();
+          if (_queuedRevision == null || _formRevision == _queuedRevision) {
+            _clearFormFields();
+          } else {
+            _queuedDraftBaseline = null;
+            _queuedRevision = null;
+          }
         });
       } else if (prev?.phase != ContactQueuePhase.failed && next.phase == ContactQueuePhase.failed) {
         setState(() {
           _sending = false;
-          if (next.draft != null) {
-            _restoreDraft(next.draft!);
+          if (next.draft != null && (_queuedRevision == null || _formRevision == _queuedRevision)) {
+            _runWithoutRevisionBump(() => _restoreDraft(next.draft!));
           }
+          _queuedDraftBaseline = null;
+          _queuedRevision = null;
           _status = context.tr('contactQueuedFailed');
           _statusTone = _ContactStatusTone.error;
         });
@@ -445,6 +510,43 @@ class _ContactFormState extends ConsumerState<ContactForm> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Text(context.tr('contactForm'),
                 style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: context.pal.primary)),
+            if (queue.hasUnverifiedPrevious) ...[
+              const SizedBox(height: 10),
+              Semantics(
+                liveRegion: true,
+                child: Container(
+                  key: const Key('contactUnverifiedNotice'),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: context.pal.notice,
+                    border: Border.all(color: context.pal.noticeEdge),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Icon(Icons.info_outline_rounded, color: context.pal.noticeInk),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          context.tr('contactUnverifiedPrevious'),
+                          style: TextStyle(color: context.pal.noticeInk, fontWeight: FontWeight.w600, height: 1.45),
+                        ),
+                      ),
+                      IconButton(
+                        key: const Key('dismissUnverifiedContactButton'),
+                        tooltip: context.tr('close'),
+                        onPressed: () => ref.read(contactQueueProvider.notifier).dismissUnverifiedNotice(),
+                        icon: Icon(Icons.close_rounded, color: context.pal.noticeInk),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             if (cats.length > 1) ...[
               // Rebuilt when the admin-managed list (settings/contact,
@@ -461,6 +563,7 @@ class _ContactFormState extends ConsumerState<ContactForm> {
                     for (final c in cats) DropdownMenuItem(value: c.slot, child: Text(context.pick(c.labelAr, c.labelEn))),
                   ],
                   onChanged: (v) => setState(() {
+                    _formRevision++;
                     _slot = v;
                     _bookingType = '';
                     _errors = const {};
@@ -476,6 +579,7 @@ class _ContactFormState extends ConsumerState<ContactForm> {
                 title: Text(context.tr('sendAnonymously'), style: const TextStyle(fontWeight: FontWeight.w700)),
                 value: _anonymous,
                 onChanged: (v) => setState(() {
+                  _formRevision++;
                   _anonymous = v;
                   _errors = const {};
                 }),
@@ -507,6 +611,7 @@ class _ContactFormState extends ConsumerState<ContactForm> {
                     label: Text(context.pick(s.labelAr, s.labelEn)),
                     selected: _bookingType == s.key,
                     onSelected: (_) => setState(() {
+                      _formRevision++;
                       _bookingType = s.key;
                       _errors = Map.of(_errors)..remove(ContactField.subtype);
                     }),
@@ -596,6 +701,7 @@ class _ContactFormState extends ConsumerState<ContactForm> {
             CheckboxListTile(
               value: _consented,
               onChanged: (v) => setState(() {
+                _formRevision++;
                 _consented = v ?? false;
                 if (_consented && _errors.containsKey(ContactField.consent)) {
                   _errors = Map.of(_errors)..remove(ContactField.consent);
