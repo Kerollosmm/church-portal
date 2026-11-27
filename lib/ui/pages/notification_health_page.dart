@@ -28,8 +28,8 @@ class _NotificationHealthPageState extends ConsumerState<NotificationHealthPage>
   OemBrand _detectedBrand = OemBrand.other;
   bool _isLoading = true;
   bool _isBatteryOptimisationIgnored = false;
-  bool _exactAlarmsAllowed = true;
-  bool _notificationsAllowed = true;
+  bool? _exactAlarmsAllowed;
+  bool? _notificationsAllowed;
   int _pendingCount = 0;
   String _manufacturer = '';
   String _brandName = '';
@@ -49,8 +49,8 @@ class _NotificationHealthPageState extends ConsumerState<NotificationHealthPage>
         _brandName = res['brand'] as String? ?? '';
         _detectedBrand = detectOemBrand(_manufacturer, _brandName);
         _isBatteryOptimisationIgnored = res['isIgnoringBatteryOptimizations'] as bool? ?? false;
-        _exactAlarmsAllowed = res['canScheduleExactAlarms'] as bool? ?? true;
-        _notificationsAllowed = res['notificationsAllowed'] as bool? ?? true;
+        _exactAlarmsAllowed = res['canScheduleExactAlarms'] as bool?;
+        _notificationsAllowed = res['notificationsAllowed'] as bool?;
       }
     } catch (_) {
       // Platform channel not available (e.g. web/desktop/test)
@@ -163,9 +163,11 @@ class _NotificationHealthPageState extends ConsumerState<NotificationHealthPage>
           _buildDiagRow(
             title: isAr ? 'إذن الإشعارات' : 'Notification Permission',
             ok: _notificationsAllowed,
-            detail: _notificationsAllowed
-                ? (isAr ? 'مسموح به' : 'Granted')
-                : (isAr ? 'محظور في إعدادات الهاتف' : 'Blocked in settings'),
+            detail: switch (_notificationsAllowed) {
+              true => isAr ? 'مسموح به' : 'Granted',
+              false => isAr ? 'محظور في إعدادات الهاتف' : 'Blocked in settings',
+              null => isAr ? 'غير معروف' : 'Unknown',
+            },
             pal: pal,
             isAr: isAr,
             actionKey: 'open_app_settings',
@@ -175,9 +177,11 @@ class _NotificationHealthPageState extends ConsumerState<NotificationHealthPage>
           _buildDiagRow(
             title: isAr ? 'المنبّهات الدقيقة للتذكيرات' : 'Exact Alarms',
             ok: _exactAlarmsAllowed,
-            detail: _exactAlarmsAllowed
-                ? (isAr ? 'مسموح به (دقيق)' : 'Allowed (Exact)')
-                : (isAr ? 'غير مسموح — يصل التذكير مبكرًا بضع دقائق' : 'Denied — arrives a few minutes early'),
+            detail: switch (_exactAlarmsAllowed) {
+              true => isAr ? 'مسموح به (دقيق)' : 'Allowed (Exact)',
+              false => isAr ? 'غير مسموح — يصل التذكير مبكرًا بضع دقائق' : 'Denied — arrives a few minutes early',
+              null => isAr ? 'غير معروف' : 'Unknown',
+            },
             pal: pal,
             isAr: isAr,
           ),
@@ -245,18 +249,23 @@ class _NotificationHealthPageState extends ConsumerState<NotificationHealthPage>
 
   Widget _buildDiagRow({
     required String title,
-    required bool ok,
+    required bool? ok,
     required String detail,
     required OccasionColors pal,
     required bool isAr,
     String? actionKey,
   }) {
+    final (icon, color) = switch (ok) {
+      true => (Icons.check_circle_rounded, pal.success),
+      false => (Icons.warning_amber_rounded, pal.alert),
+      null => (Icons.help_outline_rounded, pal.muted),
+    };
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Icon(
-          ok ? Icons.check_circle_rounded : Icons.warning_amber_rounded,
-          color: ok ? pal.success : pal.alert, // palette roles (occasion themes incl. dark Holy Week)
+          icon,
+          color: color, // palette roles (occasion themes incl. dark Holy Week)
           size: 18,
         ),
         const SizedBox(width: 10),
@@ -270,7 +279,7 @@ class _NotificationHealthPageState extends ConsumerState<NotificationHealthPage>
             ],
           ),
         ),
-        if (!ok && actionKey != null)
+        if (ok == false && actionKey != null)
           TextButton(
             onPressed: () => _triggerOemAction(actionKey),
             style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
