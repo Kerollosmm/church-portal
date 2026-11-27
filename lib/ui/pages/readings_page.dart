@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
+import '../../core/launch.dart';
 import '../../core/theme.dart';
 import '../../data/readings_store.dart';
 import '../../domain/cairo_time.dart';
@@ -13,7 +14,9 @@ import '../../domain/coptic_calendar.dart';
 import '../../domain/daily_verse.dart';
 import '../../domain/readings.dart';
 import '../../domain/season_verses.dart';
+import '../../domain/share.dart';
 import '../../state/providers.dart';
+import '../widgets/cards.dart' show ActionChipButton, whatsappGreen;
 
 sealed class _KatamerosItem {
   final Key key;
@@ -248,6 +251,19 @@ class _ReadingsPageState extends ConsumerState<ReadingsPage> {
     } catch (_) {}
   }
 
+  void _shareReadingWhatsapp() {
+    final tab = _selectedTab == 1 ? 'verse' : 'katameros';
+    final title = _selectedTab == 1
+        ? (context.isAr ? 'آية اليوم' : 'Verse of the day')
+        : (context.isAr ? 'قراءات اليوم' : "Today's readings");
+    openUrl(
+      whatsappShareUri(
+        title: title,
+        path: '/readings/$_currentIso?tab=$tab',
+      ).toString(),
+    );
+  }
+
   List<_KatamerosItem> _buildKatamerosItems(DayReadings readings, bool isAr) {
     final items = <_KatamerosItem>[];
     final feastTitle = readings.title(isAr);
@@ -441,11 +457,22 @@ class _ReadingsPageState extends ConsumerState<ReadingsPage> {
         runSpacing: 6,
         children: [
           _buildFontSizeControl(pal, isAr, textScale),
-          IconButton(
-            key: const Key('shareReadingButton'),
-            tooltip: isAr ? 'مشاركة' : 'Share',
-            icon: Icon(Icons.share_rounded, color: pal.primary),
-            onPressed: _shareReading,
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                key: const Key('readingsWhatsappShare'),
+                tooltip: context.tr('shareWhatsapp'),
+                icon: const Icon(Icons.chat_rounded, color: whatsappGreen),
+                onPressed: _shareReadingWhatsapp,
+              ),
+              IconButton(
+                key: const Key('shareReadingButton'),
+                tooltip: isAr ? 'مشاركة' : 'Share',
+                icon: Icon(Icons.share_rounded, color: pal.primary),
+                onPressed: _shareReading,
+              ),
+            ],
           ),
         ],
       ),
@@ -856,17 +883,32 @@ class _ReadingsPageState extends ConsumerState<ReadingsPage> {
                           ),
                         ),
                         const SizedBox(height: 24),
-                        OutlinedButton(
-                          onPressed: _shareReading,
-                          child: Wrap(
-                            alignment: WrapAlignment.center,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            spacing: 8,
-                            children: [
-                              const Icon(Icons.share_rounded, size: 16),
-                              Text(isAr ? 'مشاركة الآية' : 'Share verse'),
-                            ],
-                          ),
+                        Wrap(
+                          alignment: WrapAlignment.center,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            OutlinedButton(
+                              onPressed: _shareReading,
+                              child: Wrap(
+                                alignment: WrapAlignment.center,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                spacing: 8,
+                                children: [
+                                  const Icon(Icons.share_rounded, size: 16),
+                                  Text(isAr ? 'مشاركة الآية' : 'Share verse'),
+                                ],
+                              ),
+                            ),
+                            ActionChipButton(
+                              key: const Key('verseWhatsappShare'),
+                              icon: Icons.chat_rounded,
+                              label: context.tr('shareWhatsapp'),
+                              color: whatsappGreen,
+                              onTap: _shareReadingWhatsapp,
+                            ),
+                          ],
                         ),
                       ],
                     ),

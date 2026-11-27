@@ -12,6 +12,7 @@ import '../../domain/models.dart';
 import '../../domain/reminders.dart';
 import '../../domain/rules.dart';
 import '../../domain/schedule.dart';
+import '../../domain/share.dart';
 import '../../domain/today.dart';
 import '../../domain/time_format.dart';
 import '../../state/providers.dart';
@@ -392,12 +393,31 @@ class NextMassCard extends ConsumerWidget {
       children.add(ProgramDetails(n.liturgy.program, parallelText: parallelText, parallelThen: parallelThen));
       children.add(Padding(
         padding: const EdgeInsets.only(top: 8),
-        child: RemindMeButton(
-          eventKey: EventKey.liturgy(n.liturgy.id),
-          occurrence: n.liturgy.date != null ? isoDate(CairoTime.calendarDate(n.liturgy.date!)) : null,
-          title: {'ar': n.liturgy.nameAr, 'en': n.liturgy.nameEn},
-          startsAt: n.start,
-          recurring: n.liturgy.date == null,
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            RemindMeButton(
+              eventKey: EventKey.liturgy(n.liturgy.id),
+              occurrence: n.liturgy.date != null ? isoDate(CairoTime.calendarDate(n.liturgy.date!)) : null,
+              title: {'ar': n.liturgy.nameAr, 'en': n.liturgy.nameEn},
+              startsAt: n.start,
+              recurring: n.liturgy.date == null,
+            ),
+            ActionChipButton(
+              key: const Key('nextMassWhatsappShare'),
+              icon: Icons.chat_rounded,
+              label: context.tr('shareWhatsapp'),
+              color: whatsappGreen,
+              onTap: () => openUrl(
+                whatsappShareUri(
+                  title: '${context.tr('nextMass')} — ${context.pick(n.liturgy.nameAr, n.liturgy.nameEn)}',
+                  path: '/mass-schedule',
+                ).toString(),
+              ),
+            ),
+          ],
         ),
       ));
     }

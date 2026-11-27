@@ -206,6 +206,7 @@ const Map<String, List<String>> _strings = {
   'keyFacts': ['المعلومات الأساسية', 'Key information'],
   'addToCalendar': ['أضف إلى التقويم', 'Add to calendar'],
   'shareLink': ['مشاركة الرابط', 'Share link'],
+  'shareWhatsapp': ['مشاركة على واتساب', 'Share on WhatsApp'],
   'linkCopied': ['تم نسخ الرابط', 'Link copied'],
   'linkCopyFailed': ['تعذّر نسخ الرابط: {u}', 'Could not copy the link: {u}'],
   'relatedItems': ['من نفس القسم', 'More in this section'],
