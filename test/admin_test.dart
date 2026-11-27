@@ -426,6 +426,175 @@ void main() {
           validateDocument(alert, {'startsAt': DateTime.utc(2027, 1, 2), 'endsAt': DateTime.utc(2027, 1, 1)}),
           'endBeforeStart');
     });
+
+    test('seasons validation: replaceDates in window, duplicate active key, and overlapping active windows', () {
+      final seasonsDef = collectionById('seasons')!;
+      final sStart = CairoTime.at(2027, 3, 8, 0).toUtc();
+      final sEnd = CairoTime.at(2027, 4, 23, 23 * 60 + 59).toUtc();
+
+      // (a) replaceDates outside [startsAt, endsAt]
+      expect(
+        validateDocument(seasonsDef, {
+          'key': 'great_lent',
+          'startsAt': sStart,
+          'endsAt': sEnd,
+          'replaceDates': ['2027-03-07'],
+        }),
+        'seasonReplaceDateOutsideWindow',
+      );
+      expect(
+        validateDocument(seasonsDef, {
+          'key': 'great_lent',
+          'startsAt': sStart,
+          'endsAt': sEnd,
+          'replaceDates': ['2027-04-24'],
+        }),
+        'seasonReplaceDateOutsideWindow',
+      );
+      expect(
+        validateDocument(seasonsDef, {
+          'key': 'great_lent',
+          'startsAt': sStart,
+          'endsAt': sEnd,
+          'replaceDates': ['2027-03-08', '2027-04-23'],
+        }),
+        isNull,
+      );
+      // Open-ended window allows replaceDates when startsAt & endsAt are absent.
+      expect(
+        validateDocument(seasonsDef, {
+          'key': 'apostles',
+          'replaceDates': ['2027-07-12'],
+        }),
+        isNull,
+      );
+
+      // (b) Duplicate active non-deleted key
+      final siblings = [
+        AdminDoc('s1', {
+          'key': 'great_lent',
+          'nameAr': 'الصوم الكبير',
+          'nameEn': 'Great Lent',
+          'startsAt': sStart,
+          'endsAt': sEnd,
+          'active': true,
+        }),
+        AdminDoc('s2', {
+          'key': 'holy_week',
+          'nameAr': 'أسبوع الآلام القديم',
+          'startsAt': CairoTime.at(2026, 4, 6, 0).toUtc(),
+          'endsAt': CairoTime.at(2026, 4, 11, 18 * 60).toUtc(),
+          'active': false,
+        }),
+        AdminDoc('s3', {
+          'key': 'pascha',
+          'nameAr': 'محذوف',
+          'startsAt': CairoTime.at(2027, 5, 1, 18 * 60).toUtc(),
+          'endsAt': CairoTime.at(2027, 5, 2, 23 * 60 + 59).toUtc(),
+          'active': true,
+          'deletedAt': DateTime.utc(2027, 1, 1),
+        }),
+      ];
+      expect(
+        validateDocument(
+          seasonsDef,
+          {'key': 'great_lent', 'active': true, 'startsAt': sStart, 'endsAt': sEnd},
+          existingDocs: siblings,
+        ),
+        'seasonDuplicateActiveKey',
+      );
+      // Same key in a later, non-overlapping year (e.g. nativity-2027 / -2028) is allowed.
+      expect(
+        validateDocument(
+          seasonsDef,
+          {
+            'key': 'great_lent',
+            'active': true,
+            'startsAt': CairoTime.at(2099, 3, 1, 0).toUtc(),
+            'endsAt': CairoTime.at(2099, 4, 1, 0).toUtc(),
+          },
+          existingDocs: siblings,
+        ),
+        isNull,
+      );
+      // Editing the same season (matching docId) or inactive draft/sibling is allowed.
+      expect(
+        validateDocument(
+          seasonsDef,
+          {'key': 'great_lent', 'active': true, 'startsAt': sStart, 'endsAt': sEnd},
+          existingDocs: siblings,
+          docId: 's1',
+        ),
+        isNull,
+      );
+      expect(
+        validateDocument(
+          seasonsDef,
+          {'key': 'great_lent', 'active': false},
+          existingDocs: siblings,
+        ),
+        isNull,
+      );
+      expect(
+        validateDocument(
+          seasonsDef,
+          {'key': 'holy_week', 'active': true},
+          existingDocs: siblings,
+        ),
+        isNull,
+      );
+      expect(
+        validateDocument(
+          seasonsDef,
+          {'key': 'pascha', 'active': true},
+          existingDocs: siblings,
+        ),
+        isNull,
+      );
+
+      // (c) overlappingActiveSeasons
+      expect(
+        overlappingActiveSeasons(
+          {
+            'key': 'revival_moses',
+            'active': true,
+            'startsAt': CairoTime.at(2027, 4, 20, 0).toUtc(),
+            'endsAt': CairoTime.at(2027, 4, 25, 23 * 60).toUtc(),
+          },
+          existingDocs: siblings,
+        ).map((d) => d.id),
+        ['s1'],
+      );
+      // Exact boundary (s2 starts when s1 ends) does not overlap.
+      expect(
+        overlappingActiveSeasons(
+          {
+            'key': 'holy_week',
+            'active': true,
+            'startsAt': sEnd,
+            'endsAt': CairoTime.at(2027, 5, 1, 18 * 60).toUtc(),
+          },
+          existingDocs: siblings,
+        ),
+        isEmpty,
+      );
+      // Inactive draft, inactive sibling, soft-deleted sibling, or same docId are ignored.
+      expect(
+        overlappingActiveSeasons(
+          {'key': 'revival_moses', 'active': false, 'startsAt': sStart, 'endsAt': sEnd},
+          existingDocs: siblings,
+        ),
+        isEmpty,
+      );
+      expect(
+        overlappingActiveSeasons(
+          {'key': 'great_lent', 'active': true, 'startsAt': sStart, 'endsAt': sEnd},
+          existingDocs: siblings,
+          docId: 's1',
+        ),
+        isEmpty,
+      );
+    });
   });
 
   group('changed fields', () {
@@ -8219,6 +8388,174 @@ void main() {
       expect(saved!.containsKey('installPrompt'), isFalse);
     });
   });
+
+  group('seasons editor validation, overlap warning, and key change', () {
+    testWidgets('shows overlap warning banner (non-blocking) and blocks duplicate active key / out-of-window replaceDates',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 3200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final def = collectionById('seasons')!;
+      final sStart = CairoTime.at(2027, 6, 21, 0).toUtc();
+      final sEnd = CairoTime.at(2027, 7, 11, 23 * 60 + 59).toUtc();
+      final siblings = [
+        AdminDoc('ap', {
+          'key': 'apostles',
+          'nameAr': 'صوم الرسل',
+          'nameEn': "Apostles' Fast",
+          'startsAt': sStart,
+          'endsAt': sEnd,
+          'active': true,
+        }),
+      ];
+
+      Map<String, dynamic>? saved;
+      // Overlapping active window with different key: shows warning banner, still saves.
+      await tester.pumpWidget(_app(DocEditor(
+        title: 'Season',
+        fields: def.fields,
+        def: def,
+        existingDocs: siblings,
+        data: {
+          'key': 'revival_moses',
+          'nameAr': 'نهضة الأنبا موسى',
+          'startsAt': CairoTime.at(2027, 6, 22, 0).toUtc(),
+          'endsAt': CairoTime.at(2027, 7, 1, 23 * 60 + 59).toUtc(),
+          'active': true,
+          'replacesRegular': false,
+          'replaceDates': ['2027-07-01'],
+        },
+        docId: 'rm',
+        popOnSave: false,
+        onSave: (d) async => saved = d,
+      )));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('season-overlap-warning')), findsOneWidget);
+      expect(find.textContaining("Apostles' Fast"), findsOneWidget);
+
+      await tester.enterText(find.byKey(const ValueKey('field-nameAr')), 'نهضة الأنبا موسى ٢٠٢٧');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(saved, isNotNull);
+
+      // Out-of-window replaceDates blocks save.
+      await tester.pumpWidget(_app(DocEditor(
+        key: const ValueKey('bad-replace'),
+        title: 'Season',
+        fields: def.fields,
+        def: def,
+        existingDocs: siblings,
+        data: {
+          'key': 'revival_moses',
+          'nameAr': 'نهضة الأنبا موسى',
+          'startsAt': CairoTime.at(2027, 6, 22, 0).toUtc(),
+          'endsAt': CairoTime.at(2027, 7, 1, 23 * 60 + 59).toUtc(),
+          'active': true,
+          'replacesRegular': false,
+          'replaceDates': ['2027-07-05'],
+        },
+        popOnSave: false,
+        onSave: (_) async {},
+      )));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('editor-save-error')), findsOneWidget);
+
+      // Duplicate active key blocks save.
+      await tester.pumpWidget(_app(DocEditor(
+        key: const ValueKey('dup-key'),
+        title: 'Season',
+        fields: def.fields,
+        def: def,
+        existingDocs: siblings,
+        data: {
+          'key': 'apostles',
+          'nameAr': 'صوم الرسل ٢',
+          'startsAt': CairoTime.at(2027, 7, 1, 0).toUtc(),
+          'endsAt': CairoTime.at(2027, 7, 20, 23 * 60 + 59).toUtc(),
+          'active': true,
+        },
+        popOnSave: false,
+        onSave: (_) async {},
+      )));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('editor-save-error')), findsOneWidget);
+    });
+
+    testWidgets('changing an existing season key confirms affected service count and moves them in one batch',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 3200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _TestAdminBackend(initialCollections: {
+        'seasons': [
+          AdminDoc('s1', {
+            'key': 'fast',
+            'nameAr': 'صوم الرسل',
+            'nameEn': "Apostles' Fast",
+            'active': true,
+          }),
+        ],
+        'liturgies': [
+          AdminDoc('l1', {'nameAr': 'قداس ١', 'seasonKey': 'fast', 'weekday': 1, 'start': '07:00'}),
+          AdminDoc('l2', {'nameAr': 'قداس ٢', 'seasonKey': 'fast', 'weekday': 3, 'start': '08:00'}),
+          AdminDoc('l3', {'nameAr': 'قداس ٣', 'seasonKey': 'pascha', 'weekday': 7, 'start': '08:00'}),
+          AdminDoc('l4', {
+            'nameAr': 'محذوف',
+            'seasonKey': 'fast',
+            'weekday': 5,
+            'start': '08:00',
+            'deletedAt': DateTime.utc(2026, 1, 1),
+          }),
+        ],
+      });
+
+      await tester.pumpWidget(_app(CollectionListScreen(repo: repo, def: collectionById('seasons')!)));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('صوم الرسل'));
+      await tester.pumpAndSettle();
+
+      // Change key from 'fast' to 'apostles'
+      await tester.tap(find.byKey(const ValueKey('field-key')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining('Apostles').last);
+      await tester.pumpAndSettle();
+
+      // Tap save -> confirm dialog lists 2 affected services
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('seasonKeyChangeDialog')), findsOneWidget);
+      expect(find.textContaining('2 service(s) currently reference'), findsOneWidget);
+
+      // Cancel keeps editor open and writes nothing
+      await tester.tap(find.byKey(const Key('seasonKeyChange-cancel')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('seasonKeyChangeDialog')), findsNothing);
+      expect(repo.batchCalls, isEmpty);
+
+      // Save again and choose "Move services & save"
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('seasonKeyChange-move')));
+      await tester.pumpAndSettle();
+
+      expect(repo.batchCalls.length, 1);
+      final batch = repo.batchCalls.single;
+      expect(batch.updates[('seasons', 's1')], {'key': 'apostles'});
+      expect(batch.updates[('liturgies', 'l1')], {'seasonKey': 'apostles'});
+      expect(batch.updates[('liturgies', 'l2')], {'seasonKey': 'apostles'});
+      expect(batch.updates.containsKey(('liturgies', 'l3')), isFalse);
+      expect(batch.updates.containsKey(('liturgies', 'l4')), isFalse);
+    });
+  });
 }
 
 class _MediaTestAdminBackend extends _TestAdminBackend {
@@ -8256,6 +8593,7 @@ class _TestAdminBackend extends AdminBackend {
   final List<({String collection, String? id, Map<String, dynamic> data})> savedDocs = [];
   final List<({String collection, List<String> ids, int base})> reorderCalls = [];
   final List<({String collection, String id, Map<String, dynamic> data})> updates = [];
+  final List<({Map<(String, String), Map<String, dynamic>> updates, List<(String, String)> deletes})> batchCalls = [];
   final List<({String uid, String email, String role})> setAdminCalls = [];
   bool failDelete = false;
 
@@ -8286,6 +8624,15 @@ class _TestAdminBackend extends AdminBackend {
     if (failDelete) throw StateError('delete blocked');
     deletedIds.add('$collection/$id');
     collections[collection]?.removeWhere((doc) => doc.id == id);
+  }
+
+  @override
+  Future<void> batchWrite({
+    Map<(String, String), Map<String, dynamic>> updates = const {},
+    List<(String, String)> deletes = const [],
+  }) async {
+    batchCalls.add((updates: updates, deletes: deletes));
+    await super.batchWrite(updates: updates, deletes: deletes);
   }
 
   @override

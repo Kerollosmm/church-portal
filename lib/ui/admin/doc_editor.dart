@@ -85,6 +85,14 @@ class DocEditor extends StatefulWidget {
   /// Active/inactive seasons so seasonal liturgies preview override accurately.
   final List<Season> seasons;
 
+  /// Services (`liturgies`) loaded when editing an existing season so a key
+  /// change warns about affected services and can move them in the same batch.
+  final List<AdminDoc> linkedServices;
+
+  /// Optional atomic batch save used when moving services on season key change.
+  final Future<void> Function(Map<String, dynamic> seasonData, String fromKey, String toKey, List<String> serviceIds)?
+      onSaveWithMovedServices;
+
   /// Whether English translation fields are shown in the form (P2-27b).
   final bool englishEnabled;
 
@@ -114,6 +122,8 @@ class DocEditor extends StatefulWidget {
     this.takenSlugs = const {},
     this.existingDocs = const [],
     this.seasons = const [],
+    this.linkedServices = const [],
+    this.onSaveWithMovedServices,
     this.englishEnabled = true,
     this.initialNotice,
     this.popMessenger,
@@ -370,7 +380,7 @@ class DocEditorState extends State<DocEditor> {
 
   void _markDirty() {
     if (!_initializing) _clearPendingErrorFocus();
-    if (!_initializing && mounted && (!_dirty || _showErrorSummary || _saveError != null)) {
+    if (!_initializing && mounted && (!_dirty || _showErrorSummary || _saveError != null || widget.def?.name == 'seasons')) {
       setState(() {
         _dirty = true;
         _saveError = null;
@@ -819,6 +829,40 @@ class DocEditorState extends State<DocEditor> {
     );
   }
 
+  Widget _seasonOverlapWarningBanner(BuildContext context, List<AdminDoc> overlapping) {
+    final names = [
+      for (final o in overlapping)
+        (() {
+          final v = context.pick('${o.data['nameAr'] ?? ''}', '${o.data['nameEn'] ?? ''}').trim();
+          return v.isEmpty ? o.id : v;
+        })(),
+    ].join(context.isAr ? '، ' : ', ');
+    return Card(
+      key: const Key('season-overlap-warning'),
+      color: context.pal.goldText.withValues(alpha: 0.1),
+      margin: const EdgeInsets.only(top: 4, bottom: 8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: context.pal.goldText.withValues(alpha: 0.45)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: context.pal.goldText, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                context.tr('seasonOverlapWarning', {'names': names}),
+                style: TextStyle(color: context.pal.ink, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _errorSummaryCard(BuildContext context, List<_FieldErrorEntry> errors) {
     final n = errors.length;
     final title = switch (n) {
@@ -922,7 +966,12 @@ class DocEditorState extends State<DocEditor> {
     }
     var data = collect();
     final messenger = ScaffoldMessenger.maybeOf(context);
-    final docErr = validateDocument(widget.def, data);
+    final docErr = validateDocument(
+      widget.def,
+      data,
+      existingDocs: widget.existingDocs,
+      docId: widget.docId,
+    );
     if (docErr != null) {
       final msg = context.tr(docErr);
       messenger?.showSnackBar(SnackBar(content: Text(msg)));
@@ -951,6 +1000,54 @@ class DocEditorState extends State<DocEditor> {
       setState(() => _dirty = false);
       if (willPop()) nav.pop();
       return true;
+    }
+    var moveServices = false;
+    var oldSeasonKey = '';
+    var newSeasonKey = '';
+    var affectedServiceIds = const <String>[];
+    if (widget.def?.name == 'seasons' && !isNew && _persisted) {
+      oldSeasonKey = _initialValues['key']?.toString() ?? '';
+      newSeasonKey = data['key']?.toString() ?? '';
+      if (oldSeasonKey.isNotEmpty && newSeasonKey.isNotEmpty && newSeasonKey != oldSeasonKey) {
+        affectedServiceIds = [
+          for (final s in widget.linkedServices)
+            if (!isSoftDeleted(s.data) && s.data['seasonKey'] == oldSeasonKey) s.id,
+        ];
+        if (affectedServiceIds.isNotEmpty) {
+          final choice = await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              key: const Key('seasonKeyChangeDialog'),
+              title: Text(context.tr('seasonKeyChangeTitle')),
+              content: Text(context.tr('seasonKeyChangeBody', {
+                'c': '${affectedServiceIds.length}',
+                'old': choiceLabel(context, oldSeasonKey),
+                'new': choiceLabel(context, newSeasonKey),
+              })),
+              actions: [
+                TextButton(
+                  key: const Key('seasonKeyChange-cancel'),
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text(context.tr('cancel')),
+                ),
+                TextButton(
+                  key: const Key('seasonKeyChange-keep'),
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: Text(context.tr('seasonKeyChangeKeepBtn')),
+                ),
+                if (widget.onSaveWithMovedServices != null)
+                  FilledButton(
+                    key: const Key('seasonKeyChange-move'),
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: Text(context.tr('seasonKeyChangeMoveBtn')),
+                  ),
+              ],
+            ),
+          );
+          if (choice == null || !mounted) return false;
+          moveServices = choice && widget.onSaveWithMovedServices != null;
+        }
+      }
     }
     setState(() => _saving = true);
     // Upload picked images first so the document references real media docs.
@@ -983,10 +1080,16 @@ class DocEditorState extends State<DocEditor> {
         data = collect();
         payload = _persisted ? changedFields(_initialValues, data) : data;
       }
-      for (final chunk in splitSavePayload(payload)) {
-        await widget.onSave(chunk);
+      if (moveServices) {
+        await widget.onSaveWithMovedServices!(payload, oldSeasonKey, newSeasonKey, affectedServiceIds);
         _persisted = true;
-        _initialValues = {..._initialValues, ...chunk};
+        _initialValues = {..._initialValues, ...payload};
+      } else {
+        for (final chunk in splitSavePayload(payload)) {
+          await widget.onSave(chunk);
+          _persisted = true;
+          _initialValues = {..._initialValues, ...chunk};
+        }
       }
       _initialValues = data;
       for (final f in widget.fields) {
@@ -2746,6 +2849,15 @@ class DocEditorState extends State<DocEditor> {
                       for (final g in FieldGroup.values)
                         if (g != FieldGroup.basic && widget.fields.any((f) => f.group == g && _isShown(f, _values)))
                           _groupCard(g),
+                      if (widget.def?.name == 'seasons' && _hasInitialValues) ...[
+                        if (overlappingActiveSeasons(
+                              collect(),
+                              existingDocs: widget.existingDocs,
+                              docId: widget.docId,
+                            )
+                            case final overlapping when overlapping.isNotEmpty)
+                          _seasonOverlapWarningBanner(context, overlapping),
+                      ],
                       const SizedBox(height: 8),
                       if (_canPreviewPage)
                         Wrap(
