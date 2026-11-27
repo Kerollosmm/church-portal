@@ -310,7 +310,8 @@ flowchart LR
 | `/church-activities` | `ActivitiesPage` | activities |
 | `/public-services` | `PublicServicesPage` | services |
 | `/contact` | `ContactPage` | any of contactInfo, socials, contactForm |
-| `/ask` | `AssistantGate` → `assistant_page.AssistantPage` (deferred) | assistant (+ the page itself checks `assistantVisibleProvider`) |
+| `/ask` | `AssistantGate` → `assistant_page.AssistantPage` (deferred) | assistant (+ both check `settings.hasError && !settings.hasValue` before `isLoading` and expose `ErrorState` retry) |
+| `/notifications/battery` | `health_page.NotificationHealthPage` (deferred, Android-only) | redirects to `/notifications` on web/iOS (query preserved) |
 | `/church-education/:id` | `ItemDetailPage(DetailKind.meeting)` | meetings (prefix-aware `sectionsForPath`) |
 | `/church-activities/:id` | `ItemDetailPage(activity)` | activities |
 | `/public-services/:id` | `ItemDetailPage(facility)` | services |

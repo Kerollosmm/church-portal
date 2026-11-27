@@ -3,10 +3,12 @@ import 'package:church_portal/data/content_repository.dart';
 import 'package:church_portal/data/seed_data.dart';
 import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/features.dart';
+import 'package:church_portal/router.dart';
 import 'package:church_portal/state/providers.dart';
 import 'package:church_portal/ui/pages/notification_health_page.dart';
 import 'package:church_portal/ui/widgets/app_shell.dart';
 import 'package:church_portal/ui/widgets/common.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -15,7 +17,10 @@ import 'package:material_ui/material_ui.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  setUpAll(CairoTime.ensureInitialized);
+  setUpAll(() async {
+    CairoTime.ensureInitialized();
+    await preloadNotificationRoutesForTest();
+  });
 
   const deviceChannel = MethodChannel('church_portal/device');
 
@@ -137,5 +142,104 @@ void main() {
       expect(find.text('إذا لم تصلك الإشعارات'), findsOneWidget);
     }
     tester.view.reset();
+  });
+
+  testWidgets('NotificationHealthPage defaults permissions to neutral unknown when channel fails or returns null',
+      (tester) async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+      deviceChannel,
+      (MethodCall call) async {
+        if (call.method == 'getDiagnostics') {
+          throw PlatformException(code: 'unavailable');
+        }
+        return null;
+      },
+    );
+
+    await tester.pumpWidget(buildApp(size: const Size(400, 800)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('غير معروف'), findsNWidgets(2));
+    expect(find.byIcon(Icons.help_outline_rounded), findsNWidgets(2));
+    expect(find.byIcon(Icons.check_circle_rounded), findsNothing);
+    expect(find.text('مسموح به'), findsNothing);
+    expect(find.text('مسموح به (دقيق)'), findsNothing);
+
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+      deviceChannel,
+      (MethodCall call) async => null,
+    );
+
+    await tester.pumpWidget(buildApp(size: const Size(400, 800), locale: const Locale('en')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Unknown'), findsNWidgets(2));
+    expect(find.byIcon(Icons.help_outline_rounded), findsNWidgets(2));
+    expect(find.byIcon(Icons.check_circle_rounded), findsNothing);
+  });
+
+  group('/notifications/battery route platform gating', () {
+    Future<GoRouter> pumpRoutedApp(
+      WidgetTester tester, {
+      required bool isWeb,
+      required TargetPlatform platform,
+    }) async {
+      debugDefaultTargetPlatformOverride = platform;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      final container = ProviderContainer(overrides: [
+        isWebProvider.overrideWithValue(isWeb),
+        repositoryProvider.overrideWithValue(SeedRepository(SeedData(const {}))),
+        featuresProvider.overrideWithValue(FeatureSettings.fromMap({'push': true})),
+        featuresReadyProvider.overrideWithValue(true),
+        nowProvider.overrideWith((ref) => Stream.value(CairoTime.at(2026, 11, 8, 12 * 60).toUtc())),
+      ]);
+      addTearDown(container.dispose);
+      final router = container.read(routerProvider);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp.router(
+            routerConfig: router,
+            locale: const Locale('ar'),
+            theme: buildTheme(const Locale('ar')),
+            supportedLocales: const [Locale('ar'), Locale('en')],
+            localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      return router;
+    }
+
+    testWidgets('redirects /notifications/battery to /notifications on web (preserving query)', (tester) async {
+      final router = await pumpRoutedApp(tester, isWeb: true, platform: TargetPlatform.android);
+      router.go('/notifications/battery?lang=en');
+      for (var i = 0; i < 20; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(router.routerDelegate.currentConfiguration.uri.path, '/notifications');
+      expect(router.routerDelegate.currentConfiguration.uri.queryParameters['lang'], 'en');
+    });
+
+    testWidgets('redirects /notifications/battery to /notifications on iOS', (tester) async {
+      final router = await pumpRoutedApp(tester, isWeb: false, platform: TargetPlatform.iOS);
+      router.go('/notifications/battery');
+      for (var i = 0; i < 20; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(router.routerDelegate.currentConfiguration.uri.path, '/notifications');
+    });
+
+    testWidgets('allows /notifications/battery on native Android', (tester) async {
+      final router = await pumpRoutedApp(tester, isWeb: false, platform: TargetPlatform.android);
+      router.go('/notifications/battery');
+      for (var i = 0; i < 35; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+        if (find.byType(NotificationHealthPage).evaluate().isNotEmpty) break;
+      }
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(router.routerDelegate.currentConfiguration.uri.path, '/notifications/battery');
+      expect(find.byType(NotificationHealthPage), findsOneWidget);
+    });
   });
 }
