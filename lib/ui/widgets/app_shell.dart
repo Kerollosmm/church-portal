@@ -73,6 +73,7 @@ class NavItem {
 const navItems = [
   NavItem('home', '/', Icons.home_rounded),
   NavItem('massSchedule', '/mass-schedule', Icons.access_time_filled_rounded),
+  NavItem('readings', '/readings', Icons.menu_book_rounded),
   NavItem('education', '/church-education', Icons.school_rounded),
   NavItem('activities', '/church-activities', Icons.groups_rounded),
   NavItem('publicServices', '/public-services', Icons.volunteer_activism_rounded),
@@ -81,10 +82,9 @@ const navItems = [
 ];
 const askNavItem = NavItem('ask', '/ask', Icons.auto_awesome_rounded);
 
-/// Where the phone Back arrow goes from [location]: an item detail page
-/// (`/church-education/<id>`, `/about/priests/<id>`…) returns to the page listing it
-/// (milestones: About, or Home when the admin lists them on Home only,
-/// ADR-052); every other route goes Home.
+bool _isNavSelected(String location, String path) =>
+    location == path || (path != '/' && location.startsWith('$path/'));
+
 /// Whether the shell shows the full desktop link bar (no phone Back arrow).
 /// Compared in unscaled-text units so large system text gets the compact bar.
 bool shellIsWide(BuildContext context) {
@@ -95,27 +95,70 @@ bool shellIsWide(BuildContext context) {
 /// Where the phone Back arrow goes from [location]: an item detail page
 /// (`/church-education/<id>`, `/about/priests/<id>`…) returns to the page listing it
 /// (milestones: About, or Home when the admin lists them on Home only,
-/// ADR-052); every other route goes Home.
-String parentRouteOf(String location, [FeatureSettings features = FeatureSettings.defaults]) {
+/// ADR-052); a custom page (`/page/<slug>`) placed inside a section returns to
+/// that section; every other route goes Home.
+String parentRouteOf(
+  String location, [
+  FeatureSettings features = FeatureSettings.defaults,
+  Iterable<CustomPage> pages = const [],
+  Iterable<CustomCategory> categories = const [],
+]) {
   final path = Uri.tryParse(location)?.path ?? location;
   final norm = path.endsWith('/') && path.length > 1 ? path.substring(0, path.length - 1) : path;
   if (norm == '/notifications/battery') return '/notifications';
+  if (norm.startsWith('/page/')) {
+    final slug = norm.substring('/page/'.length);
+    if (slug.isNotEmpty && !slug.contains('/') && features.enabled(Sections.customPages)) {
+      for (final p in publicPages(pages)) {
+        if (p.slug == slug && p.effectivePlacement == PagePlacements.section && p.categoryId.isNotEmpty) {
+          final builtInPath = BuiltInSections.pathFor(p.categoryId);
+          if (builtInPath != null) {
+            return features.routeEnabled(builtInPath) ? builtInPath : '/';
+          }
+          if (features.enabled(Sections.customSections)) {
+            for (final c in publicCategories(categories)) {
+              if (c.id == p.categoryId) return c.path;
+            }
+          }
+          break;
+        }
+      }
+    }
+    return '/';
+  }
   return parseDetailPath(location)?.$1.parentPathIn(features) ?? '/';
 }
 
 /// l10n key naming the page [parentRoute] (for "Back to …").
 String _parentLabelKey(String parentRoute) => switch (parentRoute) {
+      '/mass-schedule' => 'massSchedule',
       '/church-education' => 'education',
       '/church-activities' => 'activities',
       '/public-services' => 'publicServices',
       '/about' => 'about',
+      '/contact' => 'contact',
       '/notifications' => 'notifications',
       _ => 'home',
     };
 
 /// "Back to …" for a detail page's parent ("Back to home" for Home).
-String backToLabel(BuildContext context, String parentRoute) =>
-    parentRoute == '/' ? context.tr('backHome') : context.tr('backTo', {'s': context.tr(_parentLabelKey(parentRoute))});
+String backToLabel(
+  BuildContext context,
+  String parentRoute, [
+  Iterable<CustomCategory> categories = const [],
+]) {
+  if (parentRoute == '/') return context.tr('backHome');
+  if (parentRoute.startsWith('/section/')) {
+    final slug = parentRoute.substring('/section/'.length);
+    for (final c in publicCategories(categories)) {
+      if (c.slug == slug) {
+        return context.tr('backTo', {'s': context.pick(c.nameAr, c.nameEn)});
+      }
+    }
+    return context.tr('backHome');
+  }
+  return context.tr('backTo', {'s': context.tr(_parentLabelKey(parentRoute))});
+}
 
 /// Status-bar icon style over a band of colour [band]: light icons on a dark
 /// band (the top utility bar's title band on every theme), dark on a light one.
@@ -322,8 +365,16 @@ class _AppShellState extends ConsumerState<AppShell> {
     // a sibling route (context.go), so there is nothing to pop, and installed
     // PWAs have no browser back button.
     final showBack = !wide && location != '/';
-    // Item detail pages go back to the section that lists them, not Home.
-    final parent = parentRouteOf(location, ref.watch(featuresProvider));
+    final features = ref.watch(featuresProvider);
+    final onCustomPage = location.startsWith('/page/');
+    final customPages = onCustomPage && features.enabled(Sections.customPages)
+        ? (ref.watch(customPagesProvider).value ?? const <CustomPage>[])
+        : const <CustomPage>[];
+    final customCats = onCustomPage && features.enabled(Sections.customSections)
+        ? (ref.watch(categoriesProvider).value ?? const <CustomCategory>[])
+        : const <CustomCategory>[];
+    // Item detail pages and section-placed custom pages go back to the section that lists them, not Home.
+    final parent = parentRouteOf(location, features, customPages, customCats);
     final toParent = parent != '/' || parseDetailPath(location) != null;
     // Ultra-narrow phones (< 360 px), very large text, or a subpage below
     // 400 px (the Back arrow takes another 48 dp): the highlighted Mass
@@ -331,7 +382,6 @@ class _AppShellState extends ConsumerState<AppShell> {
     // title keeps a readable width.
     final collapseHighlights = !wide && (width < 360 || textScale >= 1.5 || (showBack && width < 400));
     final showAsk = ref.watch(assistantVisibleProvider);
-    final features = ref.watch(featuresProvider);
     // Until settings/features arrives the defaults are "everything on": wait
     // before showing highlight buttons for sections an admin may have off.
     final ready = ref.watch(featuresReadyProvider);
@@ -382,7 +432,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       leading: showBack
           ? IconButton(
               key: Key(toParent ? 'backParent' : 'backHome'),
-              tooltip: toParent ? backToLabel(context, parent) : context.tr('backHome'),
+              tooltip: toParent ? backToLabel(context, parent, customCats) : context.tr('backHome'),
               // Mirrored automatically in RTL (matchTextDirection).
               icon: const Icon(Icons.arrow_back_rounded),
               onPressed: () => context.go(parent),
@@ -432,8 +482,10 @@ class _AppShellState extends ConsumerState<AppShell> {
                 _navText(context, 'home', '/'),
                 if (features.routeEnabled('/about')) _navText(context, 'about', '/about'),
                 _ServicesMenu(location: location),
+                if (features.routeEnabled('/readings')) _navText(context, 'readings', '/readings'),
                 for (final p in customNavItems(ref).pages) _navItemText(context, p),
                 if (showAsk) _navText(context, 'ask', '/ask'),
+                if (features.routeEnabled('/notifications')) _navText(context, 'notifications', '/notifications'),
                 if (features.routeEnabled('/contact')) _navText(context, 'contact', '/contact'),
               ]),
             ),
@@ -610,7 +662,14 @@ class _AppShellState extends ConsumerState<AppShell> {
           return;
         }
         if (location != '/') {
-          context.go(parentRouteOf(location, ref.read(featuresProvider)));
+          final f = ref.read(featuresProvider);
+          final pages = f.enabled(Sections.customPages)
+              ? (ref.read(customPagesProvider).value ?? const <CustomPage>[])
+              : const <CustomPage>[];
+          final cats = f.enabled(Sections.customSections)
+              ? (ref.read(categoriesProvider).value ?? const <CustomCategory>[])
+              : const <CustomCategory>[];
+          context.go(parentRouteOf(location, f, pages, cats));
           return;
         }
         final now = DateTime.now();
@@ -631,7 +690,7 @@ class _AppShellState extends ConsumerState<AppShell> {
   }
 
   Widget _navItemText(BuildContext context, NavItem item) {
-    final selected = widget.location == item.path;
+    final selected = _isNavSelected(widget.location, item.path);
     final primary = context.pal.primary;
     return _NavLabel(
       label: item.label(context),
@@ -642,8 +701,7 @@ class _AppShellState extends ConsumerState<AppShell> {
   }
 
   Widget _navText(BuildContext context, String key, String path) {
-    final location = widget.location;
-    final selected = location == path;
+    final selected = _isNavSelected(widget.location, path);
     final primary = context.pal.primary;
     return _NavLabel(
       label: context.tr(key),
@@ -670,15 +728,19 @@ class _NavLabel extends StatelessWidget {
       if (caret) Icon(Icons.expand_more_rounded, size: 18, color: context.pal.goldText),
     ]);
     final decorated = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: selected ? context.pal.primary.withValues(alpha: 0.10) : null,
         borderRadius: BorderRadius.circular(999),
       ),
       child: text,
     );
-    if (onTap == null) return Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: decorated);
-    return TextButton(onPressed: onTap, style: TextButton.styleFrom(foregroundColor: color), child: decorated);
+    if (onTap == null) return Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: decorated);
+    return TextButton(
+      onPressed: onTap,
+      style: TextButton.styleFrom(foregroundColor: color, padding: const EdgeInsets.symmetric(horizontal: 4)),
+      child: decorated,
+    );
   }
 }
 
@@ -819,9 +881,9 @@ class _AppDrawer extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 1),
               child: ListTile(
                 minTileHeight: 48,
-                leading: Icon(i.icon, color: location == i.path ? context.pal.onBarAccent : primary, size: 22),
+                leading: Icon(i.icon, color: _isNavSelected(location, i.path) ? context.pal.onBarAccent : primary, size: 22),
                 title: Text(i.label(context), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                selected: location == i.path,
+                selected: _isNavSelected(location, i.path),
                 selectedColor: context.pal.onBar,
                 selectedTileColor: context.pal.bar,
                 onTap: () {

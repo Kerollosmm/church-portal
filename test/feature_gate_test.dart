@@ -8,6 +8,7 @@ import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/features.dart';
 import 'package:church_portal/router.dart';
 import 'package:church_portal/state/providers.dart';
+import 'package:church_portal/ui/widgets/common.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -178,5 +179,47 @@ void main() {
       expect(tester.takeException(), isNull, reason: 'width $width');
       expect(find.text('St. Maximus & Domadius Church'), findsOneWidget, reason: 'width $width');
     }
+  });
+
+  testWidgets('daily readings entry stays reachable in desktop nav, drawer, and footer when topEvent/commemoration are off',
+      (tester) async {
+    final seed = _seedWith(const {}, extra: {'topEvent': false, 'commemoration': false});
+    final router = await _pump(tester, seed, size: const Size(1400, 2400));
+
+    final appBar = find.byType(AppBar);
+    expect(find.descendant(of: appBar, matching: find.text('Daily readings')), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.byType(Footer),
+      500,
+      scrollable: find.descendant(of: find.byType(PageBody), matching: find.byType(Scrollable)),
+    );
+    await tester.pumpAndSettle();
+    final footer = find.byType(Footer);
+    expect(find.descendant(of: footer, matching: find.text('Daily readings')), findsOneWidget);
+
+    await tester.tap(find.descendant(of: appBar, matching: find.text('Daily readings')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(router.routerDelegate.currentConfiguration.uri.path, startsWith('/readings/'));
+
+    await _pump(tester, seed, size: const Size(420, 1600));
+    await tester.tap(find.byTooltip('Menu'));
+    await tester.pumpAndSettle();
+    final drawer = find.byType(Drawer);
+    expect(find.descendant(of: drawer, matching: find.text('Daily readings')), findsOneWidget);
+  });
+
+  testWidgets('desktop nav shows Notifications only when push is enabled', (tester) async {
+    await _pump(tester, _seedWith(const {}, extra: {'push': false}), size: const Size(1400, 2400));
+    expect(find.descendant(of: find.byType(AppBar), matching: find.text('Notifications')), findsNothing);
+
+    final router = await _pump(tester, _seedWith(const {}, extra: {'push': true}), size: const Size(1400, 2400));
+    final navBtn = find.descendant(of: find.byType(AppBar), matching: find.text('Notifications'));
+    expect(navBtn, findsOneWidget);
+    await tester.tap(navBtn);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(router.routerDelegate.currentConfiguration.uri.path, '/notifications');
   });
 }

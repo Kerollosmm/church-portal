@@ -364,6 +364,7 @@ void main() {
           theme: ThemePresets.marian, scroll: false);
       final sunday = find.widgetWithText(ChoiceChip, 'الأحد');
       await tester.ensureVisible(sunday);
+      await tester.pumpAndSettle();
       await tester.tap(sunday);
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('notHeldToday')), findsNWidgets(2));
@@ -375,6 +376,7 @@ void main() {
           theme: ThemePresets.fasting, scroll: false);
       final other = find.widgetWithText(ChoiceChip, 'باقي الأيام');
       await tester.ensureVisible(other);
+      await tester.pumpAndSettle();
       await tester.tap(other);
       await tester.pumpAndSettle();
       expect(find.text('خدمة tue-real'), findsOneWidget);

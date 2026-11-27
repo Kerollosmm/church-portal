@@ -118,4 +118,39 @@ void main() {
     expect(find.text('الجدول الكامل'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('regular schedule day-tab ChoiceChips wrap cleanly without clipping at 360 px (AR & EN)', (tester) async {
+    for (final locale in const [Locale('ar'), Locale('en')]) {
+      tester.view.physicalSize = const Size(360, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: baseOverrides(),
+          child: MaterialApp(
+            locale: locale,
+            supportedLocales: const [Locale('ar'), Locale('en')],
+            localizationsDelegates: GlobalMaterialLocalizations.delegates,
+            home: const Scaffold(body: MassSchedulePage()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull, reason: 'locale=${locale.languageCode}');
+      final chips = find.byType(ChoiceChip);
+      expect(chips, findsNWidgets(5));
+      for (var i = 0; i < 5; i++) {
+        final rect = tester.getRect(chips.at(i));
+        expect(rect.left, greaterThanOrEqualTo(0.0), reason: 'chip $i clipped on left ($locale)');
+        expect(rect.right, lessThanOrEqualTo(360.0), reason: 'chip $i clipped on right ($locale)');
+      }
+      final otherLabel = locale.languageCode == 'ar' ? 'باقي الأيام' : 'Other days';
+      expect(find.text(otherLabel), findsOneWidget);
+      await tester.tap(find.text(otherLabel));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    }
+  });
 }
