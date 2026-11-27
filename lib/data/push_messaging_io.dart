@@ -15,6 +15,7 @@ import '../firebase_options.dart';
 import 'local_notifications.dart';
 
 const String seenNidsKey = 'church_portal_seen_nids';
+const String pendingTopicSyncKey = 'church_portal_fcm_pending_sync';
 const int maxSeenNids = 100;
 
 /// Background FCM message entry point. Annotated with `@pragma('vm:entry-point')`
@@ -226,13 +227,33 @@ class PushMessaging {
     }
   }
 
+  static Future<bool> hasPendingTopicSync({SharedPreferences? prefs}) async {
+    try {
+      final sp = prefs ?? await SharedPreferences.getInstance();
+      return sp.getBool(pendingTopicSyncKey) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<void> clearPendingTopicSync({SharedPreferences? prefs}) async {
+    try {
+      final sp = prefs ?? await SharedPreferences.getInstance();
+      await sp.remove(pendingTopicSyncKey);
+    } catch (_) {}
+  }
+
   /// Synchronizes Android topic subscriptions with user PushPrefs and language.
-  static Future<void> updateSubscriptions(
+  /// Returns `true` when all topic updates succeed, or persists
+  /// [pendingTopicSyncKey] and returns `false` on error so [NotifyPlanner]
+  /// can retry once connectivity returns.
+  static Future<bool> updateSubscriptions(
     PushPrefs prefs,
     String lang, {
     FirebaseMessaging? messagingInstance,
+    SharedPreferences? sharedPrefs,
   }) async {
-    if (kIsWeb) return;
+    if (kIsWeb) return true;
     try {
       final messaging = messagingInstance ?? FirebaseMessaging.instance;
       final effectiveLang = lang == 'en' ? 'en' : 'ar';
@@ -255,8 +276,15 @@ class PushMessaging {
         await messaging.unsubscribeFromTopic('app_seasons_ar');
         await messaging.unsubscribeFromTopic('app_seasons_en');
       }
+      await clearPendingTopicSync(prefs: sharedPrefs);
+      return true;
     } catch (_) {
-      // Fail-safe in case of network or FCM errors
+      // Persist pending sync flag so reconnect can retry once (no tight loop).
+      try {
+        final sp = sharedPrefs ?? await SharedPreferences.getInstance();
+        await sp.setBool(pendingTopicSyncKey, true);
+      } catch (_) {}
+      return false;
     }
   }
 }

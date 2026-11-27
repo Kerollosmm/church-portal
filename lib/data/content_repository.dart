@@ -17,6 +17,27 @@ class ContactUnavailableException implements Exception {
   String toString() => 'Contact form is unavailable (Firebase not configured).';
 }
 
+/// Outcome of a public contact form submission ([ContentRepository.submitContact]).
+enum ContactSubmitStatus { sent, queuedOffline }
+
+class ContactSubmitResult {
+  final ContactSubmitStatus status;
+
+  /// When [status] is [ContactSubmitStatus.queuedOffline], completes when
+  /// Firestore syncs the queued batch or errors if security rules reject it.
+  final Future<void>? pendingCommit;
+
+  const ContactSubmitResult._(this.status, {this.pendingCommit});
+
+  static const sent = ContactSubmitResult._(ContactSubmitStatus.sent);
+
+  const ContactSubmitResult.queuedOffline({Future<void>? pendingCommit})
+      : this._(ContactSubmitStatus.queuedOffline, pendingCommit: pendingCommit);
+
+  bool get isSent => status == ContactSubmitStatus.sent;
+  bool get isQueuedOffline => status == ContactSubmitStatus.queuedOffline;
+}
+
 /// Read access to the public content + the one public write (contact form).
 abstract class ContentRepository {
   /// True when content comes from Firestore (false = bundled seed data).
@@ -53,7 +74,7 @@ abstract class ContentRepository {
   Stream<AssistantSettings> assistantSettings();
 
   /// Writes a validated contact message (payload from validateContactForm).
-  Future<void> submitContact(Map<String, dynamic> payload, {required String lang});
+  Future<ContactSubmitResult> submitContact(Map<String, dynamic> payload, {required String lang});
 }
 
 /// Offline / unconfigured implementation backed by assets/seed/seed.json.
@@ -103,7 +124,7 @@ class SeedRepository implements ContentRepository {
   Stream<AssistantSettings> assistantSettings() => _once(AssistantSettings.defaults);
 
   @override
-  Future<void> submitContact(Map<String, dynamic> payload, {required String lang}) async =>
+  Future<ContactSubmitResult> submitContact(Map<String, dynamic> payload, {required String lang}) async =>
       throw ContactUnavailableException();
 }
 
@@ -904,7 +925,7 @@ class FirestoreRepository implements ContentRepository {
       );
 
   @override
-  Future<void> submitContact(Map<String, dynamic> payload, {required String lang}) async {
+  Future<ContactSubmitResult> submitContact(Map<String, dynamic> payload, {required String lang}) async {
     // Batched with a global throttle doc so the rules can rate-limit public
     // submissions on the server (see firestore.rules: meta/contact_rate).
     // meta/contact_rate.lastMsgId names the message created in the same
@@ -923,6 +944,28 @@ class FirestoreRepository implements ContentRepository {
       'lastAt': FieldValue.serverTimestamp(),
       'lastMsgId': msgRef.id,
     });
-    await batch.commit().timeout(const Duration(seconds: 15));
+    final commitFuture = batch.commit();
+    if (isOffline?.call() ?? false) {
+      final outcome = await Future.any<String>([
+        commitFuture.then((_) => 'sent'),
+        _waitForPendingWrite(msgRef).then((_) => 'queued'),
+      ]);
+      if (outcome == 'sent') return ContactSubmitResult.sent;
+      return ContactSubmitResult.queuedOffline(pendingCommit: commitFuture);
+    }
+    await commitFuture.timeout(const Duration(seconds: 15));
+    return ContactSubmitResult.sent;
+  }
+
+  static Future<void> _waitForPendingWrite(DocumentReference<Map<String, dynamic>> ref) async {
+    for (var i = 0; i < 40; i++) {
+      try {
+        final snap = await ref.get(const GetOptions(source: Source.cache));
+        if (snap.exists && snap.metadata.hasPendingWrites) return;
+      } catch (_) {
+        // Not yet in local persistence cache; poll briefly until queued.
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+    }
   }
 }
