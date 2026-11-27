@@ -27,14 +27,12 @@ String formatTimeArabic(String hm) {
 
 String formatRangeLatin(String start, String end) {
   if (start.trim().isEmpty) return '';
-  final body = end.isEmpty ? formatTimeLatin(start) : '${formatTimeLatin(start)} – ${formatTimeLatin(end)}';
-  return body.isEmpty ? '' : '\u2066$body\u2069';
+  return end.trim().isEmpty ? formatTimeLatin(start) : '${formatTimeLatin(start)} – ${formatTimeLatin(end)}';
 }
 
 String formatRangeArabic(String start, String end) {
   if (start.trim().isEmpty) return '';
-  final body = end.isEmpty ? formatTimeArabic(start) : '${formatTimeArabic(start)} – ${formatTimeArabic(end)}';
-  return body.isEmpty ? '' : '\u2067$body\u2069';
+  return end.trim().isEmpty ? formatTimeArabic(start) : '${formatTimeArabic(start)} – ${formatTimeArabic(end)}';
 }
 
 const weekdayNamesAr = ['', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد'];

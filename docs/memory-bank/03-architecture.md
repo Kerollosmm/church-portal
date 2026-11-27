@@ -436,7 +436,7 @@ Deferred isolation is mechanically enforced in CI via `python3 tool/fingerprint_
 - Content fields come in pairs (`nameAr`/`nameEn`…); render with `context.pick(ar, en)` — falls back to the other
   language when one is empty. `context.isAr` for conditional logic.
 - Digits: `toArabicDigits` / `normalizeDigits` (`rules.dart`); `localDigits(context, s)` (common.dart).
-  Since PR 6E (ADR-090), `formatTimeArabic` returns a single Western-digit string with `ص`/`م` (`08:00 ص`, without isolate characters), while `formatRangeArabic` and `formatRangeLatin` wrap non-empty ranges in Unicode bidi isolates (`\u206708:00 ص – 09:30 ص\u2069` / `\u206608:00 AM – 09:30 AM\u2069`), rendered on one line by `TimeRangeText`.
+  Since PR 6E (ADR-090), `formatTimeArabic` returns a single Western-digit string with `ص`/`م` (`08:00 ص`), `formatRangeArabic` and `formatRangeLatin` return plain text (`08:00 ص – 09:30 ص` / `08:00 AM – 09:30 AM`) with no invisible isolate characters so non-UI callers (`assistant_context.dart`, admin lists) stay clean, and `TimeRangeText` wraps non-empty ranges in Unicode bidi isolates (`\u206708:00 ص – 09:30 ص\u2069` / `\u206608:00 AM – 09:30 AM\u2069`) on one line.
 - Choice labels for stored keys (`opt_<key>`, e.g. `opt_holy_week`) via `choiceLabel` in `doc_editor.dart`.
 - Admin labels live inline in `admin_schema.dart` (`labelAr`, `labelEn`); 418 admin-only UI keys reside in deferred `admin_strings.dart` (`registerAdminStrings()`, ADR-077), and APK update UI strings reside in `update_banner_io.dart`. Public `tr()` / `trOrNull()` coverage is verified by `test/bundle_isolation_test.dart`.
 

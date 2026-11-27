@@ -16,15 +16,17 @@ void main() {
       expect(formatTimeArabic('12:00'), '12:00 م');
     });
 
-    test('formatRangeArabic wraps in RTL isolate with Western digits and ص/م', () {
-      expect(formatRangeArabic('08:00', '09:30'), '\u206708:00 ص – 09:30 ص\u2069');
-      expect(formatRangeArabic('08:00', ''), '\u206708:00 ص\u2069');
+    test('formatRangeArabic returns plain text with Western digits and ص/م (no bidi marks)', () {
+      expect(formatRangeArabic('08:00', '09:30'), '08:00 ص – 09:30 ص');
+      expect(formatRangeArabic('08:00', ''), '08:00 ص');
+      expect(formatRangeArabic('08:00', '   '), '08:00 ص');
       expect(formatRangeArabic('', ''), '');
     });
 
-    test('formatRangeLatin wraps in LTR isolate', () {
-      expect(formatRangeLatin('08:00', '09:30'), '\u206608:00 AM – 09:30 AM\u2069');
-      expect(formatRangeLatin('08:00', ''), '\u206608:00 AM\u2069');
+    test('formatRangeLatin returns plain text (no bidi marks)', () {
+      expect(formatRangeLatin('08:00', '09:30'), '08:00 AM – 09:30 AM');
+      expect(formatRangeLatin('08:00', ''), '08:00 AM');
+      expect(formatRangeLatin('08:00', '   '), '08:00 AM');
       expect(formatRangeLatin('', ''), '');
     });
 
@@ -45,6 +47,25 @@ void main() {
       expect(texts, ['\u206708:00 ص – 09:30 ص\u2069']);
       expect(texts.join(), isNot(matches(RegExp('[\u0660-\u0669]'))));
       expect(find.textContaining('AM'), findsNothing);
+    });
+
+    testWidgets('TimeRangeText renders single-time Arabic isolated and collapses when blank', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('ar'),
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          theme: buildTheme(const Locale('ar')),
+          home: const Scaffold(
+            body: Column(children: [TimeRangeText('08:00', '   '), TimeRangeText('', '')]),
+          ),
+        ),
+      );
+      final texts = tester
+          .widgetList<Text>(find.descendant(of: find.byType(TimeRangeText), matching: find.byType(Text)))
+          .map((t) => t.data!)
+          .toList();
+      expect(texts, ['\u206708:00 ص\u2069']);
     });
 
     testWidgets('TimeRangeText renders single-line LTR-isolated range in English', (tester) async {

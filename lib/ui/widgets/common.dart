@@ -647,10 +647,12 @@ class TimeRangeText extends StatelessWidget {
   Widget build(BuildContext context) {
     // No time set: nothing (no empty line reserving space).
     if (start.trim().isEmpty) return const SizedBox.shrink();
-    final text = context.isAr ? formatRangeArabic(start, end) : formatRangeLatin(start, end);
+    final ar = context.isAr;
+    final raw = ar ? formatRangeArabic(start, end) : formatRangeLatin(start, end);
+    final text = raw.isEmpty ? '' : (ar ? '\u2067$raw\u2069' : '\u2066$raw\u2069');
     return Text(
       text,
-      textDirection: context.isAr ? TextDirection.rtl : TextDirection.ltr,
+      textDirection: ar ? TextDirection.rtl : TextDirection.ltr,
       style: displayStyle(context, size: large ? 28 : 21, color: context.pal.primary, height: 1.3),
     );
   }

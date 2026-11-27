@@ -580,7 +580,7 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
 
 ### Time formatting (`time_format.dart`)
 `formatTimeLatin("06:30")` → `06:30 AM`; `formatTimeArabic("06:30")` → `06:30 ص` (Western digits + ص/م since PR 6E / ADR-090);
-`formatRangeArabic` / `formatRangeLatin` wrap non-empty ranges in `\u2067…\u2069` / `\u2066…\u2069`; weekday names AR/EN (ISO index);
+`formatRangeArabic` / `formatRangeLatin` return plain ranges (`08:00 ص – 09:30 ص` / `08:00 AM – 09:30 AM`), while `TimeRangeText` wraps rendered ranges in `\u2067…\u2069` / `\u2066…\u2069`; weekday names AR/EN (ISO index);
 `formatDate` → `6 يناير 2027` (Arabic digits) / `6 Jan 2027`; `formatLooseDate` for priest dates.
 
 ### Katameros Daily Readings (`/readings/<date>`, `readings_page.dart`, ADR-058)

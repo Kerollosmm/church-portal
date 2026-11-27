@@ -313,7 +313,7 @@ void main() {
       expect(p, contains('[ADDITIVE — some regular services are NOT held today'));
       expect(p, contains("[REPLACES the day's regular masses]"));
       expect(p, contains('- Today 2027-08-22 (Sunday), NOT held (the season replaces them): '));
-      expect(p, contains('Service reg-sun-1 (خدمة reg-sun-1) \u206607:00 AM – 09:00 AM\u2069'));
+      expect(p, contains('Service reg-sun-1 (خدمة reg-sun-1) 07:00 AM – 09:00 AM'));
       expect(p, isNot(contains('- Today 2027-08-22 (Sunday): Service reg-sun-1')));
     });
 
