@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart' show AppLifecycleListener;
 
 /// Pure check: true whenever at least one real network interface is present;
 /// false only when there is no network at all ([ConnectivityResult.none] only).
@@ -16,6 +17,7 @@ bool _isOnline = true;
 bool _initialized = false;
 Connectivity? _connectivity;
 StreamSubscription<List<ConnectivityResult>>? _sub;
+AppLifecycleListener? _lifecycleListener;
 final StreamController<bool> _changes = StreamController<bool>.broadcast();
 
 bool get isOnline => _isOnline;
@@ -51,6 +53,14 @@ Future<void> initConnectivityEnv({Connectivity? connectivity}) async {
       onError: (Object _) {},
     );
   } catch (_) {}
+
+  _lifecycleListener?.dispose();
+  _lifecycleListener = null;
+  try {
+    _lifecycleListener = AppLifecycleListener(
+      onResume: () => unawaited(checkOnline()),
+    );
+  } catch (_) {}
 }
 
 Future<bool> checkOnline() async {
@@ -73,6 +83,8 @@ Stream<bool> getOnOnlineChanged() => _changes.stream.distinct();
 Future<void> resetConnectivityEnvForTest({bool online = true, Connectivity? connectivity}) async {
   await _sub?.cancel();
   _sub = null;
+  _lifecycleListener?.dispose();
+  _lifecycleListener = null;
   _connectivity = connectivity;
   _initialized = connectivity != null;
   _isOnline = online;

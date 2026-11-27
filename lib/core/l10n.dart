@@ -124,10 +124,17 @@ const Map<String, List<String>> _strings = {
     'We could not confirm that your message arrived (weak connection); it may still arrive. Please do not send it again (it is still in the form) — call the church office to check.'
   ],
   'sendFailed': ['تعذّر الإرسال. حاول لاحقًا أو اتصل بنا.', 'Could not send. Please try later or call us.'],
-  'contactQueuedOffline': ['هيتبعت أول ما النت يرجع', 'Will be sent as soon as internet returns'],
+  'contactQueuedOffline': [
+    'محفوظة وهتتبعت أول ما النت يرجع — خلي التطبيق مفتوح',
+    'Saved — it will be sent when internet returns. Keep the app open.'
+  ],
   'contactQueuedFailed': [
     'تعذّر إرسال الرسالة المحفوظة عند عودة الاتصال. يمكنك مراجعتها وإعادة الإرسال.',
     'Could not send your queued message when internet returned. You can review and resend it.'
+  ],
+  'contactUnverifiedPrevious': [
+    'رسالتك السابقة ممكن متكونش اتبعتت — اتصل بالكنيسة للتأكيد',
+    'Your previous message may not have been sent — please call the church to confirm'
   ],
   'offlineBanner': [
     'لا يوجد اتصال بالإنترنت — يتم عرض البيانات المحفوظة',

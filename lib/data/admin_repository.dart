@@ -1,19 +1,8 @@
-import 'dart:typed_data';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-import '../domain/media.dart';
 import 'content_repository.dart';
 import 'media_repository.dart';
-
-/// Thrown by [AdminRepository] when a mutation is attempted while the device
-/// has no network connectivity at all.
-class AdminOfflineException implements Exception {
-  const AdminOfflineException();
-  @override
-  String toString() => 'No internet connection — admin write blocked.';
-}
 
 class AdminDoc {
   final String id;
@@ -86,25 +75,17 @@ abstract class AdminBackend {
 }
 
 /// Content editing for signed-in admins (admins/{uid} must exist; enforced
-/// by firestore.rules).
+/// by firestore.rules). Admin lives on web only; offline connectivity is shown
+/// via [OfflineBanner] as a hint, while Firestore server-ack timeouts remain
+/// the guard against stalled writes.
 class AdminRepository implements AdminBackend {
   final FirebaseFirestore db;
   final FirebaseAuth auth;
-  final bool Function() isOnline;
 
-  AdminRepository(this.db, this.auth, {bool Function()? isOnline}) : isOnline = isOnline ?? _defaultOnline;
-
-  static bool _defaultOnline() => true;
-
-  void _assertOnline() {
-    if (!isOnline()) throw const AdminOfflineException();
-  }
+  AdminRepository(this.db, this.auth);
 
   @override
-  late final MediaRepository media = _OnlineGuardedMediaRepository(
-    createMediaRepository(db, () => actor),
-    _assertOnline,
-  );
+  late final MediaRepository media = createMediaRepository(db, () => actor);
 
   Stream<User?> authChanges() => auth.authStateChanges();
 
@@ -153,7 +134,6 @@ class AdminRepository implements AdminBackend {
 
   @override
   Future<String> save(String collection, String? id, Map<String, dynamic> data) async {
-    _assertOnline();
     final col = db.collection(collection);
     if (id == null || id.isEmpty) {
       final ref = col.doc();
@@ -165,14 +145,10 @@ class AdminRepository implements AdminBackend {
   }
 
   @override
-  Future<void> saveDoc(String path, Map<String, dynamic> data) async {
-    _assertOnline();
-    return _merge(db.doc(path), data);
-  }
+  Future<void> saveDoc(String path, Map<String, dynamic> data) => _merge(db.doc(path), data);
 
   @override
-  Future<void> saveDocs(Map<String, Map<String, dynamic>> writes) async {
-    _assertOnline();
+  Future<void> saveDocs(Map<String, Map<String, dynamic>> writes) {
     final batch = db.batch();
     for (final e in writes.entries) {
       final stamped = _stamp(e.value);
@@ -183,20 +159,18 @@ class AdminRepository implements AdminBackend {
 
   @override
   Future<void> saveDocsFresh(
-          List<String> paths, Map<String, Map<String, dynamic>> Function(Map<String, Map<String, dynamic>?> current) plan) async {
-    _assertOnline();
-    return db.runTransaction((tx) async {
-      final current = <String, Map<String, dynamic>?>{};
-      for (final p in paths) {
-        final snap = await tx.get(db.doc(p));
-        current[p] = snap.exists ? normalizeDoc(snap.data()) : null;
-      }
-      for (final e in plan(current).entries) {
-        final stamped = _stamp(e.value);
-        tx.set(db.doc(e.key), stamped, SetOptions(mergeFields: stamped.keys.toList()));
-      }
-    });
-  }
+          List<String> paths, Map<String, Map<String, dynamic>> Function(Map<String, Map<String, dynamic>?> current) plan) =>
+      db.runTransaction((tx) async {
+        final current = <String, Map<String, dynamic>?>{};
+        for (final p in paths) {
+          final snap = await tx.get(db.doc(p));
+          current[p] = snap.exists ? normalizeDoc(snap.data()) : null;
+        }
+        for (final e in plan(current).entries) {
+          final stamped = _stamp(e.value);
+          tx.set(db.doc(e.key), stamped, SetOptions(mergeFields: stamped.keys.toList()));
+        }
+      });
 
   /// Writes [data]'s top-level fields and leaves every other field as it is.
   /// A written map field is replaced as a whole (`mergeFields`), never
@@ -209,20 +183,14 @@ class AdminRepository implements AdminBackend {
   }
 
   @override
-  Future<void> update(String collection, String id, Map<String, dynamic> data) async {
-    _assertOnline();
-    return db.collection(collection).doc(id).update(_stamp(data));
-  }
+  Future<void> update(String collection, String id, Map<String, dynamic> data) =>
+      db.collection(collection).doc(id).update(_stamp(data));
 
   @override
-  Future<void> delete(String collection, String id) async {
-    _assertOnline();
-    return db.collection(collection).doc(id).delete();
-  }
+  Future<void> delete(String collection, String id) => db.collection(collection).doc(id).delete();
 
   @override
   Future<void> reorder(String collection, List<String> ids, {int base = 0}) async {
-    _assertOnline();
     final batch = db.batch();
     for (var i = 0; i < ids.length; i++) {
       batch.update(db.collection(collection).doc(ids[i]), _stamp({'order': base + (i + 1) * 10}));
@@ -231,38 +199,9 @@ class AdminRepository implements AdminBackend {
   }
 
   @override
-  Future<void> setAdmin(String uid, {required String email, required String role}) async {
-    _assertOnline();
-    return db.doc('admins/$uid').set(_stamp({'email': email.trim(), 'role': role}), SetOptions(merge: true));
-  }
+  Future<void> setAdmin(String uid, {required String email, required String role}) =>
+      db.doc('admins/$uid').set(_stamp({'email': email.trim(), 'role': role}), SetOptions(merge: true));
 
   @override
-  Future<void> removeAdmin(String uid) async {
-    _assertOnline();
-    return db.doc('admins/$uid').delete();
-  }
-}
-
-class _OnlineGuardedMediaRepository implements MediaRepository {
-  final MediaRepository _inner;
-  final void Function() _assertOnline;
-  const _OnlineGuardedMediaRepository(this._inner, this._assertOnline);
-
-  @override
-  String get source => _inner.source;
-
-  @override
-  Future<Uint8List?> load(String mediaId) => _inner.load(mediaId);
-
-  @override
-  Future<MediaImage> upload(EncodedImage img, {String alt = ''}) async {
-    _assertOnline();
-    return _inner.upload(img, alt: alt);
-  }
-
-  @override
-  Future<void> delete(String mediaId) async {
-    _assertOnline();
-    return _inner.delete(mediaId);
-  }
+  Future<void> removeAdmin(String uid) => db.doc('admins/$uid').delete();
 }
