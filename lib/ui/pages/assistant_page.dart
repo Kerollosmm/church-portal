@@ -162,9 +162,9 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
         await Future.wait<Object?>([
           if (pending.contains(Sections.milestones)) ref.read(milestonesProvider.future),
           if (pending.contains(Sections.contactForm)) ref.read(contactSettingsProvider.future),
-          if (pending.contains(Sections.customSections)) ref.read(categoriesProvider.future),
+          if (pending.contains(Sections.customSections)) ref.read(rawCategoriesProvider.future),
           if (pending.contains(Sections.customSections)) ref.read(entriesProvider.future),
-          if (pending.contains(Sections.customPages)) ref.read(customPagesProvider.future),
+          if (pending.contains(Sections.customPages)) ref.read(rawPagesProvider.future),
         ]).timeout(left);
         done.addAll(pending);
       }

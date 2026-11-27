@@ -434,6 +434,21 @@ class ErrorState extends StatelessWidget {
   );
 }
 
+/// "Page not found" (404) with a Back-home button.
+class NotFoundPage extends StatelessWidget {
+  const NotFoundPage({super.key});
+
+  @override
+  Widget build(BuildContext context) => PageBody(children: [
+        const SizedBox(height: 40),
+        const Icon(Icons.explore_off_rounded, size: 64),
+        const SizedBox(height: 12),
+        Text(context.tr('notFound'), textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 12),
+        Center(child: FilledButton(onPressed: () => context.go('/'), child: Text(context.tr('backHome')))),
+      ]);
+}
+
 /// Loading / non-empty state of custom pages linked to built-in section [sid].
 ({bool waiting, bool hasPages}) linkedBuiltInState(WidgetRef ref, String? sid) {
   if (sid == null || !ref.watch(featuresProvider.select((f) => f.enabled(Sections.customPages)))) {

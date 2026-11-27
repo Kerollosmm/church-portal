@@ -8,7 +8,6 @@ import 'package:material_ui/material_ui.dart';
 import 'config/app_config.dart';
 import 'core/theme.dart';
 import 'core/document_lang.dart';
-import 'core/l10n.dart';
 import 'data/error_reporting.dart';
 import 'domain/cairo_time.dart';
 import 'domain/item_detail.dart';
@@ -337,14 +336,7 @@ GoRouter buildAppRouter(Ref ref, {bool? isWeb, String initialLocation = '/'}) {
       setDocumentRouteMeta(path: state.uri.path, indexable: false);
       return AppShell(
         location: state.uri.path,
-        child: PageBody(children: [
-          const SizedBox(height: 40),
-          const Icon(Icons.explore_off_rounded, size: 64),
-          const SizedBox(height: 12),
-          Text(context.tr('notFound'), textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 12),
-          Center(child: FilledButton(onPressed: () => context.go('/'), child: Text(context.tr('backHome')))),
-        ]),
+        child: const NotFoundPage(),
       );
     },
   );
