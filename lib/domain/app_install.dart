@@ -301,3 +301,15 @@ bool shouldShowInstallBanner({
   if (dismissedUntil != null && now.isBefore(dismissedUntil)) return false;
   return true;
 }
+
+/// Decides whether the permanent «حمّل التطبيق» entry in Footer / drawer should
+/// be rendered. Unlike [shouldShowInstallBanner], this stays available on
+/// non-standalone web sessions even if the visitor dismissed the popup banner
+/// or browses on desktop.
+bool shouldShowInstallEntry({
+  required InstallSettings settings,
+  required bool isStandalone,
+  required bool installedEventReceived,
+  required bool isWeb,
+}) =>
+    isWeb && settings.enabled && !isStandalone && !installedEventReceived;

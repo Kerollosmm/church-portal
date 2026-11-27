@@ -593,8 +593,8 @@ void main() {
       expect(formatTimeLatin('06:30'), '06:30 AM');
       expect(formatTimeLatin('18:30'), '06:30 PM');
       expect(formatTimeLatin('00:15'), '12:15 AM');
-      expect(formatTimeArabic('06:30'), '٠٦:٣٠ ص');
-      expect(formatTimeArabic('18:30'), '٠٦:٣٠ م');
+      expect(formatTimeArabic('06:30'), '06:30 ص');
+      expect(formatTimeArabic('18:30'), '06:30 م');
       expect(formatRangeLatin('06:30', '08:30'), '06:30 AM – 08:30 AM');
       expect(weekdayName(5, arabic: true), 'الجمعة');
       expect(normalizeDigits('٢٠٢٦'), '2026');

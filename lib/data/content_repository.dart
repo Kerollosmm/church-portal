@@ -798,7 +798,7 @@ class FirestoreRepository implements ContentRepository {
       _col('priests', Priest.fromMap, seed.priests, sort: (a, b) => a.order.compareTo(b.order));
   @override
   Stream<List<Milestone>> milestones() =>
-      _col('milestones', Milestone.fromMap, seed.milestones, sort: (a, b) => a.order.compareTo(b.order));
+      _col('milestones', Milestone.fromMap, seed.milestones, sort: compareMilestonesByYear);
   @override
   Stream<List<Saint>> saints() => _col('saints', Saint.fromMap, seed.saints, sort: (a, b) => a.order.compareTo(b.order));
   @override

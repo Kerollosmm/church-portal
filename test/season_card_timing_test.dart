@@ -464,7 +464,7 @@ void main() {
     expect(find.text('خدمة sat-night'), findsOneWidget);
     // It starts later (00:00, the next date) while sat-night runs: named
     // with its time, not «في نفس الوقت» (ADR-053, sims r2 P2 O-a).
-    expect(find.text('وبعدها ١٢:٠٠ ص: خدمة sun-early — القاعة السفلية (شباب)'), findsOneWidget);
+    expect(find.text('وبعدها 12:00 ص: خدمة sun-early — القاعة السفلية (شباب)'), findsOneWidget);
     expect(find.textContaining('وفي نفس الوقت'), findsNothing);
     expect(tester.takeException(), isNull);
   });

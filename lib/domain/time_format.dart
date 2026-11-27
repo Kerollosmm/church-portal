@@ -13,7 +13,7 @@ String formatTimeLatin(String hm) {
   return '${h.toString().padLeft(2, '0')}:${mi.toString().padLeft(2, '0')} ${pm ? 'PM' : 'AM'}';
 }
 
-/// "٠٦:٣٠ ص" (Arabic-Indic digits, ص/م) for an "HH:mm" string.
+/// "06:30 ص" (Western digits, ص/م) for an "HH:mm" string (Phase 6 Q2).
 String formatTimeArabic(String hm) {
   final m = parseHm(hm);
   if (m == null) return hm;
@@ -22,14 +22,18 @@ String formatTimeArabic(String hm) {
   final pm = h >= 12;
   h = h % 12;
   if (h == 0) h = 12;
-  return toArabicDigits('${h.toString().padLeft(2, '0')}:${mi.toString().padLeft(2, '0')}') + (pm ? ' م' : ' ص');
+  return '${h.toString().padLeft(2, '0')}:${mi.toString().padLeft(2, '0')}${pm ? ' م' : ' ص'}';
 }
 
-String formatRangeLatin(String start, String end) =>
-    end.isEmpty ? formatTimeLatin(start) : '${formatTimeLatin(start)} – ${formatTimeLatin(end)}';
+String formatRangeLatin(String start, String end) {
+  if (start.trim().isEmpty) return '';
+  return end.trim().isEmpty ? formatTimeLatin(start) : '${formatTimeLatin(start)} – ${formatTimeLatin(end)}';
+}
 
-String formatRangeArabic(String start, String end) =>
-    end.isEmpty ? formatTimeArabic(start) : '${formatTimeArabic(start)} – ${formatTimeArabic(end)}';
+String formatRangeArabic(String start, String end) {
+  if (start.trim().isEmpty) return '';
+  return end.trim().isEmpty ? formatTimeArabic(start) : '${formatTimeArabic(start)} – ${formatTimeArabic(end)}';
+}
 
 const weekdayNamesAr = ['', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد'];
 const weekdayNamesEn = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];

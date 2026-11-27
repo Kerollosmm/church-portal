@@ -1,14 +1,17 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show ValueListenable;
+import 'package:flutter/foundation.dart' show ValueListenable, kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../core/install_env.dart';
 import '../../core/l10n.dart';
 import '../../core/launch.dart';
 import '../../core/theme.dart';
+import '../../data/error_reporting.dart';
+import 'apk_install_guide.dart' deferred as guide;
 import '../../domain/custom_content.dart' show BuiltInSections;
 import '../../domain/features.dart';
 import '../../domain/models.dart';
@@ -633,10 +636,8 @@ class IconLine extends StatelessWidget {
   }
 }
 
-/// "٠٦:٣٠ ص – ٠٨:٣٠ ص" with the Latin-digit version underneath in Arabic
-/// (spec: both digit systems for Arabic readers); Latin digits only on the
-/// English site (live check 4 Nov 2026, ADR-038: Arabic digits there read as
-/// untranslated text).
+/// Single-line time range using Western digits: "\u206706:30 ص – 08:30 ص\u2069"
+/// in Arabic and "\u206606:30 AM – 08:30 AM\u2069" in English (Phase 6 Q2).
 class TimeRangeText extends StatelessWidget {
   final String start, end;
   final bool large;
@@ -646,27 +647,13 @@ class TimeRangeText extends StatelessWidget {
   Widget build(BuildContext context) {
     // No time set: nothing (no empty line reserving space).
     if (start.trim().isEmpty) return const SizedBox.shrink();
-    final latin = formatRangeLatin(start, end);
-    final primary = context.isAr ? formatRangeArabic(start, end) : latin;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          primary,
-          style: displayStyle(context, size: large ? 28 : 21, color: context.pal.primary, height: 1.3),
-        ),
-        // Arabic mode: the Latin secondary line keeps its own script's base
-        // direction (BUG-10).
-        if (context.isAr)
-          Directionality(
-            textDirection: TextDirection.ltr,
-            child: Text(
-              latin,
-              style: TextStyle(fontSize: large ? 14 : 12, color: context.pal.muted),
-            ),
-          ),
-      ],
+    final ar = context.isAr;
+    final raw = ar ? formatRangeArabic(start, end) : formatRangeLatin(start, end);
+    final text = raw.isEmpty ? '' : (ar ? '\u2067$raw\u2069' : '\u2066$raw\u2069');
+    return Text(
+      text,
+      textDirection: ar ? TextDirection.rtl : TextDirection.ltr,
+      style: displayStyle(context, size: large ? 28 : 21, color: context.pal.primary, height: 1.3),
     );
   }
 }
@@ -681,15 +668,108 @@ String localDigits(BuildContext context, String s) => context.isAr ? toArabicDig
 /// switchable in `settings/features.footer` (and hidden with its section).
 /// "Golden hour": a warm panel over the church in the mist, then the
 /// posters' signature line with the Facebook / WhatsApp icons.
-class Footer extends ConsumerWidget {
-  const Footer({super.key});
+Future<void> _loadInstallGuide(
+  BuildContext context,
+  Future<void> Function(BuildContext) show,
+) async {
+  try {
+    await guide.loadLibrary();
+  } catch (e, st) {
+    ErrorReporting.capture(e, st, section: 'deferred_chunk', source: 'apk_install_guide');
+    return;
+  }
+  if (context.mounted) await show(context);
+}
+
+/// Opens the appropriate deferred install sheet or APK download for the
+/// permanent «حمّل التطبيق» entry in the Footer and drawer.
+Future<void> launchInstallEntry(
+  BuildContext context,
+  InstallEnv env,
+  InstallSettings settings,
+) async {
+  final osInfo = detectInstallOs(
+    userAgent: env.userAgent,
+    platform: env.platform,
+    maxTouchPoints: env.maxTouchPoints,
+  );
+  final action = resolveInstallAction(
+    os: osInfo.os,
+    androidUrl: settings.androidUrl,
+    hasPrompt: env.hasDeferredPrompt,
+  );
+  switch (action) {
+    case InstallAction.apk:
+      openUrl(resolveInstallUrl(settings.androidUrl, Uri.base));
+      final hasOlder = settings.androidUrl32.trim().isNotEmpty;
+      await _loadInstallGuide(
+        context,
+        (c) => guide.showApkInstallGuide(
+          c,
+          apkSizeMb: settings.apkSizeMb,
+          olderApkSizeMb: hasOlder ? settings.apkSize32Mb : null,
+          onDownloadOlder: hasOlder ? () => openUrl(resolveInstallUrl(settings.androidUrl32, Uri.base)) : null,
+        ),
+      );
+    case InstallAction.pwaPrompt:
+      final shown = await env.promptInstall();
+      if (!shown && context.mounted) {
+        await _loadInstallGuide(context, (c) => guide.showAndroidInstallSteps(c));
+      }
+    case InstallAction.androidSteps:
+      await _loadInstallGuide(context, (c) => guide.showAndroidInstallSteps(c));
+    case InstallAction.iosSteps:
+      await _loadInstallGuide(context, (c) => guide.showIosInstallSteps(c));
+    case InstallAction.none:
+      if (env.hasDeferredPrompt) {
+        final shown = await env.promptInstall();
+        if (shown) return;
+      }
+      if (context.mounted) {
+        await _loadInstallGuide(context, (c) => guide.showAndroidInstallSteps(c));
+      }
+  }
+}
+
+class Footer extends ConsumerStatefulWidget {
+  final bool? isWeb;
+  const Footer({super.key, this.isWeb});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<Footer> createState() => _FooterState();
+}
+
+class _FooterState extends ConsumerState<Footer> {
+  void Function()? _unlistenInstall;
+
+  @override
+  void initState() {
+    super.initState();
+    _unlistenInstall = ref.read(installEnvProvider).listenInstallChanges(() {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _unlistenInstall?.call();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final s = ref.watch(settingsProvider).value;
     final servingSeed = ref.watch(repositoryProvider).servingSeed;
     final year = DateTime.now().year;
     final features = ref.watch(featuresProvider);
+    final installEnv = ref.watch(installEnvProvider);
+    final installSettings = ref.watch(installSettingsProvider);
+    final showInstall = shouldShowInstallEntry(
+      settings: installSettings,
+      isStandalone: installEnv.isStandalone,
+      installedEventReceived: installEnv.installedEventReceived,
+      isWeb: widget.isWeb ?? kIsWeb,
+    );
     // Until settings/features arrives the defaults are "everything on": wait
     // before showing phones / social links an admin may have switched off.
     final ready = ref.watch(featuresReadyProvider);
@@ -839,7 +919,7 @@ class Footer extends ConsumerWidget {
             ],
           );
 
-    final quick = !(footer.showQuickLinks && links.isNotEmpty)
+    final quick = !(footer.showQuickLinks && (links.isNotEmpty || showInstall))
         ? null
         : Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -859,6 +939,20 @@ class Footer extends ConsumerWidget {
                           child: Text(
                             context.tr(l.$1),
                             style: TextStyle(color: context.pal.ink, fontWeight: FontWeight.w400),
+                          ),
+                        ),
+                      ),
+                    if (showInstall)
+                      SizedBox(
+                        height: 48,
+                        child: TextButton.icon(
+                          key: const Key('footerInstallApp'),
+                          onPressed: () => launchInstallEntry(context, installEnv, installSettings),
+                          style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4)),
+                          icon: Icon(Icons.download_for_offline_outlined, size: 18, color: primary),
+                          label: Text(
+                            context.tr('installAppLink'),
+                            style: TextStyle(color: context.pal.ink, fontWeight: FontWeight.w600),
                           ),
                         ),
                       ),

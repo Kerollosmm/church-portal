@@ -308,7 +308,7 @@ void main() {
 
     expect(find.text('قداس الصباح الباكر'), findsOneWidget);
     // Verified: shows 07:00 Cairo time, never 05:00 UTC
-    expect(find.textContaining('٠٧:٠٠ ص'), findsOneWidget);
+    expect(find.textContaining('07:00 ص'), findsOneWidget);
     expect(find.textContaining('٠٥:٠٠'), findsNothing);
   });
 

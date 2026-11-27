@@ -168,7 +168,11 @@ final meetingsProvider = StreamProvider<List<Meeting>>((ref) => _public(ref.watc
 final activitiesProvider = StreamProvider<List<Activity>>((ref) => _public(ref.watch(repositoryProvider).activities()));
 final facilitiesProvider = StreamProvider<List<Facility>>((ref) => _public(ref.watch(repositoryProvider).facilities()));
 final priestsProvider = StreamProvider<List<Priest>>((ref) => _public(ref.watch(repositoryProvider).priests()));
-final milestonesProvider = StreamProvider<List<Milestone>>((ref) => _public(ref.watch(repositoryProvider).milestones()));
+final milestonesProvider = StreamProvider<List<Milestone>>(
+  (ref) => ref.watch(repositoryProvider).milestones().map(
+        (items) => items.where((m) => m.visible).toList()..sort(compareMilestonesByYear),
+      ),
+);
 final saintsProvider = StreamProvider<List<Saint>>((ref) => _public(ref.watch(repositoryProvider).saints()));
 
 /// Admin-defined categories (ADR-027): public ones (visible, usable slug,

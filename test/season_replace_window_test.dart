@@ -289,7 +289,7 @@ void main() {
       expect((tester.widget<Text>(at)).data, isNot(contains('الكنيسة الكبرى')));
       final then = find.byKey(const Key('parallelThen0'));
       expect(then, findsOneWidget);
-      expect(find.descendant(of: then, matching: find.textContaining('وبعدها ٠٧:٠٠ ص: خدمة late — ')), findsOneWidget);
+      expect(find.descendant(of: then, matching: find.textContaining('وبعدها 07:00 ص: خدمة late — ')), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 

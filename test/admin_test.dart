@@ -2937,7 +2937,7 @@ void main() {
       expect(
         find.descendant(
           of: find.byKey(const ValueKey('replacesDayPreview')),
-          matching: find.textContaining('٠٧:٠٠ ص'),
+          matching: find.textContaining('07:00 ص'),
         ),
         findsOneWidget,
       );

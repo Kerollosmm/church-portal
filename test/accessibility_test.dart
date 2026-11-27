@@ -718,7 +718,7 @@ void main() {
       expect(learnMore(), findsNothing);
     });
 
-    testWidgets('secondary time line uses its own script direction (BUG-10)', (tester) async {
+    testWidgets('Arabic time range uses single-line Western digits ص/م with RTL direction (Q2)', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           locale: const Locale('ar'),
@@ -727,12 +727,12 @@ void main() {
           home: const Scaffold(body: TimeRangeText('06:30', '08:30')),
         ),
       );
-      final secondary = find.text('06:30 AM – 08:30 AM');
-      expect(secondary, findsOneWidget);
-      final d = tester.widget<Directionality>(
-        find.ancestor(of: secondary, matching: find.byType(Directionality)).first,
-      );
-      expect(d.textDirection, TextDirection.ltr);
+      final texts = tester
+          .widgetList<Text>(find.descendant(of: find.byType(TimeRangeText), matching: find.byType(Text)))
+          .toList();
+      expect(texts.map((t) => t.data!).toList(), ['\u206706:30 ص – 08:30 ص\u2069']);
+      expect(texts.single.textDirection, TextDirection.rtl);
+      expect(texts.single.data, isNot(matches(RegExp('[\u0660-\u0669]'))));
     });
 
     testWidgets('English times use Latin digits only (live check, ADR-038)', (tester) async {
@@ -748,7 +748,7 @@ void main() {
           .widgetList<Text>(find.descendant(of: find.byType(TimeRangeText), matching: find.byType(Text)))
           .map((t) => t.data!)
           .toList();
-      expect(texts, ['06:30 AM – 08:30 AM']);
+      expect(texts, ['\u206606:30 AM – 08:30 AM\u2069']);
       expect(texts.join(), isNot(matches(RegExp('[\u0660-\u0669]'))));
     });
 

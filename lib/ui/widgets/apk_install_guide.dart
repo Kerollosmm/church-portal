@@ -44,7 +44,12 @@ const Map<String, List<String>> installGuideStrings = {
 };
 
 /// Shows the step-by-step visual sideload guide modal (ADR-057).
-Future<void> showApkInstallGuide(BuildContext context, {double? apkSizeMb}) {
+Future<void> showApkInstallGuide(
+  BuildContext context, {
+  double? apkSizeMb,
+  double? olderApkSizeMb,
+  VoidCallback? onDownloadOlder,
+}) {
   registerStrings(installGuideStrings);
   return showModalBottomSheet<void>(
     context: context,
@@ -53,14 +58,24 @@ Future<void> showApkInstallGuide(BuildContext context, {double? apkSizeMb}) {
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
-    builder: (ctx) => _ApkInstallGuideSheet(apkSizeMb: apkSizeMb),
+    builder: (ctx) => _ApkInstallGuideSheet(
+      apkSizeMb: apkSizeMb,
+      olderApkSizeMb: olderApkSizeMb,
+      onDownloadOlder: onDownloadOlder,
+    ),
   );
 }
 
 class _ApkInstallGuideSheet extends StatefulWidget {
   final double? apkSizeMb;
+  final double? olderApkSizeMb;
+  final VoidCallback? onDownloadOlder;
 
-  const _ApkInstallGuideSheet({this.apkSizeMb});
+  const _ApkInstallGuideSheet({
+    this.apkSizeMb,
+    this.olderApkSizeMb,
+    this.onDownloadOlder,
+  });
 
   @override
   State<_ApkInstallGuideSheet> createState() => _ApkInstallGuideSheetState();
@@ -336,6 +351,22 @@ class _ApkInstallGuideSheetState extends State<_ApkInstallGuideSheet> {
                       );
                     },
                   ),
+                  if (widget.onDownloadOlder != null) ...[
+                    const SizedBox(height: 8),
+                    Center(
+                      child: TextButton(
+                        key: const Key('guideOlderPhoneButton'),
+                        style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+                        onPressed: widget.onDownloadOlder,
+                        child: Text(
+                          widget.olderApkSizeMb != null && widget.olderApkSizeMb! > 0
+                              ? '${context.tr('installOlderPhone')} (${widget.olderApkSizeMb!.toStringAsFixed(1)} MB)'
+                              : context.tr('installOlderPhone'),
+                          style: TextStyle(fontSize: 13, color: pal.goldText),
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
