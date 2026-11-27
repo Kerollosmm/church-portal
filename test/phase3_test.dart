@@ -42,7 +42,8 @@ Map<String, dynamic> _seedChurch() =>
     (jsonDecode(File('assets/seed/seed.json').readAsStringSync()) as Map<String, dynamic>)['settings']['church']
         as Map<String, dynamic>;
 
-Future<(ProviderContainer, _MemoryStore)> _pumpApp(WidgetTester tester, {String? saved, bool? assistantVisible}) async {
+Future<(ProviderContainer, _MemoryStore)> _pumpApp(WidgetTester tester,
+    {String? saved, bool? assistantVisible, DateTime Function()? clock}) async {
   tester.view.physicalSize = const Size(1200, 3000);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -50,6 +51,7 @@ Future<(ProviderContainer, _MemoryStore)> _pumpApp(WidgetTester tester, {String?
   final container = ProviderContainer(overrides: [
     repositoryProvider.overrideWithValue(SeedRepository(_seed())),
     nowProvider.overrideWith((ref) => Stream.value(CairoTime.at(2026, 11, 1, 12 * 60).toUtc())),
+    if (clock != null) routeClockProvider.overrideWithValue(clock),
     languageStoreProvider.overrideWithValue(store),
     if (assistantVisible != null) assistantVisibleProvider.overrideWithValue(assistantVisible),
   ]);
@@ -358,7 +360,9 @@ void main() {
       final applied = <DocumentHeadSpec>[];
       debugOnRouteMeta = applied.add;
       addTearDown(() => debugOnRouteMeta = null);
-      final (container, _) = await _pumpApp(tester);
+      // Keep nowProvider stale before midnight (23:59:50) while clock advances past Cairo midnight (00:00:05).
+      var clockNow = DateTime.utc(2026, 11, 1, 21, 59, 50); // 2026-11-01 23:59:50 Africa/Cairo (UTC+2)
+      final (container, _) = await _pumpApp(tester, clock: () => clockNow);
       final router = container.read(routerProvider);
 
       router.go('/readings');
@@ -369,11 +373,12 @@ void main() {
       expect(applied.last.canonicalUrl, 'https://maximos-domadios-church.web.app/readings/2026-11-01');
       expect(applied.last.noIndex, isFalse);
 
+      clockNow = DateTime.utc(2026, 11, 1, 22, 0, 5); // 2026-11-02 00:00:05 Africa/Cairo (UTC+2)
       router.go('/readings/?lang=en&tab=verse');
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 50));
       }
-      expect(router.routerDelegate.currentConfiguration.uri.toString(), '/readings/2026-11-01?lang=en&tab=verse');
+      expect(router.routerDelegate.currentConfiguration.uri.toString(), '/readings/2026-11-02?lang=en&tab=verse');
     });
 
     test('resolveLangSync keeps the URL fragment', () {

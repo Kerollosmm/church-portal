@@ -138,6 +138,10 @@ bool _detectIsWeb() {
 
 final isWebProvider = Provider<bool>((ref) => _detectIsWeb());
 
+/// Clock sampled when resolving date-based route redirects (e.g. `/readings`).
+/// Uses [CairoTime.now] at redirect execution time; override in tests.
+final routeClockProvider = Provider<DateTime Function()>((_) => CairoTime.now);
+
 final routerProvider = Provider<GoRouter>((ref) {
   final isWeb = ref.watch(isWebProvider);
   return buildAppRouter(ref, isWeb: isWeb);
@@ -254,8 +258,7 @@ GoRouter buildAppRouter(Ref ref, {bool? isWeb, String initialLocation = '/'}) {
           GoRoute(
             path: '/readings',
             redirect: (_, s) {
-              final now = ref.read(nowProvider).value;
-              final cairoNow = now == null ? CairoTime.now() : CairoTime.fromInstant(now);
+              final cairoNow = CairoTime.fromInstant(ref.read(routeClockProvider)());
               final todayIso = isoDate(CairoTime.calendarDate(cairoNow));
               return _redirectWithQuery('/readings/$todayIso', s);
             },
