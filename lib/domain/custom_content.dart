@@ -9,7 +9,7 @@
 // they keep their own collections, fields and pages and coexist with these
 // (see ADR-027 in docs/memory-bank/10-decisions-and-history.md).
 
-import 'features.dart' show Hideable;
+import 'features.dart' show FeatureSettings, Hideable;
 import 'media.dart';
 
 String _s(Object? v) => v is String ? v : (v == null ? '' : v.toString());
@@ -30,6 +30,54 @@ bool isValidSlug(String s) => s.length <= slugMaxLength && _slugRe.hasMatch(s);
 /// Public path of a category / a custom page.
 String categoryPath(String slug) => '/section/$slug';
 String customPagePath(String slug) => '/page/$slug';
+
+/// True when [url] is an in-app path (starts with a single `/`, not `//`).
+bool isInternalAppLink(String url) {
+  final l = url.trim();
+  return l.startsWith('/') && !l.startsWith('//');
+}
+
+String _canonicalInternalPath(String path) => switch (path) {
+      '/activities' => '/church-activities',
+      '/priests' => '/about',
+      '/notices' => '/notifications',
+      '/donations' => '/page/donations',
+      '/clinics' => '/',
+      _ => path,
+    };
+
+/// Whether [block] should be rendered on a public custom page given [features]
+/// and the loaded public [pages] / [categories]. Internal button and link
+/// targets whose route is disabled or whose target `/page/<slug>` or
+/// `/section/<slug>` does not exist (or is hidden) are hidden; external links
+/// are unchanged.
+bool isPageBlockVisible(
+  PageBlock block, {
+  required FeatureSettings features,
+  Iterable<CustomPage>? pages,
+  Iterable<CustomCategory>? categories,
+}) {
+  if (block.type != BlockTypes.button && block.type != BlockTypes.link) return true;
+  final raw = block.url.trim();
+  if (raw.isEmpty) return false;
+  if (!isInternalAppLink(raw)) return true;
+
+  final parsed = Uri.tryParse(raw)?.path ?? raw;
+  final norm = parsed.length > 1 && parsed.endsWith('/') ? parsed.substring(0, parsed.length - 1) : parsed;
+  final target = _canonicalInternalPath(norm);
+  if (!features.routeEnabled(target)) return false;
+
+  if (target == '/page' || target.startsWith('/page/')) {
+    final slug = target.length > '/page/'.length ? target.substring('/page/'.length) : '';
+    if (slug.isEmpty || slug.contains('/')) return false;
+    if (pages != null && !pages.any((p) => p.slug == slug)) return false;
+  } else if (target == '/section' || target.startsWith('/section/')) {
+    final slug = target.length > '/section/'.length ? target.substring('/section/'.length) : '';
+    if (slug.isEmpty || slug.contains('/')) return false;
+    if (categories != null && !categories.any((c) => c.slug == slug)) return false;
+  }
+  return true;
+}
 
 /// Icons an admin can pick for a category (mapped to Material icons in the UI).
 class CategoryIcons {

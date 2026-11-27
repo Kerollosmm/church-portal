@@ -42,7 +42,7 @@ void openLink(BuildContext context, String link) {
 
 /// `/section/<slug>`: an admin-defined category and its items (ADR-027),
 /// with the same cards, grid and image styles (ADR-023) as the built-in
-/// sections. Hidden / deleted / unknown → "not available" (noindex).
+/// sections. Hidden → "not available" (noindex); unknown slug → 404 (noindex).
 class CategoryPage extends ConsumerWidget {
   final String slug;
   const CategoryPage({super.key, required this.slug});
@@ -50,21 +50,30 @@ class CategoryPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final path = categoryPath(slug);
-    final cats = ref.watch(categoriesProvider);
+    final cats = ref.watch(rawCategoriesProvider);
     return cats.when(
       skipLoadingOnReload: true,
       loading: () => const PageBody(children: [SizedBox(height: 24), SkeletonList(count: 3)]),
       error: (_, _) {
         setDocumentRouteMeta(path: path, indexable: false);
-        return PageBody(children: [ErrorState(onRetry: () => ref.invalidate(categoriesProvider))]);
+        return PageBody(children: [ErrorState(onRetry: () => ref.invalidate(rawCategoriesProvider))]);
       },
-      data: (list) {
+      data: (allCats) {
+        final list = publicCategories(allCats);
         CustomCategory? cat;
         for (final c in list) {
-          if (c.slug == slug) cat = c;
+          if (c.slug == slug) {
+            cat = c;
+            break;
+          }
         }
         setDocumentRouteMeta(path: path, indexable: cat != null);
-        if (cat == null) return const ContentUnavailable(key: Key('categoryUnavailable'));
+        if (cat == null) {
+          if (allCats.any((c) => c.slug == slug)) {
+            return const ContentUnavailable(key: Key('categoryUnavailable'));
+          }
+          return const NotFoundPage(key: Key('categoryNotFound'));
+        }
         final c = cat;
         final intro = context.pick(c.introAr.trim(), c.introEn.trim());
         return PageBody(
@@ -91,7 +100,7 @@ class CategoryPage extends ConsumerWidget {
                 if (items.isEmpty && sPages.isEmpty) {
                   if (pagesAsync != null && pagesList == null) {
                     if (pagesAsync.hasError) {
-                      return ErrorState(onRetry: () => ref.invalidate(customPagesProvider));
+                      return ErrorState(onRetry: () => ref.invalidate(rawPagesProvider));
                     }
                     if (pagesAsync.isLoading) {
                       return const SkeletonList(count: 2);
@@ -110,7 +119,7 @@ class CategoryPage extends ConsumerWidget {
                   ],
                   if (pagesAsync != null && pagesList == null && pagesAsync.hasError) ...[
                     if (items.isNotEmpty || sPages.isNotEmpty) const SizedBox(height: 16),
-                    ErrorState(onRetry: () => ref.invalidate(customPagesProvider)),
+                    ErrorState(onRetry: () => ref.invalidate(rawPagesProvider)),
                   ] else if (pagesAsync != null && pagesList == null && pagesAsync.isLoading) ...[
                     if (items.isNotEmpty || sPages.isNotEmpty) const SizedBox(height: 16),
                     const SkeletonList(count: 1),
@@ -139,7 +148,7 @@ class BuiltInSectionPages extends ConsumerWidget {
     if (pagesAsync.hasError && !pagesAsync.hasValue) {
       return Padding(
         padding: const EdgeInsets.only(top: 16),
-        child: ErrorState(onRetry: () => ref.invalidate(customPagesProvider)),
+        child: ErrorState(onRetry: () => ref.invalidate(rawPagesProvider)),
       );
     }
     final pages = pagesAsync.value;
@@ -169,39 +178,44 @@ class CustomPageCard extends StatelessWidget {
     final sub = context.pick(p.subtitleAr, p.subtitleEn);
     return Card(
       clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          CardCover(collection: 'pages', itemStyle: '', image: p.image, label: title),
-          Padding(
-            padding: const EdgeInsets.all(Space.card),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: context.pal.surfaceAlt, borderRadius: BorderRadius.circular(4)),
-                  child: Icon(Icons.article_rounded, color: context.pal.primary),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, height: 1.4)),
+      child: InkWell(
+        excludeFromSemantics: true,
+        canRequestFocus: false,
+        onTap: () => context.go(p.path),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            CardCover(collection: 'pages', itemStyle: '', image: p.image, label: title, enlargeOnTap: false),
+            Padding(
+              padding: const EdgeInsets.all(Space.card),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(color: context.pal.surfaceAlt, borderRadius: BorderRadius.circular(4)),
+                    child: Icon(Icons.article_rounded, color: context.pal.primary),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, height: 1.4)),
+                  ),
+                ]),
+                if (sub.isNotEmpty) ...[
+                  const SizedBox(height: Space.s),
+                  Text(sub, style: const TextStyle(height: 1.6)),
+                ],
+                const SizedBox(height: 10),
+                ActionChipButton(
+                  icon: Icons.arrow_forward_rounded,
+                  label: context.tr('learnMore'),
+                  semanticLabel: actionSemanticLabel(context.tr('learnMore'), title),
+                  color: context.pal.bar,
+                  onTap: () => context.go(p.path),
                 ),
               ]),
-              if (sub.isNotEmpty) ...[
-                const SizedBox(height: Space.s),
-                Text(sub, style: const TextStyle(height: 1.6)),
-              ],
-              const SizedBox(height: 10),
-              ActionChipButton(
-                icon: Icons.open_in_new_rounded,
-                label: context.tr('learnMore'),
-                semanticLabel: actionSemanticLabel(context.tr('learnMore'), title),
-                color: context.pal.bar,
-                onTap: () => context.go(p.path),
-              ),
-            ]),
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }

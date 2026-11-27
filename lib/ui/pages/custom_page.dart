@@ -16,7 +16,7 @@ import 'category_page.dart' show ContentUnavailable, openLink;
 
 /// `/page/<slug>`: an admin-built page (ADR-027): optional hero image, then
 /// heading / paragraph / image / button / link / donation-info blocks.
-/// Hidden / unknown → "not available" (noindex).
+/// Hidden → "not available" (noindex); unknown slug → 404 (noindex).
 class CustomPageView extends ConsumerWidget {
   final String slug;
   const CustomPageView({super.key, required this.slug});
@@ -24,25 +24,41 @@ class CustomPageView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final path = customPagePath(slug);
-    return ref.watch(customPagesProvider).when(
+    return ref.watch(rawPagesProvider).when(
           skipLoadingOnReload: true,
           loading: () => const PageBody(children: [SizedBox(height: 24), SkeletonList(count: 3)]),
           error: (_, _) {
             setDocumentRouteMeta(path: path, indexable: false);
-            return PageBody(children: [ErrorState(onRetry: () => ref.invalidate(customPagesProvider))]);
+            return PageBody(children: [ErrorState(onRetry: () => ref.invalidate(rawPagesProvider))]);
           },
-          data: (pages) {
+          data: (allPages) {
+            final pages = publicPages(allPages);
             CustomPage? page;
             for (final p in pages) {
-              if (p.slug == slug) page = p;
+              if (p.slug == slug) {
+                page = p;
+                break;
+              }
             }
             setDocumentRouteMeta(path: path, indexable: page != null);
-            if (page == null) return const ContentUnavailable(key: Key('pageUnavailable'));
+            if (page == null) {
+              if (allPages.any((p) => p.slug == slug)) {
+                return const ContentUnavailable(key: Key('pageUnavailable'));
+              }
+              return const NotFoundPage(key: Key('pageNotFound'));
+            }
             final p = page;
+            final features = ref.watch(featuresProvider);
+            final categories = ref.watch(categoriesProvider).value;
             final title = context.pick(p.titleAr, p.titleEn);
             final subtitle = context.pick(p.subtitleAr.trim(), p.subtitleEn.trim());
             final hero = p.image;
-            final visibleBlocks = [for (final b in p.blocks) if (!b.isEmpty) b];
+            final visibleBlocks = [
+              for (final b in p.blocks)
+                if (!b.isEmpty &&
+                    isPageBlockVisible(b, features: features, pages: pages, categories: categories))
+                  b,
+            ];
             return PageBody(
               key: Key('page-${p.slug}'),
               header: PageHeader(title: title, subtitle: subtitle.isEmpty ? null : subtitle),
