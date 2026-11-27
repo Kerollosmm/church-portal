@@ -63,6 +63,7 @@ class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
     final messenger = ScaffoldMessenger.of(context);
     final saved = context.tr('saved');
     final failed = context.tr('saveFailed', {'e': '{e}'});
+    final isAr = context.isAr;
     setState(() => _saving = true);
     try {
       await widget.repo.saveDoc('settings/contact', ContactSettings(_renumbered()).toMap());
@@ -74,7 +75,7 @@ class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
         });
       }
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e)))));
+      messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e, isAr: isAr)))));
     } finally {
       if (mounted) setState(() => _saving = false);
     }

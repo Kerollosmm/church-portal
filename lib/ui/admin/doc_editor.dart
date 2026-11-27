@@ -1037,7 +1037,7 @@ class DocEditorState extends State<DocEditor> {
           ..image = null;
       }
       if (mounted) {
-        final errText = context.tr('saveFailed', {'e': formatAdminError(e)});
+        final errText = context.tr('saveFailed', {'e': formatAdminError(e, isAr: context.isAr)});
         messenger?.showSnackBar(SnackBar(content: Text(errText)));
         setState(() {
           _saving = false;
