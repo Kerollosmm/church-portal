@@ -161,14 +161,14 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   (`noCurrentSeasons`, `nextSeasonLine`), not admin fields. +0 reads.
 - **Parallel line on the next-service card (ADR-053):** `parallelOccurrencesOf` keeps each parallel occurrence; one
   starting with (or before) the card's service stays in «وفي نفس الوقت: …», one starting later while it runs gets its
-  own line «وبعدها ٠٧:٠٠ ص: <name> — <place> (<audience>)» (`parallelThen` / "Then at {t}: {v}",
+  own line «وبعدها 07:00 ص: <name> — <place> (<audience>)» (`parallelThen` / "Then at {t}: {v}",
   `parallelThenLine`, keys `parallelThen0…`). /mass-schedule's list cards keep the ADR-041 overlap summary.
 - **Additive seasons (ADR-050):** a seasonal `mass` hides only the regular masses that overlap it in time (the 12:00
   fasting liturgy keeps the 06:30 mass; a Kiahk 05:30–07:30 liturgy hides the 06:00 mass, not the 08:00 ones); a
   seasonal service with `replacesDay` (feast liturgy) hides every regular mass of its day; vespers / praise keep the
   overlap rule. `regularSupersededOn` lists what is hidden: /mass-schedule's weekly tab marks them «لا يُقام اليوم»
   on today's weekday, and the assistant prompt lists today's / tomorrow's services from `occurrencesForDay` with a
-  "NOT held" line and a computed season label. The «يُقام الآن» box shows its end: «حتى ٠٣:٣٠ ص» (12-hour ص/م).
+  "NOT held" line and a computed season label. The «يُقام الآن» box shows its end: «حتى 03:30 ص» (12-hour ص/م).
 - **Placeholder text (ADR-050):** «— في انتظار تأكيد الكنيسة.», «(لم يُؤكَّد …)», "pending church confirmation" in
   `descAr/En` / `bioAr/En` is dropped on read (`stripPendingPlaceholders`), on public pages and in the prompt.
 - **Hero season tint (ADR-050):** on an occasion theme (Marian, fasting, Resurrection, Nativity, Epiphany) the hero

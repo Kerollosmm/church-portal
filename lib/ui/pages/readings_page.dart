@@ -460,12 +460,18 @@ class _ReadingsPageState extends ConsumerState<ReadingsPage> {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              IconButton(
+              IconButton.filled(
                 key: const Key('readingsWhatsappShare'),
                 tooltip: context.tr('shareWhatsapp'),
-                icon: const Icon(Icons.chat_rounded, color: whatsappGreen),
+                style: IconButton.styleFrom(
+                  backgroundColor: whatsappGreen,
+                  foregroundColor: Colors.white, // palette-exempt: white on darkened WhatsApp brand green
+                  minimumSize: const Size(48, 48),
+                ),
+                icon: const Icon(Icons.chat_rounded, size: 20),
                 onPressed: _shareReadingWhatsapp,
               ),
+              const SizedBox(width: 4),
               IconButton(
                 key: const Key('shareReadingButton'),
                 tooltip: isAr ? 'مشاركة' : 'Share',

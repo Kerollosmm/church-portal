@@ -20,18 +20,21 @@ class _FakeInstallEnv implements InstallEnv {
   String platform;
   @override
   bool isStandalone;
+  @override
+  bool hasDeferredPrompt;
+  final bool promptResult;
+  int promptCalls = 0;
 
   _FakeInstallEnv({
     this.userAgent = 'Mozilla/5.0 (Linux; Android 14) Chrome/120.0.0.0 Mobile Safari/537.36',
     this.platform = 'Linux armv8l',
     this.isStandalone = false,
+    this.hasDeferredPrompt = false,
+    this.promptResult = true,
   });
 
   @override
   int get maxTouchPoints => 5;
-
-  @override
-  bool get hasDeferredPrompt => false;
 
   @override
   bool get installedEventReceived => false;
@@ -40,7 +43,10 @@ class _FakeInstallEnv implements InstallEnv {
   void clearInstalledSessionFlag() {}
 
   @override
-  Future<bool> promptInstall() async => true;
+  Future<bool> promptInstall() async {
+    promptCalls++;
+    return promptResult;
+  }
 
   @override
   Map<String, dynamic>? readJson(String key) => null;
@@ -255,6 +261,89 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('تثبيت التطبيق من المتصفح'), findsOneWidget);
+    });
+
+    testWidgets('tapping footer entry triggers pwaPrompt when prompt is available and falls back when declined',
+        (tester) async {
+      final envAccepted = _FakeInstallEnv(hasDeferredPrompt: true, promptResult: true);
+      await tester.pumpWidget(
+        wrapScope(
+          env: envAccepted,
+          child: const Scaffold(body: SingleChildScrollView(child: Footer(isWeb: true))),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.byKey(const Key('footerInstallApp')));
+      await tester.tap(find.byKey(const Key('footerInstallApp')));
+      await tester.pumpAndSettle();
+      expect(envAccepted.promptCalls, 1);
+      expect(find.text('تثبيت التطبيق من المتصفح'), findsNothing);
+
+      final envDeclined = _FakeInstallEnv(hasDeferredPrompt: true, promptResult: false);
+      await tester.pumpWidget(
+        wrapScope(
+          env: envDeclined,
+          child: const Scaffold(body: SingleChildScrollView(child: Footer(isWeb: true))),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('footerInstallApp')));
+      await tester.tap(find.byKey(const Key('footerInstallApp')));
+      await tester.pumpAndSettle();
+      expect(envDeclined.promptCalls, 1);
+      expect(find.text('تثبيت التطبيق من المتصفح'), findsOneWidget);
+    });
+
+    testWidgets('tapping footer entry on Desktop opens browser install steps without crash', (tester) async {
+      await tester.pumpWidget(
+        wrapScope(
+          env: _FakeInstallEnv(
+            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36',
+            platform: 'Win32',
+          ),
+          child: const Scaffold(body: SingleChildScrollView(child: Footer(isWeb: true))),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('footerInstallApp')));
+      await tester.tap(find.byKey(const Key('footerInstallApp')));
+      await tester.pumpAndSettle();
+      expect(find.text('تثبيت التطبيق من المتصفح'), findsOneWidget);
+    });
+
+    testWidgets('Footer inside PageBody lays out without overflow across 320(2x)/400/1400 px (AR & EN)',
+        (tester) async {
+      addTearDown(tester.view.reset);
+      for (final c in [
+        (width: 320.0, scale: 2.0, locale: const Locale('ar'), label: 'حمّل التطبيق'),
+        (width: 400.0, scale: 1.5, locale: const Locale('ar'), label: 'حمّل التطبيق'),
+        (width: 1400.0, scale: 1.0, locale: const Locale('en'), label: 'Get the app'),
+      ]) {
+        tester.view.physicalSize = Size(c.width, 720);
+        tester.view.devicePixelRatio = 1.0;
+        await tester.pumpWidget(
+          MediaQuery(
+            data: MediaQueryData(size: Size(c.width, 720), textScaler: TextScaler.linear(c.scale)),
+            child: wrapScope(
+              env: _FakeInstallEnv(),
+              locale: c.locale,
+              child: const Scaffold(
+                body: CustomScrollView(
+                  slivers: [
+                    SliverToBoxAdapter(child: SizedBox(height: 120)),
+                    SliverFillRemaining(hasScrollBody: false, child: Footer(isWeb: true)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('footerInstallApp')), findsOneWidget, reason: '${c.width}/${c.locale}');
+        expect(find.text(c.label), findsOneWidget);
+        expect(tester.takeException(), isNull, reason: '${c.width}/${c.locale}');
+      }
     });
   });
 

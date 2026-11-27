@@ -1,6 +1,8 @@
 import 'package:church_portal/data/content_repository.dart';
 import 'package:church_portal/data/seed_data.dart';
 import 'package:church_portal/domain/models.dart';
+import 'package:church_portal/state/providers.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -44,6 +46,30 @@ void main() {
       final repo = SeedRepository(seed);
       final sorted = await repo.milestones().first;
       expect(sorted.map((m) => m.id).toList(), ['d', 'e', 'c', 'a', 'b']);
+    });
+  });
+
+  group('milestonesProvider', () {
+    test('preserves compareMilestonesByYear order even when admin order conflicts and drops hidden items', () async {
+      final seed = SeedData({
+        'milestones': {
+          'm2025': {'titleAr': '2025', 'titleEn': '2025', 'year': 2025, 'order': 1},
+          'mHidden': {'titleAr': 'Hidden', 'titleEn': 'Hidden', 'year': 1970, 'order': 0, 'visible': false},
+          'mNull': {'titleAr': 'NoYear', 'titleEn': 'NoYear', 'order': 0},
+          'm2022b': {'titleAr': '2022b', 'titleEn': '2022b', 'year': 2022, 'order': 3},
+          'm1980': {'titleAr': '1980', 'titleEn': '1980', 'year': 1980, 'order': 9},
+          'm2022a': {'titleAr': '2022a', 'titleEn': '2022a', 'year': 2022, 'order': 2},
+        },
+      });
+      final container = ProviderContainer(
+        overrides: [
+          repositoryProvider.overrideWithValue(SeedRepository(seed)),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final items = await container.listen(milestonesProvider.future, (_, _) {}).read();
+      expect(items.map((m) => m.id).toList(), ['m1980', 'm2022a', 'm2022b', 'm2025', 'mNull']);
     });
   });
 }

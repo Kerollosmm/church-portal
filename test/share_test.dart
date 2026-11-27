@@ -275,5 +275,59 @@ void main() {
       expect(launchedUri.queryParameters['text'], isNot(contains('src=')));
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets('ReadingsPage Verse tab shares /readings/:date?tab=verse and uses filled whatsappGreen contrast',
+        (tester) async {
+      tester.view.physicalSize = const Size(320, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      SharedPreferences.setMockInitialValues({
+        'church_portal_readings_2026-11-08': jsonEncode(_sampleReadings),
+      });
+      final launched = captureLaunched(tester);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            installEnvProvider.overrideWithValue(_FakeEnv()),
+          ],
+          child: MaterialApp(
+            locale: const Locale('ar'),
+            supportedLocales: const [Locale('ar'), Locale('en')],
+            localizationsDelegates: GlobalMaterialLocalizations.delegates,
+            theme: buildTheme(
+              const Locale('ar'),
+              palette: ThemePresets.palettes[ThemePresets.holyWeek]!,
+              key: ThemePresets.holyWeek,
+            ),
+            home: const Scaffold(
+              body: ReadingsPage(dateIso: '2026-11-08', initialTab: 'verse'),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Header icon button must use a high-contrast dark-green fill + white icon (safe on Holy Week #0C0B0A).
+      final headerBtn = tester.widget<IconButton>(find.byKey(const Key('readingsWhatsappShare')));
+      expect(headerBtn.style?.backgroundColor?.resolve({}), whatsappGreen);
+      expect(headerBtn.style?.foregroundColor?.resolve({}), Colors.white);
+
+      final verseBtn = find.byKey(const Key('verseWhatsappShare'));
+      expect(verseBtn, findsOneWidget);
+      await tester.ensureVisible(verseBtn);
+      await tester.tap(verseBtn);
+      await tester.pump();
+
+      expect(launched, hasLength(1));
+      final launchedUri = Uri.parse(launched.single);
+      expect(launchedUri.host, 'wa.me');
+      expect(
+        launchedUri.queryParameters['text'],
+        contains('https://maximos-domadios-church.web.app/readings/2026-11-08?tab=verse'),
+      );
+      expect(launchedUri.queryParameters['text'], isNot(contains('src=')));
+      expect(tester.takeException(), isNull);
+    });
   });
 }
