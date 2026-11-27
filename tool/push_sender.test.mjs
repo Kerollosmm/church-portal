@@ -135,6 +135,104 @@ describe('push_daily', () => {
     assert.equal(res.alerts[0].seasonId, 'nativity-fast');
     assert.equal(res.alerts[0].daysRemaining, 0);
   });
+
+  test('runDailySeasons resolves Cairo date for UTC timestamp startsAt without firing early (#137)', async () => {
+    // Cairo midnight 2026-04-12 (EET, UTC+2) is stored as 2026-04-11T22:00:00Z.
+    const features = {
+      push: true,
+      pushTypes: ['seasons'],
+      notifyTypes: [['seasons', '09:00', '1', '', '', '', ''].join('\x1f')],
+    };
+    const makeFetch = (startsAtField) => async (url) => {
+      if (url.includes('/seasons')) {
+        return {
+          ok: true,
+          json: async () => ({
+            documents: [
+              {
+                name: 'projects/p/databases/(default)/documents/seasons/easter',
+                fields: {
+                  nameAr: { stringValue: 'عيد القيامة' },
+                  nameEn: { stringValue: 'Easter' },
+                  startsAt: startsAtField,
+                  active: { booleanValue: true },
+                },
+              },
+            ],
+          }),
+        };
+      }
+      throw new Error(`Unexpected url: ${url}`);
+    };
+
+    // Cairo 2026-04-10 (2 days before): must NOT fire when daysBefore=1
+    const resEarly = await runDailySeasons(
+      'proj',
+      'tok',
+      features,
+      {},
+      [],
+      makeFetch({ stringValue: '2026-04-11T22:00:00Z' }),
+      new Date('2026-04-10T08:00:00Z'), // 10:00 Cairo Apr 10
+    );
+    assert.equal(resEarly.alerts.length, 0);
+
+    // Cairo 2026-04-11 (1 day before): fires with daysRemaining = 1
+    const resDueString = await runDailySeasons(
+      'proj',
+      'tok',
+      features,
+      {},
+      [],
+      makeFetch({ stringValue: '2026-04-11T22:00:00Z' }),
+      new Date('2026-04-11T08:00:00Z'), // 10:00 Cairo Apr 11
+    );
+    assert.equal(resDueString.alerts.length, 1);
+    assert.equal(resDueString.alerts[0].daysRemaining, 1);
+    assert.equal(resDueString.alerts[0].logKey, 'season:easter:2026-04-12:1');
+
+    // Same check with Firestore timestampValue form
+    const resDueTs = await runDailySeasons(
+      'proj',
+      'tok',
+      features,
+      {},
+      [],
+      makeFetch({ timestampValue: '2026-04-11T22:00:00Z' }),
+      new Date('2026-04-11T08:00:00Z'),
+    );
+    assert.equal(resDueTs.alerts.length, 1);
+    assert.equal(resDueTs.alerts[0].daysRemaining, 1);
+    assert.equal(resDueTs.alerts[0].logKey, 'season:easter:2026-04-12:1');
+
+    // Plain YYYY-MM-DD string form passes through unchanged
+    const resPlain = await runDailySeasons(
+      'proj',
+      'tok',
+      features,
+      {},
+      [],
+      makeFetch({ stringValue: '2026-04-12' }),
+      new Date('2026-04-11T08:00:00Z'),
+    );
+    assert.equal(resPlain.alerts.length, 1);
+    assert.equal(resPlain.alerts[0].daysRemaining, 1);
+    assert.equal(resPlain.alerts[0].logKey, 'season:easter:2026-04-12:1');
+
+    // Summer EEST (UTC+3): Cairo midnight 2026-08-01 is stored as 2026-07-31T21:00:00Z
+    const resSummer = await runDailySeasons(
+      'proj',
+      'tok',
+      features,
+      {},
+      [],
+      makeFetch({ stringValue: '2026-07-31T21:00:00Z' }),
+      new Date('2026-08-01T07:00:00Z'), // 10:00 Cairo Aug 1
+    );
+    assert.equal(resSummer.alerts.length, 1);
+    assert.equal(resSummer.alerts[0].daysRemaining, 0);
+    assert.equal(resSummer.alerts[0].logKey, 'season:easter:2026-08-01:0');
+  });
 });
 
 describe('push_sender', () => {
@@ -454,6 +552,21 @@ describe('ADR-060: Web push delivery, condition format, and token caching', () =
     // Right before midnight
     const late = new Date('2026-11-15T21:59:58Z').getTime(); // 23:59:58 Cairo
     assert.equal(secondsUntilCairoEndOfDay(late), 300, 'should enforce 300s floor');
+  });
+
+  test('secondsUntilCairoEndOfDay is exact across DST (#135)', async () => {
+    const { secondsUntilCairoEndOfDay } = await import('./push_sender.js');
+    // Winter 14:00 Cairo (EET) -> 23:59:59 Cairo = 21:59:59Z
+    assert.equal(secondsUntilCairoEndOfDay(Date.parse('2026-11-15T12:00:00Z')), 35999);
+    // Summer 23:00 Cairo (EEST) -> 23:59:59 Cairo = 20:59:59Z same day (was next day before #135)
+    assert.equal(secondsUntilCairoEndOfDay(Date.parse('2026-07-15T20:00:00Z')), 3599);
+    // Fall-back day 2026-10-29: first 23:15 (EEST) must still count the repeated hour,
+    // the Cairo day ends at 23:59:59 EET = 21:59:59Z
+    assert.equal(secondsUntilCairoEndOfDay(Date.parse('2026-10-29T20:15:00Z')), 6299);
+    // Spring-forward eve 2026-04-23 23:00 EET: next day starts at 01:00 EEST = 22:00Z
+    assert.equal(secondsUntilCairoEndOfDay(Date.parse('2026-04-23T21:00:00Z')), 3599);
+    // Month/year rollover
+    assert.equal(secondsUntilCairoEndOfDay(Date.parse('2026-12-31T20:00:00Z')), 7199);
   });
 
   test('sendFcmMessage injects webpush headers and supports condition', async () => {

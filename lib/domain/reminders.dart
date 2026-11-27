@@ -14,6 +14,8 @@ class EventKey {
   static String liturgy(String id) => 'lit-$id';
   static String meeting(String id) => 'meeting-$id';
   static String dayEvent(String id) => 'day-$id';
+
+  /// Event key for a season document (not liturgies; all liturgies use [liturgy], #136).
   static String seasonService(String id) => 'season-$id';
   static String custom(String source, String id) => '$source-$id';
 }

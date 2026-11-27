@@ -52,6 +52,12 @@ void main() {
       expect(EventKey.seasonService('pascha-1'), 'season-pascha-1');
       expect(EventKey.custom('vsp', '1'), 'vsp-1');
     });
+
+    test('liturgy key matches Worker planning key for seasonal liturgies (#136)', () {
+      // The Worker plans all liturgies — including seasonal liturgies — under
+      // lit-<id> so UI subscriptions (EventKey.liturgy) match push_plan.
+      expect(EventKey.liturgy('x'), 'lit-x');
+    });
   });
 
   group('Reminder model', () {

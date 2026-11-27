@@ -13,12 +13,16 @@ export const EXPIRE_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 /**
  * Calculates remaining seconds until 23:59:59 Africa/Cairo end of day.
+ * The end is derived from the start of the next Cairo day minus one second, so
+ * the repeated 23:xx hour on the DST fall-back day still counts in full.
  * Floor at 300 seconds (5 minutes).
  */
 export function secondsUntilCairoEndOfDay(nowMs) {
   const parts = getCairoParts(new Date(nowMs));
-  const endUtc = cairoToUtc(parts.year, parts.month, parts.day, 23, 59, 59);
-  return Math.max(300, Math.floor((endUtc.getTime() - nowMs) / 1000));
+  // Date.UTC normalizes day + 1 across month/year ends.
+  const nextDayStartUtc = cairoToUtc(parts.year, parts.month, parts.day + 1, 0, 0, 0);
+  const endMs = nextDayStartUtc.getTime() - 1000;
+  return Math.max(300, Math.floor((endMs - nowMs) / 1000));
 }
 
 /**
