@@ -42,7 +42,7 @@
   - نص مخفي بصريًا `role="status"` «جارٍ التحميل…» لقارئات الشاشة.
   - تلاشٍ ناعم `opacity 0.6s cubic-bezier(0.4, 0.0, 0.2, 1)`؛ وعند استدعاء `splashDone()` تُضاف الفئة `gone` ثم يُحذف العنصر `#splash` بالكامل من شجرة الـ DOM.
   - تبقى الشاشة حتى الحدث `app-content-ready` الذي يرسله التطبيق (`lib/core/content_ready.dart`) بعد إطارين من جاهزية الإعدادات والمفاتيح (`contentReadyProvider` / `firstContentArrived` في `lib/state/providers.dart`: `settings/church` و `settings/features` عبر `featuresReadyProvider` دون انتظار قراءة ملف آيات اليوم `dailyVersesProvider` — ADR-088)، وبحد أقصى 9 ثوانٍ بعد `flutter-first-frame`.
-  - يضيف `web/index.html` روابط `preconnect` لـ `www.gstatic.com` و `firestore.googleapis.com` وتحميلًا مسبقًا (`modulepreload` / `preload`) لحزم Firebase JS المثبتة على نسخة `firebase_core_web` (يفحصها CI) وملف `assets/assets/verses/daily_verses.json`.
+  - يضيف `web/index.html` روابط `preconnect` لـ `www.gstatic.com` و `firestore.googleapis.com` وتحميلًا مسبقًا (`modulepreload`) لحزم Firebase JS المثبتة على نسخة `firebase_core_web` (يفحصها CI) دون تحميل مسبق لملف `daily_verses.json`.
   - الأداة `tool/fingerprint_web_bundle.py` تبصّم `main.dart.js` إلى `main.<hash>.dart.js` (`immutable` في `firebase.json`) لتفادي إعادة تحميل الحزمة للزوار العائدين.
   - دعم تقليل الحركة: `@media (prefers-reduced-motion: reduce)` يوقف التحريك تمامًا ويملأ شريط التحميل باللون الذهبي الثابت.
   - مسار الفشل: تستبدل دالة `splashFailed()` في `web/index.html` شريط التحميل برسالة خطأ ورابط إعادة المحاولة باللون `#6E1C1C` في حالتين فقط: فشل تحميل سكربت الإقلاع (`flutter_bootstrap.js` أو خطأ تحميل عنصر `<script>`)، أو عدم رسم Flutter أي إطار خلال 30 ثانية. لا تعالج أخطاء التشغيل الأخرى.

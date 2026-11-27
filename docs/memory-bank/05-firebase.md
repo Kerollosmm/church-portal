@@ -274,9 +274,9 @@ App target settings:
   `version.json`, `firebase-messaging-sw.js`, `push_client.js`) stay un-cached / revalidated (`no-cache` or
   `no-cache, no-store, must-revalidate`) so browsers never load mismatched chunks; `DeferredLoader` still reloads the
   tab once per session on a stale-chunk mismatch. `web/index.html` also preconnects `www.gstatic.com` and
-  `firestore.googleapis.com`, preloads pinned ES modules `firebasejs/13.1.0/firebase-app.js` and
-  `firebasejs/13.1.0/firebase-firestore-pipelines.js` (`modulepreload`, enforced in CI against `firebase_core_web`),
-  and preloads `assets/assets/verses/daily_verses.json`.
+  `firestore.googleapis.com` and preloads pinned ES modules `firebasejs/13.1.0/firebase-app.js`,
+  `firebase-firestore-pipelines.js`, `firebase-auth.js`, and `firebase-app-check.js`
+  (`modulepreload`, enforced in CI against `firebase_core_web`).
   **Icon fonts are fingerprinted (PR #23):** `flutter build web` tree-shakes `MaterialIcons-Regular.otf` /
   `CupertinoIcons.ttf` to the icons in use but keeps one file name, so the 7-day font cache kept an old subset and
   icons added later (the PR #18 admin menu entries) drew as blank space. `tool/fingerprint_icon_fonts.py` (run by
