@@ -1582,6 +1582,74 @@ void main() {
     expect(pushEnv.syncQuietHoursCalls, 1);
   });
 
+  testWidgets('denied card shows platform-specific instructions for Android Chrome, desktop, iOS/iPadOS PWA, and native Android (#156)',
+      (tester) async {
+    // 1. Android Chrome (web)
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(enabled: true),
+      pushEnv: FakeTestPushEnv(permission: 'denied'),
+      installEnv: FakeTestInstallEnv(
+        userAgent: 'Mozilla/5.0 (Linux; Android 14) Chrome/120.0.0.0 Mobile Safari/537.36',
+        platform: 'Linux armv8l',
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Chrome'), findsOneWidget);
+    expect(find.textContaining('iPhone'), findsNothing);
+    expect(find.textContaining('التطبيقات'), findsNothing);
+
+    // 2. Desktop browser (web)
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(enabled: true),
+      pushEnv: FakeTestPushEnv(permission: 'denied'),
+      installEnv: FakeTestInstallEnv(
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+        platform: 'Win32',
+        maxTouchPoints: 0,
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('شريط العنوان في المتصفح'), findsOneWidget);
+    expect(find.textContaining('iPhone'), findsNothing);
+    expect(find.textContaining('Chrome'), findsNothing);
+
+    // 3. iOS / iPadOS PWA (web standalone)
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(enabled: true),
+      pushEnv: FakeTestPushEnv(permission: 'denied'),
+      installEnv: FakeTestInstallEnv(
+        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/17.0 Safari/605.1.15',
+        platform: 'MacIntel',
+        maxTouchPoints: 5,
+        isStandalone: true,
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('iPhone أو iPad'), findsOneWidget);
+    expect(find.textContaining('شريط العنوان'), findsNothing);
+    expect(find.textContaining('التطبيقات'), findsNothing);
+
+    // 4. Native Android app
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    try {
+      await tester.pumpWidget(buildTestable(
+        child: const NotificationsPage(isWeb: false),
+        pushSettings: const PushSettings(enabled: true),
+        pushEnv: FakeTestPushEnv(permission: 'denied'),
+        installEnv: FakeTestInstallEnv(),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('التطبيقات ← كنيسة مكسيموس ودوماديوس'), findsOneWidget);
+      expect(find.textContaining('iPhone'), findsNothing);
+      expect(find.textContaining('شريط العنوان'), findsNothing);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
   testWidgets('web reminder sheet downloads .ics via Blob hook, keeps recurring leads enabled, and adds weekly RRULE',
       (tester) async {
     final launched = <String>[];
