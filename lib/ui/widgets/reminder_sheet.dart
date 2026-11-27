@@ -12,6 +12,7 @@ import '../../domain/push.dart';
 import '../../domain/reminders.dart';
 import '../../domain/time_format.dart';
 import '../../state/providers.dart';
+import 'ics_download.dart';
 
 /// Strings only this deferred chunk uses (registered before it builds).
 const Map<String, List<String>> reminderSheetStrings = {
@@ -113,8 +114,9 @@ int? initialReminderLead({
 }) {
   final web = isWeb ?? kIsWeb;
   bool ok(int lead) {
+    if (recurring) return true;
     if (startsAt.subtract(Duration(minutes: lead)).isBefore(now)) return false;
-    if (web && !recurring && isWebLeadTooSoon(startsAt: startsAt, lead: lead, now: now)) {
+    if (web && isWebLeadTooSoon(startsAt: startsAt, lead: lead, now: now)) {
       return false;
     }
     return true;
@@ -146,14 +148,31 @@ class _ReminderConfigSheetState extends ConsumerState<_ReminderConfigSheet> {
   }
 
   bool _leadPast(int lead, DateTime now) {
+    if (_every) return false;
     if (widget.startsAt.subtract(Duration(minutes: lead)).isBefore(now)) {
       return true;
     }
     final web = widget.isWeb ?? kIsWeb;
-    if (web && !_every) {
+    if (web) {
       return isWebLeadTooSoon(startsAt: widget.startsAt, lead: lead, now: now);
     }
     return false;
+  }
+
+  void _setEvery(bool value) {
+    final pushSettings = ref.read(pushSettingsProvider);
+    final now = ref.read(nowProvider).value ?? DateTime.now();
+    setState(() {
+      _every = value;
+      _selectedLead = initialReminderLead(
+        preferred: _selectedLead ?? widget.existing?.lead ?? pushSettings.defaultLead,
+        leads: pushSettings.reminderLeads,
+        startsAt: widget.startsAt,
+        now: now,
+        recurring: value,
+        isWeb: widget.isWeb,
+      );
+    });
   }
 
   @override
@@ -280,7 +299,7 @@ class _ReminderConfigSheetState extends ConsumerState<_ReminderConfigSheet> {
                                 label: Center(child: Text(context.tr('remindOccurrenceSingle'))),
                                 selected: !_every,
                                 onSelected: (sel) {
-                                  if (sel) setState(() => _every = false);
+                                  if (sel) _setEvery(false);
                                 },
                               ),
                               const SizedBox(height: 6),
@@ -288,7 +307,7 @@ class _ReminderConfigSheetState extends ConsumerState<_ReminderConfigSheet> {
                                 label: Center(child: Text(context.tr('remindOccurrenceEvery'))),
                                 selected: _every,
                                 onSelected: (sel) {
-                                  if (sel) setState(() => _every = true);
+                                  if (sel) _setEvery(true);
                                 },
                               ),
                             ],
@@ -306,7 +325,7 @@ class _ReminderConfigSheetState extends ConsumerState<_ReminderConfigSheet> {
                             ),
                           ],
                           selected: {_every},
-                          onSelectionChanged: (val) => setState(() => _every = val.first),
+                          onSelectionChanged: (val) => _setEvery(val.first),
                         );
                       },
                     ),
@@ -350,6 +369,7 @@ class _ReminderConfigSheetState extends ConsumerState<_ReminderConfigSheet> {
                                   final gUrl = singleCalendarUrl(
                                     startsAt: widget.startsAt,
                                     title: titleText,
+                                    recurringWeekly: _every,
                                   );
                                   openUrl(gUrl);
                                 },
@@ -364,7 +384,11 @@ class _ReminderConfigSheetState extends ConsumerState<_ReminderConfigSheet> {
                                     leadMinutes: _selectedLead ?? 15,
                                     recurringWeekly: _every,
                                   );
-                                  openUrl('data:text/calendar;charset=utf-8,${Uri.encodeComponent(ics)}');
+                                  final safeKey = widget.eventKey.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+                                  downloadIcsFile(
+                                    ics,
+                                    filename: '${safeKey.isEmpty ? 'reminder' : safeKey}.ics',
+                                  );
                                 },
                               ),
                             ],
