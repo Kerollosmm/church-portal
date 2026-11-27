@@ -64,7 +64,7 @@ lib/
     push.dart               NotifyTypeSpec, NotifyConfig, ScheduledNotification, TopicSendState, RowSendStatus,
                             SentEntry, SenderHealth, NotifySchedule, safeNotificationLink, topicKey, isValidWebReminderTopic,
                             WebTopicPlan, computeWebTopicSync, WebInboxItem — ADR-059, ADR-060
-    calendar_ics.dart       buildReminderIcs (pure-Dart RFC 5545 .ics generator, Cairo TZID weekly RRULE, VALARM, 75-octet line folding), singleCalendarUrl — ADR-060
+    calendar_ics.dart       buildReminderIcs (pure-Dart RFC 5545 .ics generator, Cairo TZID weekly RRULE, VALARM, 75-octet line folding), singleCalendarUrl (with optional recurringWeekly RRULE) — ADR-060
     oem_guide.dart          OemBrand, detectOemBrand (Xiaomi/Oppo/Vivo/Huawei/Samsung), OemActionInfo,
                             oemIntentTryList, getOemSteps — ADR-058
     app_update.dart         ApkManifest, UpdateDecision, checkForUpdate, shouldForceUpdate — ADR-058

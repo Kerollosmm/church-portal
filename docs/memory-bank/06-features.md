@@ -341,7 +341,7 @@ counter in `AssistantConversation` still runs first (default 3 per Cairo day, 6 
   Feast / Gregorian date for saints, Year for milestones; empty rows dropped); **quick actions** (`detailActions`,
   PR #14): «أضف إلى التقويم» (`detailAddToCalendar`, meetings with a weekday + start:
   Google Calendar template link, weekly `RRULE`, next occurrence, `ctz=Africa/Cairo`, location = church name +
-  address, details = page URL — `weeklyCalendarUrl`), «الاتجاهات (GPS)» to the church (`detailDirections`, on-site
+  address, details = page URL — `weeklyCalendarUrl`), «ذكّرني» (`RemindMeButton` on meeting detail pages only; activity/facility reminders are not supported yet — no `reminderSources` or Worker planner entry), «الاتجاهات (GPS)» to the church (`detailDirections`, on-site
   items — meetings, activities, services — while `contactInfo` is on), «مشاركة الرابط» (`detailShare`,
   every page: copies `absoluteDetailUrl` — canonical origin, `?lang=en` in English — and shows «تم نسخ الرابط»); summary
   (desc/bio); long text `detailsAr/En` as `SelectableText` (line height 1.8); custom fields (`extraFields`) as cream
@@ -660,7 +660,7 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
 - **In-App Browser detection:** Detects embedded WebViews (Facebook, Instagram, Telegram) and renders a prominent warning with a one-tap «نسخ الرابط» (Copy link) button and Safari/Chrome open guidance.
 - **Focus mode & quiet hours:** Plain service worker (`firebase-messaging-sw.js`) respects overnight quiet hours by adding `silent: true` without dropping notifications (matching both singular `'reminder'` and plural `'reminders'` bypass), ensuring compliance with WebKit's background push termination policy.
 - **Web Reminder Planner & Condition FCM Reminders:**
-  - `ReminderSheet` clamps leads with `isWebLeadTooSoon` (40-minute minimum window on web) and displays honest delay copy («قد يصل التنبيه قبل الموعد بـ ١٥ دقيقة أو بعده بقليل حسب جدول الخادم») plus alternative Google Calendar and RFC 5545 `.ics` export options.
+  - `ReminderSheet` clamps single-occurrence leads with `isWebLeadTooSoon` (40-minute minimum window on web; recurring «كل مرة» reminders skip the past-lead check) and displays honest delay copy («قد يصل التنبيه قبل الموعد بـ ١٥ دقيقة أو بعده بقليل حسب جدول الخادم») plus alternative Google Calendar (`singleCalendarUrl`) and RFC 5545 `.ics` export (downloaded via `Blob` + `<a download>` in `ics_download*.dart`, both including weekly `RRULE` when recurring).
   - Zero-lead ("at service time") triggers a warning badge explaining server cron latency.
   - Cloudflare Worker Cron 3 (`tool/push_reminders.js`) compiles visible, non-soft-deleted (`!isSoftDeleted`, mirroring Dart `deletedAt != null`) weekly liturgies, meetings, and special day events (normalizing Firestore `timestampValue` dates via `toCairoIsoDate`, filtering Cairo active seasons, and applying `undatedSuppressedOn` / `seasonHasRealServices` parity) into `meta/push_plan` with valid `/mass-schedule` and `/church-education/<id>` deep links; `tool/push_daily.js` likewise skips soft-deleted seasons (`isSoftDeleted` in `tool/firestore_rest.js`).
   - Cloudflare Worker Cron 1 sends due reminders targeting web reminder topics (using FCM boolean topic condition `'<recurring>' in topics || '<once>' in topics` when both recurring and single-occurrence subscribers exist).

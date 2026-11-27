@@ -12,9 +12,11 @@ import 'package:church_portal/domain/features.dart';
 import 'package:church_portal/domain/reminders.dart';
 import 'package:church_portal/state/providers.dart';
 import 'package:church_portal/ui/pages/notifications_page.dart';
+import 'package:church_portal/ui/widgets/ics_download.dart' show debugOnIcsDownload;
 import 'package:church_portal/ui/widgets/remind_me.dart';
+import 'package:church_portal/ui/widgets/reminder_sheet.dart' show showReminderSheet;
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart' show MethodCall, PlatformException, SystemChannels;
+import 'package:flutter/services.dart' show MethodCall, MethodChannel, PlatformException, SystemChannels;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -1646,6 +1648,90 @@ void main() {
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }
+  });
+
+  testWidgets('web reminder sheet downloads .ics via Blob hook, keeps recurring leads enabled, and adds weekly RRULE',
+      (tester) async {
+    final launched = <String>[];
+    const urlChannel = MethodChannel('plugins.flutter.io/url_launcher');
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(urlChannel, (call) async {
+      final args = call.arguments;
+      if (args is Map && args['url'] is String) launched.add(args['url'] as String);
+      return true;
+    });
+    addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(urlChannel, null));
+
+    final downloaded = <({String content, String filename})>[];
+    debugOnIcsDownload = (content, filename) => downloaded.add((content: content, filename: filename));
+    addTearDown(() => debugOnIcsDownload = null);
+
+    // nowProvider in buildTestable is Fri 6 Nov 2026 12:00 Cairo.
+    // Event starts in 30 min (12:30 Cairo): on web, all leads are past for today's single occurrence.
+    final startsAt = CairoTime.at(2026, 11, 6, 12 * 60 + 30).toUtc();
+
+    await tester.pumpWidget(buildTestable(
+      locale: const Locale('en'),
+      pushSettings: const PushSettings(enabled: true, offered: [NotifyType.reminders]),
+      pushEnv: FakeTestPushEnv(),
+      installEnv: FakeTestInstallEnv(),
+      child: Builder(
+        builder: (context) => FilledButton(
+          onPressed: () => showReminderSheet(
+            context,
+            eventKey: 'lit-fri',
+            title: const {'ar': 'قداس الجمعة', 'en': 'Friday Liturgy'},
+            startsAt: startsAt,
+            recurring: true,
+            isWeb: true,
+          ),
+          child: const Text('Open sheet'),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Open sheet'));
+    await tester.pumpAndSettle();
+
+    // Before toggling recurring: all leads are marked past for today's web window and Save is disabled.
+    expect(find.text('(Reminder time has passed)'), findsWidgets);
+    expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Save reminder')).onPressed, isNull);
+
+    // One-off Google Calendar link has no RRULE and .ics download uses Blob helper (never data: URL).
+    await tester.ensureVisible(find.text('Google Calendar'));
+    await tester.tap(find.text('Google Calendar'));
+    await tester.pump();
+    expect(launched, hasLength(1));
+    expect(Uri.parse(launched.single).queryParameters['recur'], isNull);
+
+    await tester.ensureVisible(find.text('Download calendar file (.ics)'));
+    await tester.tap(find.text('Download calendar file (.ics)'));
+    await tester.pump();
+    expect(launched.where((u) => u.startsWith('data:')), isEmpty);
+    expect(downloaded, hasLength(1));
+    expect(downloaded.single.filename, 'lit-fri.ics');
+    expect(downloaded.single.content, contains('BEGIN:VCALENDAR'));
+    expect(downloaded.single.content, isNot(contains('RRULE:FREQ=WEEKLY')));
+
+    // Toggle "Every time (recurring)": leads are no longer marked past, Save becomes enabled.
+    await tester.ensureVisible(find.text('Every time (recurring)'));
+    await tester.tap(find.text('Every time (recurring)'));
+    await tester.pumpAndSettle();
+    expect(find.text('(Reminder time has passed)'), findsNothing);
+    expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Save reminder')).onPressed, isNotNull);
+
+    // Recurring Google Calendar link and .ics download both include weekly RRULE.
+    await tester.ensureVisible(find.text('Google Calendar'));
+    await tester.tap(find.text('Google Calendar'));
+    await tester.pump();
+    expect(launched, hasLength(2));
+    expect(Uri.parse(launched.last).queryParameters['recur'], 'RRULE:FREQ=WEEKLY;BYDAY=FR');
+
+    await tester.ensureVisible(find.text('Download calendar file (.ics)'));
+    await tester.tap(find.text('Download calendar file (.ics)'));
+    await tester.pump();
+    expect(downloaded, hasLength(2));
+    expect(downloaded.last.content, contains('RRULE:FREQ=WEEKLY;BYDAY=FR'));
   });
 }
 
