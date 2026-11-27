@@ -554,6 +554,21 @@ describe('ADR-060: Web push delivery, condition format, and token caching', () =
     assert.equal(secondsUntilCairoEndOfDay(late), 300, 'should enforce 300s floor');
   });
 
+  test('secondsUntilCairoEndOfDay is exact across DST (#135)', async () => {
+    const { secondsUntilCairoEndOfDay } = await import('./push_sender.js');
+    // Winter 14:00 Cairo (EET) -> 23:59:59 Cairo = 21:59:59Z
+    assert.equal(secondsUntilCairoEndOfDay(Date.parse('2026-11-15T12:00:00Z')), 35999);
+    // Summer 23:00 Cairo (EEST) -> 23:59:59 Cairo = 20:59:59Z same day (was next day before #135)
+    assert.equal(secondsUntilCairoEndOfDay(Date.parse('2026-07-15T20:00:00Z')), 3599);
+    // Fall-back day 2026-10-29: first 23:15 (EEST) must still count the repeated hour,
+    // the Cairo day ends at 23:59:59 EET = 21:59:59Z
+    assert.equal(secondsUntilCairoEndOfDay(Date.parse('2026-10-29T20:15:00Z')), 6299);
+    // Spring-forward eve 2026-04-23 23:00 EET: next day starts at 01:00 EEST = 22:00Z
+    assert.equal(secondsUntilCairoEndOfDay(Date.parse('2026-04-23T21:00:00Z')), 3599);
+    // Month/year rollover
+    assert.equal(secondsUntilCairoEndOfDay(Date.parse('2026-12-31T20:00:00Z')), 7199);
+  });
+
   test('sendFcmMessage injects webpush headers and supports condition', async () => {
     let capturedBody = null;
     const mockFetch = async (url, opts) => {
