@@ -135,6 +135,104 @@ describe('push_daily', () => {
     assert.equal(res.alerts[0].seasonId, 'nativity-fast');
     assert.equal(res.alerts[0].daysRemaining, 0);
   });
+
+  test('runDailySeasons resolves Cairo date for UTC timestamp startsAt without firing early (#137)', async () => {
+    // Cairo midnight 2026-04-12 (EET, UTC+2) is stored as 2026-04-11T22:00:00Z.
+    const features = {
+      push: true,
+      pushTypes: ['seasons'],
+      notifyTypes: [['seasons', '09:00', '1', '', '', '', ''].join('\x1f')],
+    };
+    const makeFetch = (startsAtField) => async (url) => {
+      if (url.includes('/seasons')) {
+        return {
+          ok: true,
+          json: async () => ({
+            documents: [
+              {
+                name: 'projects/p/databases/(default)/documents/seasons/easter',
+                fields: {
+                  nameAr: { stringValue: 'عيد القيامة' },
+                  nameEn: { stringValue: 'Easter' },
+                  startsAt: startsAtField,
+                  active: { booleanValue: true },
+                },
+              },
+            ],
+          }),
+        };
+      }
+      throw new Error(`Unexpected url: ${url}`);
+    };
+
+    // Cairo 2026-04-10 (2 days before): must NOT fire when daysBefore=1
+    const resEarly = await runDailySeasons(
+      'proj',
+      'tok',
+      features,
+      {},
+      [],
+      makeFetch({ stringValue: '2026-04-11T22:00:00Z' }),
+      new Date('2026-04-10T08:00:00Z'), // 10:00 Cairo Apr 10
+    );
+    assert.equal(resEarly.alerts.length, 0);
+
+    // Cairo 2026-04-11 (1 day before): fires with daysRemaining = 1
+    const resDueString = await runDailySeasons(
+      'proj',
+      'tok',
+      features,
+      {},
+      [],
+      makeFetch({ stringValue: '2026-04-11T22:00:00Z' }),
+      new Date('2026-04-11T08:00:00Z'), // 10:00 Cairo Apr 11
+    );
+    assert.equal(resDueString.alerts.length, 1);
+    assert.equal(resDueString.alerts[0].daysRemaining, 1);
+    assert.equal(resDueString.alerts[0].logKey, 'season:easter:2026-04-12:1');
+
+    // Same check with Firestore timestampValue form
+    const resDueTs = await runDailySeasons(
+      'proj',
+      'tok',
+      features,
+      {},
+      [],
+      makeFetch({ timestampValue: '2026-04-11T22:00:00Z' }),
+      new Date('2026-04-11T08:00:00Z'),
+    );
+    assert.equal(resDueTs.alerts.length, 1);
+    assert.equal(resDueTs.alerts[0].daysRemaining, 1);
+    assert.equal(resDueTs.alerts[0].logKey, 'season:easter:2026-04-12:1');
+
+    // Plain YYYY-MM-DD string form passes through unchanged
+    const resPlain = await runDailySeasons(
+      'proj',
+      'tok',
+      features,
+      {},
+      [],
+      makeFetch({ stringValue: '2026-04-12' }),
+      new Date('2026-04-11T08:00:00Z'),
+    );
+    assert.equal(resPlain.alerts.length, 1);
+    assert.equal(resPlain.alerts[0].daysRemaining, 1);
+    assert.equal(resPlain.alerts[0].logKey, 'season:easter:2026-04-12:1');
+
+    // Summer EEST (UTC+3): Cairo midnight 2026-08-01 is stored as 2026-07-31T21:00:00Z
+    const resSummer = await runDailySeasons(
+      'proj',
+      'tok',
+      features,
+      {},
+      [],
+      makeFetch({ stringValue: '2026-07-31T21:00:00Z' }),
+      new Date('2026-08-01T07:00:00Z'), // 10:00 Cairo Aug 1
+    );
+    assert.equal(resSummer.alerts.length, 1);
+    assert.equal(resSummer.alerts[0].daysRemaining, 0);
+    assert.equal(resSummer.alerts[0].logKey, 'season:easter:2026-08-01:0');
+  });
 });
 
 describe('push_sender', () => {

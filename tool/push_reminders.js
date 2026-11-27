@@ -82,14 +82,38 @@ export function toCairoIsoDate(rawDate) {
 }
 
 /**
- * Converts Cairo wall time to a UTC Date object, handling Cairo DST transitions accurately.
+ * Converts Africa/Cairo wall time to a UTC Date object, handling Cairo DST transitions accurately.
+ *
+ * Egypt DST rules:
+ * - Spring forward (last Friday of April, 00:00 -> 01:00 EEST): non-existent wall times
+ *   in the 00:xx gap map forward by the transition offset (e.g. 00:30 -> same instant as 01:30 EEST).
+ * - Fall back (last Thursday of October, 24:00 -> 23:00 EET): ambiguous 23:xx wall times
+ *   resolve to the FIRST occurrence (EEST, UTC+3) so reminders never fire late.
+ *
+ * @param {number} year
+ * @param {number} month 1-12
+ * @param {number} day 1-31
+ * @param {number} [hour=0]
+ * @param {number} [minute=0]
+ * @param {number} [second=0]
+ * @returns {Date}
  */
-export function cairoToUtc(year, month, day, hour = 0, minute = 0) {
-  // Approximate candidate at UTC+2
-  const candidateUtc = new Date(Date.UTC(year, month - 1, day, hour - 2, minute));
-  const c = getCairoParts(candidateUtc);
-  const diffMinutes = hour * 60 + minute - (c.hour * 60 + c.minute);
-  return new Date(candidateUtc.getTime() + diffMinutes * 60000);
+export function cairoToUtc(year, month, day, hour = 0, minute = 0, second = 0) {
+  const wallMs = Date.UTC(year, month - 1, day, hour, minute, second);
+  const offsetAt = (t) => {
+    const c = getCairoParts(new Date(t));
+    return Date.UTC(c.year, c.month - 1, c.day, c.hour, c.minute, c.second) - t;
+  };
+  // Sample 3 hours earlier (max Cairo offset, UTC+3) so ambiguous fall-back times hit the first (EEST) occurrence.
+  const o1 = offsetAt(wallMs - 3 * 3600000);
+  const g1 = wallMs - o1;
+  const o2 = offsetAt(g1);
+  if (o2 === o1) return new Date(g1);
+  // If o2 !== o1, either g1 crossed into a different offset (g2 round-trips)
+  // or wallMs is in a spring-forward gap where g1 already maps forward.
+  const g2 = wallMs - o2;
+  if (offsetAt(g2) === o2) return new Date(g2);
+  return new Date(g1);
 }
 
 /**
@@ -287,8 +311,7 @@ export async function runPushReminderPlanner(env, options = {}) {
   // Register all known active event keys (skip hidden docs)
   for (const l of liturgies) {
     if (!isVisible(l.data || {})) continue;
-    const rawKey = l.data?.seasonKey ? `season-${l.id}` : `lit-${l.id}`;
-    const t = topicKey(rawKey);
+    const t = topicKey(`lit-${l.id}`);
     if (t) activeEventKeysSet.add(t);
   }
   for (const m of meetings) {
@@ -358,7 +381,7 @@ export async function runPushReminderPlanner(env, options = {}) {
 
       if (serviceStartMs < nowMs - 60000) continue;
 
-      const rawKey = `season-${lit.id}`;
+      const rawKey = `lit-${lit.id}`;
       const tKey = topicKey(rawKey);
       if (!tKey) continue;
 

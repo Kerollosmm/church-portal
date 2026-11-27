@@ -2,6 +2,7 @@
 // Standard Web APIs only (compatible with Cloudflare Workers and Node.js 22+).
 
 import { listCollection } from './firestore_rest.js';
+import { toCairoIsoDate } from './push_reminders.js';
 
 /**
  * Default season template configuration.
@@ -139,13 +140,12 @@ export async function runDailySeasons(
     const data = s.data || {};
     if (data.active === false) continue;
 
-    // Get start date ISO
-    let startDateIso = '';
-    if (typeof data.startsAt === 'string') {
-      startDateIso = data.startsAt.slice(0, 10);
-    } else if (data.startsAt?.timestampValue) {
-      startDateIso = data.startsAt.timestampValue.slice(0, 10);
-    }
+    // Get start date ISO in Africa/Cairo (admin dates are Cairo wall time stored as UTC)
+    const rawStartsAt =
+      typeof data.startsAt === 'string'
+        ? data.startsAt
+        : data.startsAt?.timestampValue;
+    const startDateIso = toCairoIsoDate(rawStartsAt);
     if (!startDateIso) continue;
 
     let daysRemaining = null;
