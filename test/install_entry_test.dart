@@ -2,7 +2,6 @@ import 'package:church_portal/core/install_env.dart';
 import 'package:church_portal/core/theme.dart';
 import 'package:church_portal/data/content_repository.dart';
 import 'package:church_portal/data/seed_data.dart';
-import 'package:church_portal/domain/app_install.dart';
 import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/features.dart';
 import 'package:church_portal/domain/models.dart';
@@ -20,32 +19,28 @@ class _FakeInstallEnv implements InstallEnv {
   @override
   String platform;
   @override
-  int maxTouchPoints;
-  @override
   bool isStandalone;
-  @override
-  bool hasDeferredPrompt;
-  @override
-  bool installedEventReceived;
-  int promptCalls = 0;
 
   _FakeInstallEnv({
     this.userAgent = 'Mozilla/5.0 (Linux; Android 14) Chrome/120.0.0.0 Mobile Safari/537.36',
     this.platform = 'Linux armv8l',
-    this.maxTouchPoints = 5,
     this.isStandalone = false,
-    this.hasDeferredPrompt = false,
-    this.installedEventReceived = false,
   });
 
   @override
-  void clearInstalledSessionFlag() => installedEventReceived = false;
+  int get maxTouchPoints => 5;
 
   @override
-  Future<bool> promptInstall() async {
-    promptCalls++;
-    return true;
-  }
+  bool get hasDeferredPrompt => false;
+
+  @override
+  bool get installedEventReceived => false;
+
+  @override
+  void clearInstalledSessionFlag() {}
+
+  @override
+  Future<bool> promptInstall() async => true;
 
   @override
   Map<String, dynamic>? readJson(String key) => null;

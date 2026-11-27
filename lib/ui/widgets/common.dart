@@ -11,7 +11,6 @@ import '../../core/l10n.dart';
 import '../../core/launch.dart';
 import '../../core/theme.dart';
 import '../../data/error_reporting.dart';
-import '../../domain/app_install.dart';
 import 'apk_install_guide.dart' deferred as guide;
 import '../../domain/custom_content.dart' show BuiltInSections;
 import '../../domain/features.dart';

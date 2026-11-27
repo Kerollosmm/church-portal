@@ -11,7 +11,6 @@ import '../../core/push_env.dart' show hasPendingWebPushSync, readWebPushStorage
 import '../../core/theme.dart';
 import '../../data/error_reporting.dart';
 import '../../data/web_push_repository.dart' deferred as web_push;
-import '../../domain/app_install.dart';
 import '../../domain/custom_content.dart';
 import '../../domain/features.dart';
 import '../../domain/item_detail.dart';

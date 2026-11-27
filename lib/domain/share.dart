@@ -1,4 +1,4 @@
-/// Pure helpers for plain-link sharing with zero tracking parameters.
+// Pure helpers for plain-link sharing with zero tracking parameters.
 
 /// Builds a WhatsApp share URI (`https://wa.me/?text=...`) containing [title]
 /// (if non-empty) and the plain canonical URL formed by [origin] + [path].
