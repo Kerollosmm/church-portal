@@ -1,14 +1,18 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show ValueListenable;
+import 'package:flutter/foundation.dart' show ValueListenable, kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../core/install_env.dart';
 import '../../core/l10n.dart';
 import '../../core/launch.dart';
 import '../../core/theme.dart';
+import '../../data/error_reporting.dart';
+import '../../domain/app_install.dart';
+import 'apk_install_guide.dart' deferred as guide;
 import '../../domain/custom_content.dart' show BuiltInSections;
 import '../../domain/features.dart';
 import '../../domain/models.dart';
@@ -681,8 +685,76 @@ String localDigits(BuildContext context, String s) => context.isAr ? toArabicDig
 /// switchable in `settings/features.footer` (and hidden with its section).
 /// "Golden hour": a warm panel over the church in the mist, then the
 /// posters' signature line with the Facebook / WhatsApp icons.
+Future<void> _loadInstallGuide(
+  BuildContext context,
+  Future<void> Function(BuildContext) show,
+) async {
+  try {
+    await guide.loadLibrary();
+  } catch (e, st) {
+    ErrorReporting.capture(e, st, section: 'deferred_chunk', source: 'apk_install_guide');
+    return;
+  }
+  if (context.mounted) await show(context);
+}
+
+/// Opens the appropriate deferred install sheet or APK download for the
+/// permanent «حمّل التطبيق» entry in the Footer and drawer.
+Future<void> launchInstallEntry(
+  BuildContext context,
+  InstallEnv env,
+  InstallSettings settings,
+) async {
+  final osInfo = detectInstallOs(
+    userAgent: env.userAgent,
+    platform: env.platform,
+    maxTouchPoints: env.maxTouchPoints,
+  );
+  final action = resolveInstallAction(
+    os: osInfo.os,
+    androidUrl: settings.androidUrl,
+    hasPrompt: env.hasDeferredPrompt,
+  );
+  switch (action) {
+    case InstallAction.apk:
+      openUrl(resolveInstallUrl(settings.androidUrl, Uri.base));
+      await _loadInstallGuide(
+        context,
+        (c) => guide.showApkInstallGuide(c, apkSizeMb: settings.apkSizeMb),
+      );
+    case InstallAction.pwaPrompt:
+      final shown = await env.promptInstall();
+      if (!shown && context.mounted) {
+        await _loadInstallGuide(context, (c) => guide.showAndroidInstallSteps(c));
+      }
+    case InstallAction.androidSteps:
+      await _loadInstallGuide(context, (c) => guide.showAndroidInstallSteps(c));
+    case InstallAction.iosSteps:
+      await _loadInstallGuide(context, (c) => guide.showIosInstallSteps(c));
+    case InstallAction.none:
+      if (env.hasDeferredPrompt) {
+        final shown = await env.promptInstall();
+        if (shown) return;
+      }
+      if (settings.androidUrl.trim().isNotEmpty) {
+        openUrl(resolveInstallUrl(settings.androidUrl, Uri.base));
+        if (context.mounted) {
+          await _loadInstallGuide(
+            context,
+            (c) => guide.showApkInstallGuide(c, apkSizeMb: settings.apkSizeMb),
+          );
+        }
+        return;
+      }
+      if (context.mounted) {
+        await _loadInstallGuide(context, (c) => guide.showAndroidInstallSteps(c));
+      }
+  }
+}
+
 class Footer extends ConsumerWidget {
-  const Footer({super.key});
+  final bool? isWeb;
+  const Footer({super.key, this.isWeb});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -690,6 +762,14 @@ class Footer extends ConsumerWidget {
     final servingSeed = ref.watch(repositoryProvider).servingSeed;
     final year = DateTime.now().year;
     final features = ref.watch(featuresProvider);
+    final installEnv = ref.watch(installEnvProvider);
+    final installSettings = ref.watch(installSettingsProvider);
+    final showInstall = shouldShowInstallEntry(
+      settings: installSettings,
+      isStandalone: installEnv.isStandalone,
+      installedEventReceived: installEnv.installedEventReceived,
+      isWeb: isWeb ?? kIsWeb,
+    );
     // Until settings/features arrives the defaults are "everything on": wait
     // before showing phones / social links an admin may have switched off.
     final ready = ref.watch(featuresReadyProvider);
@@ -839,7 +919,7 @@ class Footer extends ConsumerWidget {
             ],
           );
 
-    final quick = !(footer.showQuickLinks && links.isNotEmpty)
+    final quick = !(footer.showQuickLinks && (links.isNotEmpty || showInstall))
         ? null
         : Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -859,6 +939,20 @@ class Footer extends ConsumerWidget {
                           child: Text(
                             context.tr(l.$1),
                             style: TextStyle(color: context.pal.ink, fontWeight: FontWeight.w400),
+                          ),
+                        ),
+                      ),
+                    if (showInstall)
+                      SizedBox(
+                        height: 48,
+                        child: TextButton.icon(
+                          key: const Key('footerInstallApp'),
+                          onPressed: () => launchInstallEntry(context, installEnv, installSettings),
+                          style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4)),
+                          icon: Icon(Icons.download_for_offline_outlined, size: 18, color: primary),
+                          label: Text(
+                            context.tr('installAppLink'),
+                            style: TextStyle(color: context.pal.ink, fontWeight: FontWeight.w600),
                           ),
                         ),
                       ),

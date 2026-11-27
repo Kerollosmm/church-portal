@@ -346,6 +346,7 @@ const Map<String, List<String>> _strings = {
   'installDismiss': ['إغلاق', 'Close'],
   'installOpenMethod': ['طريقة التثبيت', 'Install guide'],
   'installIosAction': ['طريقة الإضافة', 'How to add'],
+  'installAppLink': ['حمّل التطبيق', 'Get the app'],
   'notifications': ['الإشعارات', 'Notifications'],
   'remindMe': ['ذكّرني', 'Remind me'],
   'remindMeSet': ['مجدول ({lead})', 'Set ({lead})'],

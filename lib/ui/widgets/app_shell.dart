@@ -11,6 +11,7 @@ import '../../core/push_env.dart' show hasPendingWebPushSync, readWebPushStorage
 import '../../core/theme.dart';
 import '../../data/error_reporting.dart';
 import '../../data/web_push_repository.dart' deferred as web_push;
+import '../../domain/app_install.dart';
 import '../../domain/custom_content.dart';
 import '../../domain/features.dart';
 import '../../domain/item_detail.dart';
@@ -19,6 +20,7 @@ import '../../router.dart' show consumePendingNotificationRoute;
 import '../../state/notify_providers.dart';
 import '../../state/providers.dart';
 import '../pages/category_page.dart' show categoryIcon;
+import 'common.dart' show launchInstallEntry;
 import 'coptic_cross.dart';
 import 'golden.dart';
 import 'install_banner.dart';
@@ -132,7 +134,8 @@ const serviceNavPaths = ['/mass-schedule', '/church-education', '/church-activit
 class AppShell extends ConsumerStatefulWidget {
   final Widget child;
   final String location;
-  const AppShell({super.key, required this.child, required this.location});
+  final bool? isWeb;
+  const AppShell({super.key, required this.child, required this.location, this.isWeb});
 
   @override
   ConsumerState<AppShell> createState() => _AppShellState();
@@ -508,7 +511,15 @@ class _AppShellState extends ConsumerState<AppShell> {
           ),
         ),
       ),
-      endDrawer: wide ? null : _AppDrawer(location: location, showAsk: showAsk, showLang: ready && features.englishEnabled),
+      endDrawer: wide
+          ? null
+          : _AppDrawer(
+              location: location,
+              showAsk: showAsk,
+              showLang: ready && features.englishEnabled,
+              hostContext: context,
+              isWeb: widget.isWeb ?? kIsWeb,
+            ),
       body: Stack(children: [
         const Positioned.fill(child: WarmBackdrop()),
         // Today layer (ADR-040): while the church is streaming,
@@ -751,12 +762,28 @@ class _AppDrawer extends ConsumerWidget {
   final String location;
   final bool showAsk;
   final bool showLang;
-  const _AppDrawer({required this.location, required this.showAsk, this.showLang = true});
+  final BuildContext hostContext;
+  final bool isWeb;
+  const _AppDrawer({
+    required this.location,
+    required this.showAsk,
+    this.showLang = true,
+    required this.hostContext,
+    required this.isWeb,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final items = visibleNavItems(ref.watch(featuresProvider), showAsk: showAsk);
     final settings = ref.watch(settingsProvider).value;
+    final installEnv = ref.watch(installEnvProvider);
+    final installSettings = ref.watch(installSettingsProvider);
+    final showInstall = shouldShowInstallEntry(
+      settings: installSettings,
+      isStandalone: installEnv.isStandalone,
+      installedEventReceived: installEnv.installedEventReceived,
+      isWeb: isWeb,
+    );
     final primary = context.pal.primary;
     final custom = customNavItems(ref);
     final pushOn = ref.watch(pushSettingsProvider.select((p) => p.enabled));
@@ -841,6 +868,20 @@ class _AppDrawer extends ConsumerWidget {
             const SizedBox(height: 6),
             if (church.isNotEmpty) group(context.tr('navChurch'), church),
             if (services.isNotEmpty) group(context.tr('churchServices'), services),
+            if (showInstall)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                child: ListTile(
+                  key: const Key('drawerInstallApp'),
+                  minTileHeight: 48,
+                  leading: Icon(Icons.download_for_offline_outlined, color: primary, size: 22),
+                  title: Text(context.tr('installAppLink'), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    launchInstallEntry(hostContext, installEnv, installSettings);
+                  },
+                ),
+              ),
             if (showLang)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
