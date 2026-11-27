@@ -160,6 +160,8 @@ class _AppShellState extends ConsumerState<AppShell> {
     _unlistenInstall = ref.read(installEnvProvider).listenInstallChanges(() {
       if (mounted) setState(() {});
     });
+    // Trigger best-effort verification of any previous offline contact marker on startup.
+    ref.read(contactQueueProvider);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final pending = consumePendingNotificationRoute();

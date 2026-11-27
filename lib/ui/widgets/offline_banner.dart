@@ -8,27 +8,11 @@ import '../../state/providers.dart';
 /// Compact connectivity-hint banner shown when the device has no network.
 ///
 /// Uses [connectivityProvider] (a hint only — lie-fi still reports online;
-/// Firestore timeouts remain the authoritative guard). Renders nothing when no
-/// [ProviderScope] is above it (e.g. bare widget tests for [AdminDashboard]).
-class OfflineBanner extends StatelessWidget {
+/// Firestore timeouts remain the authoritative guard).
+class OfflineBanner extends ConsumerWidget {
   final String? message;
 
   const OfflineBanner({super.key, this.message});
-
-  @override
-  Widget build(BuildContext context) {
-    final hasScope =
-        context.findAncestorWidgetOfExactType<UncontrolledProviderScope>() != null ||
-            context.findAncestorWidgetOfExactType<ProviderScope>() != null;
-    if (!hasScope) return const SizedBox.shrink();
-    return _ScopedOfflineBanner(message: message);
-  }
-}
-
-class _ScopedOfflineBanner extends ConsumerWidget {
-  final String? message;
-
-  const _ScopedOfflineBanner({this.message});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
