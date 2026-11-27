@@ -10,11 +10,13 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../data/app_updater.dart';
 import '../domain/app_update.dart';
 
+import '../core/connectivity_env.dart';
 import '../core/content_ready.dart';
 import '../core/install_env.dart';
 import '../core/locale_storage.dart';
 import '../core/push_env.dart';
 import '../data/content_repository.dart';
+import '../data/error_reporting.dart';
 import '../data/firebase_bootstrap.dart';
 import '../data/media_repository.dart';
 import '../data/reminder_store.dart';
@@ -25,11 +27,34 @@ import '../domain/contact_categories.dart';
 import '../domain/coptic_calendar.dart';
 import '../domain/custom_content.dart';
 import '../domain/daily_verse.dart';
+import '../domain/error_privacy.dart';
 import '../domain/features.dart';
 import '../domain/models.dart';
 import '../domain/reminders.dart';
 import '../domain/schedule.dart' show activeSeasonsAt;
 import '../domain/today.dart';
+
+/// Connectivity environment provider (overridable in tests).
+final connectivityEnvProvider = Provider<ConnectivityEnv>((ref) => const PlatformConnectivityEnv());
+
+/// Live connectivity hint stream (true when a network interface or browser
+/// connection is active, false only when offline).
+final connectivityProvider = StreamProvider<bool>((ref) async* {
+  final env = ref.watch(connectivityEnvProvider);
+  var last = env.isOnline;
+  yield last;
+  final checked = await env.checkOnline();
+  if (checked != last) {
+    last = checked;
+    yield checked;
+  }
+  await for (final next in env.onOnlineChanged) {
+    if (next != last) {
+      last = next;
+      yield next;
+    }
+  }
+});
 
 /// Overridden in main() after bootstrapping.
 final firebaseStatusProvider = Provider<FirebaseStatus>((ref) => FirebaseStatus.unavailable);
@@ -598,5 +623,122 @@ class ReaderFocusModeNotifier extends Notifier<bool> {
 
   void setFocus(bool active) {
     if (state != active) state = active;
+  }
+}
+
+// ------------------- Offline Contact Queue (PR 6F-2) -------------------
+
+/// Preserved form draft for an offline-queued contact message so a later
+/// Firestore rules/throttle rejection never loses the visitor's text.
+@immutable
+class ContactDraft {
+  final String name;
+  final String phone;
+  final String email;
+  final String message;
+  final String preferredDate;
+  final String? slot;
+  final String bookingType;
+  final bool anonymous;
+  final bool consented;
+
+  const ContactDraft({
+    this.name = '',
+    this.phone = '',
+    this.email = '',
+    this.message = '',
+    this.preferredDate = '',
+    this.slot,
+    this.bookingType = '',
+    this.anonymous = false,
+    this.consented = false,
+  });
+}
+
+enum ContactQueuePhase { idle, pending, sent, failed }
+
+@immutable
+class ContactQueueState {
+  final ContactQueuePhase phase;
+  final ContactDraft? draft;
+  final bool hasPendingWrites;
+  final Object? error;
+
+  const ContactQueueState({
+    this.phase = ContactQueuePhase.idle,
+    this.draft,
+    this.hasPendingWrites = false,
+    this.error,
+  });
+}
+
+/// Coordinates contact submission and continues watching queued offline batch
+/// commits so server rejections (e.g. `meta/contact_rate` throttle or rules
+/// errors) surface a persistent notice and preserve the visitor's draft.
+final contactQueueProvider =
+    NotifierProvider<ContactQueueNotifier, ContactQueueState>(ContactQueueNotifier.new);
+
+class ContactQueueNotifier extends Notifier<ContactQueueState> {
+  int _generation = 0;
+
+  @override
+  ContactQueueState build() => const ContactQueueState();
+
+  void clearNotice() {
+    if (state.phase == ContactQueuePhase.pending) return;
+    state = const ContactQueueState();
+  }
+
+  Future<ContactSubmitResult> submit({
+    required Map<String, dynamic> payload,
+    required String lang,
+    required ContactDraft draft,
+    VoidCallback? onSynced,
+  }) async {
+    final gen = ++_generation;
+    final result = await ref.read(repositoryProvider).submitContact(payload, lang: lang);
+    if (!ref.mounted || gen != _generation) return result;
+
+    if (result.isSent) {
+      onSynced?.call();
+      state = const ContactQueueState(phase: ContactQueuePhase.sent);
+      return result;
+    }
+
+    state = ContactQueueState(
+      phase: ContactQueuePhase.pending,
+      draft: draft,
+      hasPendingWrites: true,
+    );
+
+    final pending = result.pendingCommit;
+    if (pending != null) {
+      unawaited(
+        pending.then<void>(
+          (_) {
+            if (!ref.mounted || gen != _generation) return;
+            onSynced?.call();
+            state = const ContactQueueState(phase: ContactQueuePhase.sent);
+          },
+          onError: (Object e, StackTrace st) {
+            ErrorReporting.capture(
+              ContactSubmitFailure(e.runtimeType.toString(), scrubText('$e')),
+              st,
+              section: 'contact',
+              source: '$e'.contains('permission-denied') ? 'permission-denied' : null,
+            );
+            if (!ref.mounted || gen != _generation) return;
+            state = ContactQueueState(
+              phase: ContactQueuePhase.failed,
+              draft: draft,
+              hasPendingWrites: false,
+              error: e,
+            );
+          },
+        ),
+      );
+    }
+
+    return result;
   }
 }

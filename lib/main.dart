@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'app.dart';
+import 'core/connectivity_env.dart';
 import 'core/install_env.dart';
 import 'core/locale_storage.dart';
 import 'core/push_env.dart';
@@ -61,12 +62,19 @@ Future<void> _start() async {
     initLanguageStore(),
     initInstallStore(),
     initPushStore(),
+    initConnectivityEnv(),
   ]);
   final seed = results[0] as SeedData;
   final status = results[1] as FirebaseStatus;
+  const connectivity = PlatformConnectivityEnv();
 
-  final ContentRepository repo =
-      status.available ? FirestoreRepository(FirebaseFirestore.instance, seed) : SeedRepository(seed);
+  final ContentRepository repo = status.available
+      ? FirestoreRepository(
+          FirebaseFirestore.instance,
+          seed,
+          isOffline: () => !connectivity.isOnline,
+        )
+      : SeedRepository(seed);
   final MediaRepository? media =
       status.available ? createPublicMediaRepository(FirebaseFirestore.instance) : null;
 
