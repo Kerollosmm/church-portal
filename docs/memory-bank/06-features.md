@@ -553,7 +553,7 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
 - **Server throttle** (rules): message + `meta/contact_rate {lastAt: serverTimestamp(), lastMsgId: <message id>}` in
   one batch; the rate doc may advance only every **10 s** globally and only together with a new message (SEC-01);
   rules re-validate every field; the public can never read messages.
-- Outcomes: sent; **timeout** (15 s, PR 1 / BUG-06): «لم نتمكن من تأكيد الإرسال…» (`sendTimeoutRetry`), shown as an
+- Outcomes: sent; **queuedOffline** (`ContactSubmitStatus.queuedOffline`, PR 6F-2 / ADR-092): when `isOffline()` hints no connection, `FirestoreRepository.submitContact` polls `msgRef.get(Source.cache)` (never an active `.snapshots()` listener, since `contact_messages` denies public reads) until `hasPendingWrites` is true and returns `queuedOffline(pendingCommit: commitFuture)`, clearing fields and showing «هيتبعت أول ما النت يرجع» (`contactQueuedOffline`, `Key('contactQueuedStatus')`) with Send (`Key('contactSendButton')`) disabled while pending; meanwhile `contactQueueProvider` continues listening to `pendingCommit` so if the server later rejects on sync (e.g. global `meta/contact_rate` 10 s throttle or rules), `ContactForm` surfaces a persistent `Key('contactQueuedError')` (`contactQueuedFailed`) banner and restores the saved `ContactDraft` for resend; **timeout** (15 s, PR 1 / BUG-06, e.g. lie-fi): «لم نتمكن من تأكيد الإرسال…» (`sendTimeoutRetry`), shown as an
   error and the **form keeps the visitor's text** (the queued batch may still be rejected by the server throttle, so
   delivery is never promised); unavailable (seed mode); failed.
 - **Privacy notice + consent** (PR 3 of the review plan, FR-CT-06, Egyptian PDPL Law 151/2020): under the message
@@ -622,6 +622,7 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
 - **Denied Permission Recovery (ADR-065):**
   - When `permission == 'denied'`, the screen displays a browser site settings guide (padlock / site settings instructions) and an «إعادة فحص الإذن» / "Re-check permission" button to re-evaluate without reloading.
 - Standalone OEM battery health diagnostics remain available on the dedicated route `/notifications/battery` (`notification_health_page.dart`, ADR-058, ADR-062).
+- **Offline Banner & Admin Offline Guard (PR 6F-2 / ADR-092):** `OfflineBanner` (`lib/ui/widgets/offline_banner.dart`, `Key('offlineBanner')`) watches `connectivityProvider` (`ConnectivityEnv` hint only) inside `AppShell` and `AdminDashboard` (`adminOfflineBanner`). When `connectivityProvider` hints completely offline (`ConnectivityResult.none` only / `navigator.onLine == false`), `AdminRepository` (`_assertOnline` → `AdminOfflineException`) blocks mutations and media uploads immediately with `formatAdminError` guidance (`adminOfflineError`) while keeping existing server-ack timeouts (`15 s`) as the lie-fi guard; failed native FCM topic sync (`pendingTopicSyncKey`) retries once per `offline -> online` transition via `NotifyPlanner` (`notify_providers.dart`).
 
 ### Notification Health & OEM Guidance (`/notifications/battery`, `notification_health_page.dart`, ADR-058, ADR-062)
 - Screen uses unified `PageBody` + `PageHeader` (ADR-062, `INV-NAV-01`; no nested `Scaffold` or custom top bar) with localized strings registered via dedicated deferred string table `notificationHealthStrings`. `parentRouteOf('/notifications/battery')` routes back to `/notifications` with tooltip «العودة إلى الإشعارات» / "Back to Notifications".
@@ -634,7 +635,7 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
 - If a newer build is published (`installApkBuild > currentBuild`), a dismissable bottom banner appears.
 - If `currentBuild < minSupportedBuild`, the update is mandatory and non-dismissable.
 - Tapping «تحديث الآن» opens `UpdateSheet` displaying Arabic release notes, file size, download progress bar with speed/percentage, and triggers APK installation via Android `FileProvider`.
-- Streaming download supports HTTP `Range` resume on network dropouts and verifies SHA-256 hash before renaming `.apk.part` to `.apk`.
+- Streaming download supports HTTP `Range` resume on network dropouts, verifies SHA-256 hash before renaming `.apk.part` to `.apk`, and bounds both `checkForUpdate` and `downloadUpdate` by `PlatformAppUpdater.manifestTimeout` (`8 s` `connectionTimeout` + `8 s` response read bound, PR 6F-2 / ADR-092).
 
 ### Android Native Shell (`app_shell.dart`, `router.dart`, ADR-058)
 - Route `/admin` is completely compiled out when `!isWeb`.
