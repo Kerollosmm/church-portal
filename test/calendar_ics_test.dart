@@ -120,8 +120,22 @@ void main() {
       expect(url, contains('text=%D9%82%D8%AF%D8%A7%D8%B3+%D8%AE%D8%A7%D8%B5'));
       expect(url, contains('dates=20261115T083000%2F20261115T093000'));
       expect(url, contains('ctz=Africa%2FCairo'));
+      expect(url, isNot(contains('recur=')));
       expect(url, contains('details='));
       expect(url, contains('location='));
+    });
+
+    test('singleCalendarUrl includes weekly RRULE when recurringWeekly is true', () {
+      // 2026-11-15 is Sunday (Cairo UTC+2 -> 08:30 Cairo).
+      final startsAt = DateTime.utc(2026, 11, 15, 6, 30);
+      final url = singleCalendarUrl(
+        title: 'قداس الأحد',
+        startsAt: startsAt,
+        recurringWeekly: true,
+      );
+
+      final parsed = Uri.parse(url);
+      expect(parsed.queryParameters['recur'], 'RRULE:FREQ=WEEKLY;BYDAY=SU');
     });
   });
 }
