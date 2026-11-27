@@ -781,6 +781,33 @@ const Map<String, List<String>> adminStrings = {
     'Change this admin\'s role to "{role}"?',
   ],
   'changeRoleAction': ['تغيير الصلاحية', 'Change role'],
+  'catDeletePagesWarn': [
+    'ستُفصل أيضًا الصفحات المرتبطة بهذا القسم ({p}) وتتحول إلى «لينك بس» دون حذفها:',
+    'Its {p} linked page(s) will also be detached from this section and switched to "Link only" (not deleted):',
+  ],
+  'catDeletedWithPages': [
+    'حُذف القسم وأُخفيت عناصره وفُصلت صفحاته',
+    'Section deleted; its items are hidden and linked pages detached',
+  ],
+  'seasonReplaceDateOutsideWindow': [
+    'أيام استبدال الجدول يجب أن تكون داخل فترة الموسم (من البداية إلى النهاية).',
+    'Schedule-replacement dates must fall within the season start and end dates.',
+  ],
+  'seasonDuplicateActiveKey': [
+    'يوجد موسم آخر مُفعَّل بنفس نوع الموسم وفي نفس الفترة. أوقِف أحدهما أو غيّر التواريخ.',
+    'Another active season with the same key overlaps these dates. Turn one off or change the dates.',
+  ],
+  'seasonOverlapWarning': [
+    'تنبيه: تتداخل فترة هذا الموسم مع موسم مفعّل آخر ({names}).',
+    'Warning: this season overlaps in dates with another active season ({names}).',
+  ],
+  'seasonKeyChangeTitle': ['تغيير نوع الموسم', 'Change season key'],
+  'seasonKeyChangeBody': [
+    'توجد {c} خدمة مرتبطة حاليًا بموسم «{old}». تغيير نوع الموسم إلى «{new}» بدون نقلها سيفصلها عن جدوله.',
+    '{c} service(s) currently reference "{old}". Changing the key to "{new}" without moving them will detach them from its schedule.',
+  ],
+  'seasonKeyChangeMoveBtn': ['نقل الخدمات وحفظ', 'Move services & save'],
+  'seasonKeyChangeKeepBtn': ['حفظ بدون نقل', 'Save without moving'],
 };
 
 /// Idempotently registers [adminStrings] in the runtime localization table.
