@@ -776,6 +776,11 @@ const Map<String, List<String>> adminStrings = {
     'تعذّر الحفظ — تأكد من الاتصال بالإنترنت وحاول تاني',
     'Could not save — check your internet connection and try again.'
   ],
+  'confirmChangeAdminRole': [
+    'تغيير صلاحية هذا المشرف إلى «{role}»؟',
+    'Change this admin\'s role to "{role}"?',
+  ],
+  'changeRoleAction': ['تغيير الصلاحية', 'Change role'],
 };
 
 /// Idempotently registers [adminStrings] in the runtime localization table.

@@ -8,16 +8,19 @@ import '../../core/l10n.dart';
 import '../../core/theme.dart';
 import '../../domain/rules.dart' show toArabicDigits;
 import 'admin_strings.dart';
+import 'session_policy_stub.dart' if (dart.library.js_interop) 'session_policy_web.dart' as focus_impl;
 import 'unsaved_guard.dart';
 
 /// Pure idle-timeout policy for shared office admin sessions (P1-13, D1).
 class SessionPolicy {
   final Duration idleLimit;
   final Duration warnBefore;
+  final Duration confirmTimeout;
 
   const SessionPolicy({
     this.idleLimit = const Duration(minutes: 30),
     this.warnBefore = const Duration(seconds: 60),
+    this.confirmTimeout = const Duration(seconds: 60),
   });
 
   Duration get warnAt => idleLimit > warnBefore ? idleLimit - warnBefore : Duration.zero;
@@ -32,6 +35,7 @@ class AdminSessionGuard extends StatefulWidget {
   final SessionPolicy policy;
   final UnsavedGuardRegistry unsaved;
   final VoidCallback onSignOut;
+  final DateTime Function()? now;
   final Widget child;
 
   const AdminSessionGuard({
@@ -41,20 +45,28 @@ class AdminSessionGuard extends StatefulWidget {
     required this.onSignOut,
     required this.child,
     this.policy = const SessionPolicy(),
+    this.now,
   });
 
   @override
   State<AdminSessionGuard> createState() => _AdminSessionGuardState();
 }
 
-class _AdminSessionGuardState extends State<AdminSessionGuard> {
+class _AdminSessionGuardState extends State<AdminSessionGuard> with WidgetsBindingObserver {
   Timer? _warnTimer;
   Timer? _signOutTimer;
   Timer? _countdownTimer;
+  Timer? _confirmTimer;
+  DateTime? _lastActivityAt;
+  DateTime? _confirmShownAt;
+  void Function(bool discard)? _dismissConfirmDialog;
+  VoidCallback? _removeFocusListener;
   bool _warning = false;
   bool _confirmingUnsaved = false;
   bool _listenersAttached = false;
   int _secondsLeft = 0;
+
+  DateTime _now() => (widget.now ?? DateTime.now)();
 
   @override
   void initState() {
@@ -74,6 +86,8 @@ class _AdminSessionGuardState extends State<AdminSessionGuard> {
     } else if (!widget.enabled && oldWidget.enabled) {
       _detachListeners();
       _cancelTimers();
+      _lastActivityAt = null;
+      _dismissConfirmDialog?.call(false);
       if (_warning) setState(() => _warning = false);
     } else if (widget.enabled && widget.policy != oldWidget.policy) {
       _resetTimers();
@@ -87,11 +101,20 @@ class _AdminSessionGuardState extends State<AdminSessionGuard> {
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkWallClock();
+    }
+  }
+
   void _attachListeners() {
     if (_listenersAttached) return;
     _listenersAttached = true;
     GestureBinding.instance.pointerRouter.addGlobalRoute(_onGlobalPointer);
     HardwareKeyboard.instance.addHandler(_onKeyEvent);
+    WidgetsBinding.instance.addObserver(this);
+    _removeFocusListener = focus_impl.addWindowFocusListener(_checkWallClock);
   }
 
   void _detachListeners() {
@@ -99,6 +122,9 @@ class _AdminSessionGuardState extends State<AdminSessionGuard> {
     _listenersAttached = false;
     GestureBinding.instance.pointerRouter.removeGlobalRoute(_onGlobalPointer);
     HardwareKeyboard.instance.removeHandler(_onKeyEvent);
+    WidgetsBinding.instance.removeObserver(this);
+    _removeFocusListener?.call();
+    _removeFocusListener = null;
   }
 
   void _onGlobalPointer(PointerEvent event) {
@@ -123,10 +149,17 @@ class _AdminSessionGuardState extends State<AdminSessionGuard> {
     _signOutTimer = null;
     _countdownTimer?.cancel();
     _countdownTimer = null;
+    _confirmTimer?.cancel();
+    _confirmTimer = null;
   }
 
   void _recordActivity() {
     if (!mounted || !widget.enabled || _confirmingUnsaved) return;
+    final last = _lastActivityAt;
+    if (last != null && _now().difference(last) >= widget.policy.idleLimit) {
+      _onIdleLimit();
+      return;
+    }
     if (_warning) {
       setState(() => _warning = false);
     }
@@ -135,11 +168,67 @@ class _AdminSessionGuardState extends State<AdminSessionGuard> {
 
   void _resetTimers() {
     _cancelTimers();
-    if (!widget.enabled) return;
+    if (!widget.enabled) {
+      _lastActivityAt = null;
+      return;
+    }
+    _lastActivityAt = _now();
+    _scheduleFromElapsed(Duration.zero);
+  }
+
+  void _scheduleFromElapsed(Duration elapsed) {
+    _warnTimer?.cancel();
+    _warnTimer = null;
+    _signOutTimer?.cancel();
+    _signOutTimer = null;
+    _countdownTimer?.cancel();
+    _countdownTimer = null;
+
     final policy = widget.policy;
+    if (elapsed >= policy.idleLimit) {
+      _onIdleLimit();
+      return;
+    }
+    final untilSignOut = policy.idleLimit - elapsed;
+    if (elapsed >= policy.warnAt) {
+      final remaining = untilSignOut.inSeconds;
+      if (!_warning || _secondsLeft != remaining) {
+        setState(() {
+          _warning = true;
+          _secondsLeft = remaining > 0 ? remaining : 0;
+        });
+      }
+      _startCountdown();
+      _signOutTimer = Timer(untilSignOut, _onIdleLimit);
+      return;
+    }
+    if (_warning) {
+      setState(() => _warning = false);
+    }
     _secondsLeft = policy.warnBefore.inSeconds;
-    _warnTimer = Timer(policy.warnAt, _showWarning);
-    _signOutTimer = Timer(policy.idleLimit, _onIdleLimit);
+    _warnTimer = Timer(policy.warnAt - elapsed, _showWarning);
+    _signOutTimer = Timer(untilSignOut, _onIdleLimit);
+  }
+
+  void _checkWallClock() {
+    if (!mounted || !widget.enabled) return;
+    if (_confirmingUnsaved) {
+      final shownAt = _confirmShownAt;
+      if (shownAt != null && _now().difference(shownAt) >= widget.policy.confirmTimeout) {
+        _confirmTimer?.cancel();
+        _confirmTimer = null;
+        _dismissConfirmDialog?.call(true);
+      }
+      return;
+    }
+    final last = _lastActivityAt;
+    if (last == null) return;
+    final elapsed = _now().difference(last);
+    if (elapsed.isNegative) {
+      _resetTimers();
+      return;
+    }
+    _scheduleFromElapsed(elapsed);
   }
 
   void _showWarning() {
@@ -149,6 +238,10 @@ class _AdminSessionGuardState extends State<AdminSessionGuard> {
       _warning = true;
       _secondsLeft = remaining > 0 ? remaining : 0;
     });
+    _startCountdown();
+  }
+
+  void _startCountdown() {
     _countdownTimer?.cancel();
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted || !_warning) return;
@@ -159,6 +252,10 @@ class _AdminSessionGuardState extends State<AdminSessionGuard> {
   }
 
   Future<void> _onIdleLimit() async {
+    _warnTimer?.cancel();
+    _warnTimer = null;
+    _signOutTimer?.cancel();
+    _signOutTimer = null;
     _countdownTimer?.cancel();
     _countdownTimer = null;
     if (!mounted || !widget.enabled || _confirmingUnsaved) return;
@@ -167,8 +264,20 @@ class _AdminSessionGuardState extends State<AdminSessionGuard> {
       return;
     }
     _confirmingUnsaved = true;
+    _confirmShownAt = _now();
     if (_warning) setState(() => _warning = false);
-    final discard = await confirmDiscardChanges(context);
+    _confirmTimer?.cancel();
+    _confirmTimer = Timer(widget.policy.confirmTimeout, () {
+      _dismissConfirmDialog?.call(true);
+    });
+    final discard = await confirmDiscardChanges(
+      context,
+      onOpen: (dismiss) => _dismissConfirmDialog = dismiss,
+    );
+    _confirmTimer?.cancel();
+    _confirmTimer = null;
+    _confirmShownAt = null;
+    _dismissConfirmDialog = null;
     _confirmingUnsaved = false;
     if (!mounted || !widget.enabled) return;
     if (discard) {
