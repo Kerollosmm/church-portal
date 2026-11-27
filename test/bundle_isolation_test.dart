@@ -199,14 +199,21 @@ void main() {
       final updateBannerRouter = File('lib/ui/widgets/update_banner.dart').readAsStringSync();
       final urlImageCacheRouter = File('lib/data/url_image_cache.dart').readAsStringSync();
       final urlImageCacheStub = File('lib/data/url_image_cache_stub.dart').readAsStringSync();
+      final connRouter = File('lib/core/connectivity_env.dart').readAsStringSync();
+      final connWeb = File('lib/core/connectivity_env_web.dart').readAsStringSync();
+      final connStub = File('lib/core/connectivity_env_stub.dart').readAsStringSync();
 
       expect(mainSource, isNot(contains('firebase_auth')));
       expect(mainSource, isNot(contains('admin_repository.dart')));
       expect(mainSource, isNot(contains('adminRepositoryProvider')));
+      expect(mainSource, isNot(contains('connectivity_plus')));
+      expect(mainSource, isNot(contains('connectivity_env_io.dart')));
       expect(mainSource, contains('createPublicMediaRepository'));
 
       expect(providersSource, isNot(contains('admin_repository.dart')));
       expect(providersSource, isNot(contains('adminRepositoryProvider')));
+      expect(providersSource, isNot(contains('connectivity_plus')));
+      expect(providersSource, isNot(contains('connectivity_env_io.dart')));
 
       expect(bootstrapSource, isNot(matches(RegExp(r'^import\s+.*firebase_app_check', multiLine: true))));
       expect(bootstrapSource, isNot(matches(RegExp(r'^import\s+.*app_check_providers\.dart', multiLine: true))));
@@ -225,6 +232,13 @@ void main() {
       expect(urlImageCacheStub, isNot(contains('dart:io')));
       expect(urlImageCacheStub, isNot(contains('package:http/')));
       expect(urlImageCacheStub, isNot(contains('package:crypto/')));
+
+      expect(connRouter, contains("if (dart.library.js_interop) 'connectivity_env_web.dart'"));
+      expect(connRouter, contains("if (dart.library.io) 'connectivity_env_io.dart'"));
+      expect(connWeb, isNot(contains('connectivity_plus')));
+      expect(connWeb, isNot(contains('dart:io')));
+      expect(connStub, isNot(contains('connectivity_plus')));
+      expect(connStub, isNot(contains('dart:io')));
     });
 
     test('isAppCheckConfigured matches selectAppCheckPlan.activate across all build/platform inputs', () {

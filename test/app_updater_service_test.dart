@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:church_portal/data/app_updater_io.dart' show PlatformAppUpdater;
 import 'package:crypto/crypto.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -208,6 +210,53 @@ void main() {
         installApkBuild: 50,
       );
 
+      expect(decision, isNotNull);
+      expect(decision!.hasUpdate, isFalse);
+    });
+
+    test('checkForUpdate sets 8 s connectionTimeout and returns UpdateDecision.none when server stalls', () async {
+      expect(PlatformAppUpdater.manifestTimeout, const Duration(seconds: 8));
+
+      final stalledSockets = <Socket>[];
+      final stalledServer = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      stalledServer.listen((socket) {
+        stalledSockets.add(socket);
+        // Accept TCP connection and intentionally never send HTTP headers/body.
+      });
+      addTearDown(() async {
+        for (final s in stalledSockets) {
+          s.destroy();
+        }
+        await stalledServer.close();
+      });
+
+      final seenTimeouts = <Duration?>[];
+      final defaultClient = HttpClient();
+      final defaultUpdater = AppUpdater(
+        cacheDirectory: tempDir,
+        clientFactory: () => defaultClient,
+        defaultManifestUrl: 'http://${stalledServer.address.host}:${stalledServer.port}/version.json',
+      );
+      // Verify default connectionTimeout is wired before the stalled test runs.
+      unawaited(
+        defaultUpdater
+            .checkForUpdate(currentBuild: 1, installApkBuild: 2)
+            .catchError((_) => null),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      seenTimeouts.add(defaultClient.connectionTimeout);
+      defaultClient.close(force: true);
+      expect(seenTimeouts.single, const Duration(seconds: 8));
+
+      final fastTimeoutUpdater = AppUpdater(
+        cacheDirectory: tempDir,
+        defaultManifestUrl: 'http://${stalledServer.address.host}:${stalledServer.port}/version.json',
+        timeout: const Duration(milliseconds: 120),
+      );
+      final decision = await fastTimeoutUpdater.checkForUpdate(
+        currentBuild: 1,
+        installApkBuild: 2,
+      );
       expect(decision, isNotNull);
       expect(decision!.hasUpdate, isFalse);
     });
