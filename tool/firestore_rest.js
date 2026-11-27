@@ -239,6 +239,18 @@ export function fromFirestoreFields(fields) {
 }
 
 /**
+ * Whether a content document is in the soft-delete bin (`deletedAt != null`),
+ * mirroring Dart `isSoftDeleted` (handles decoded values and raw REST shapes).
+ */
+export function isSoftDeleted(data) {
+  if (!data) return false;
+  const v = data.deletedAt;
+  if (v === null || v === undefined) return false;
+  if (typeof v === 'object' && 'nullValue' in v) return false;
+  return true;
+}
+
+/**
  * Batch-gets multiple Firestore documents in a single HTTP subrequest.
  * Consumes exactly 1 read per found document.
  *
