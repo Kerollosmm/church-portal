@@ -1,3 +1,4 @@
+import 'dart:async' show unawaited;
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -12,6 +13,7 @@ import '../../state/providers.dart';
 
 typedef MediaLoader = Future<Uint8List?> Function(String mediaId);
 typedef UrlMediaLoader = Future<Uint8List?> Function(String url);
+typedef UrlMediaEvictor = Future<void> Function(String url);
 
 /// Renders a [MediaImage]: network (or native LRU disk cache via [UrlImageCache]
 /// off-web) for url/storage images, lazily fetched + cached bytes for inline
@@ -21,6 +23,7 @@ class MediaImageView extends StatefulWidget {
   final MediaImage image;
   final MediaLoader? loader;
   final UrlMediaLoader? urlLoader;
+  final UrlMediaEvictor? urlEvictor;
   final Widget placeholder;
   final BoxFit fit;
   final String semanticLabel;
@@ -36,6 +39,7 @@ class MediaImageView extends StatefulWidget {
     required this.placeholder,
     this.loader,
     this.urlLoader,
+    this.urlEvictor,
     this.fit = BoxFit.cover,
     this.semanticLabel = '',
     this.cache,
@@ -84,7 +88,12 @@ class _MediaImageViewState extends State<MediaImageView> {
     ]);
   }
 
-  Widget _error(BuildContext context, Object error, StackTrace? stack) => widget.placeholder;
+  Widget _error(BuildContext context, Object error, StackTrace? stack) {
+    if (widget.image.isRemote && !kIsWeb) {
+      unawaited((widget.urlEvictor ?? UrlImageCache.instance.evict)(widget.image.url));
+    }
+    return widget.placeholder;
+  }
 
   @override
   Widget build(BuildContext context) {

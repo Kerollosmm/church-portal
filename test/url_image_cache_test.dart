@@ -27,7 +27,7 @@ void main() {
 
     test('fetches by sha256(url) once and serves cached bytes offline', () async {
       const url = 'https://example.org/saint.jpg';
-      final bytes = Uint8List.fromList([1, 2, 3, 4, 5]);
+      final bytes = Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xE0, 5]);
       var calls = 0;
 
       final onlineCache = UrlImageCache(
@@ -76,7 +76,7 @@ void main() {
       final cache = UrlImageCache(
         directory: tempDir,
         maxBytes: 100,
-        client: MockClient((_) async => http.Response.bytes(Uint8List(45), 200)),
+        client: MockClient((_) async => http.Response.bytes(Uint8List(45)..setAll(0, [0xFF, 0xD8, 0xFF]), 200)),
       );
 
       await cache.get(urlA); // 45 B
@@ -114,12 +114,13 @@ void main() {
 
       final f1 = cache.get(url);
       final f2 = cache.get(url);
-      completer.complete(http.Response.bytes(Uint8List.fromList([9, 8, 7]), 200));
+      final jpegBytes = Uint8List.fromList([0xFF, 0xD8, 0xFF, 8, 7]);
+      completer.complete(http.Response.bytes(jpegBytes, 200));
 
       final results = await Future.wait<Uint8List?>([f1, f2]);
       expect(calls, 1);
-      expect(results[0], Uint8List.fromList([9, 8, 7]));
-      expect(results[1], Uint8List.fromList([9, 8, 7]));
+      expect(results[0], jpegBytes);
+      expect(results[1], jpegBytes);
     });
 
     test('times out stalled HTTP requests after 8 s and returns null cleanly', () {
@@ -171,6 +172,83 @@ void main() {
       final img = tester.widget<Image>(find.byKey(const Key('itemImage')));
       expect(img.semanticLabel, 'Cached Saint');
       expect(img.image, isA<MemoryImage>());
+    });
+
+    test('recreates cache directory if OS purges cacheDir mid-session', () async {
+      const urlA = 'https://example.org/a.jpg';
+      const urlB = 'https://example.org/b.jpg';
+      final jpegBytes = Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3]);
+      final cache = UrlImageCache(
+        directory: tempDir,
+        client: MockClient((_) async => http.Response.bytes(jpegBytes, 200)),
+      );
+
+      expect(await cache.get(urlA), jpegBytes);
+      // Simulate OS storage manager clearing cacheDir while app stays alive.
+      tempDir.deleteSync(recursive: true);
+      expect(tempDir.existsSync(), isFalse);
+
+      expect(await cache.get(urlB), jpegBytes);
+      final digestB = sha256.convert(utf8.encode(urlB)).toString();
+      expect(File('${tempDir.path}/$digestB.bin').existsSync(), isTrue);
+    });
+
+    test('rejects captive-portal 200 text/html and non-image responses without caching', () async {
+      const htmlUrl = 'https://example.org/portal.jpg';
+      final htmlBytes = utf8.encode('<html><body>Sign in</body></html>');
+      final cache = UrlImageCache(
+        directory: tempDir,
+        client: MockClient((_) async => http.Response.bytes(
+              htmlBytes,
+              200,
+              headers: {'content-type': 'text/html; charset=utf-8'},
+            )),
+      );
+
+      expect(await cache.get(htmlUrl), isNull);
+      final digest = sha256.convert(utf8.encode(htmlUrl)).toString();
+      expect(File('${tempDir.path}/$digest.bin').existsSync(), isFalse);
+
+      const spoofedUrl = 'https://example.org/spoofed.jpg';
+      final spoofedCache = UrlImageCache(
+        directory: tempDir,
+        client: MockClient((_) async => http.Response.bytes(
+              htmlBytes,
+              200,
+              headers: {'content-type': 'application/octet-stream'},
+            )),
+      );
+      expect(await spoofedCache.get(spoofedUrl), isNull);
+      final spoofDigest = sha256.convert(utf8.encode(spoofedUrl)).toString();
+      expect(File('${tempDir.path}/$spoofDigest.bin').existsSync(), isFalse);
+    });
+
+    testWidgets('MediaImageView evicts corrupt non-zero disk file on decode error', (tester) async {
+      const url = 'https://example.org/corrupt-image.png';
+      final digest = sha256.convert(utf8.encode(url)).toString();
+      final badBytes = Uint8List.fromList([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 1, 2]);
+      final file = File('${tempDir.path}/$digest.bin')..writeAsBytesSync(badBytes);
+      expect(file.existsSync(), isTrue);
+
+      final cache = UrlImageCache(
+        directory: tempDir,
+        client: MockClient((_) async => throw const SocketException('offline')),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaImageView(
+            image: const MediaImage(source: MediaSource.url, url: url),
+            urlLoader: cache.get,
+            urlEvictor: cache.evict,
+            placeholder: const SizedBox(key: Key('ph')),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('ph')), findsOneWidget);
+      expect(file.existsSync(), isFalse);
     });
   });
 }

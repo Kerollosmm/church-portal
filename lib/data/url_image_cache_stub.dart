@@ -9,4 +9,6 @@ class UrlImageCache {
   static final UrlImageCache instance = UrlImageCache();
 
   Future<Uint8List?> get(String url) async => null;
+
+  Future<void> evict(String url) async {}
 }
