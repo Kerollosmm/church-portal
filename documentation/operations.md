@@ -142,7 +142,7 @@
 - ألغى هذا النقل الحاجة لمسار GitHub Actions القديم ومسار منع السبات (`keepalive.yml`) وضمن استقرار المهام السحابية وفق بنية Zero-Budget.
 
 ### آلية التحديث من داخل التطبيق (In-App Updates)
-- يفحص التطبيق ملف البيان `/app/android/version.json` من الاستضافة عندما يكون `installApkBuild` في لوحة التحكم أكبر من رقم بناء التطبيق.
+- يفحص التطبيق ملف البيان `/app/android/version.json` من الاستضافة عندما يكون `installApkBuild` في لوحة التحكم أكبر من رقم بناء التطبيق (بمهلة اتصال واستجابة لا تتجاوز **8 ثوانٍ** عبر `PlatformAppUpdater.manifestTimeout` لمنع التعليق عند ضعف الشبكة).
 - عند توفر إصدار أحدث (`build > currentBuild`) يظهر شريط تنبيه للمستخدم.
 - يدعم التحميل استئناف التنزيل عبر ترويسة `Range` في HTTP عند انقطاع الشبكة.
 - يتحقق التطبيق إلزامياً من مطابقة بصمة SHA-256 للحزمة المحملة مع البيان، ويتأكد من توقيع الحزمة بنفس شهادة التطبيق المثبت عبر `PackageManager`.
@@ -177,6 +177,7 @@
 
 ### استكشاف أخطاء أندرويد وتوفير البطارية (OEM Battery Troubleshooting)
 - تميل بعض واجهات المصنعين العدوانية (Xiaomi MIUI/HyperOS, Oppo ColorOS, Realme UI, Huawei EMUI, Samsung OneUI, Vivo Funtouch) إلى قتل التطبيقات في الخلفية أو تأخير المنبهات الدقيقة وحظر البدء التلقائي.
+- إذا فشل تسجيل موضوعات إشعارات التطبيق (`PushMessaging.updateSubscriptions`) أثناء انقطاع الشبكة، يُحفظ علم مؤقت على الجهاز (`pendingTopicSyncKey`) وتُعاد المحاولة تلقائيًا مرة واحدة فقط عند عودة الاتصال (`offline -> online`) دون حلقات إعادة مستمرة.
 - عند شكوى المستخدمين من تأخر تذكيرات القداسات أو إشعارات قراءات القطمارس والآية اليومية:
   1. توجيه المستخدم لصفحة التشخيص ودليل تحسين البطارية داخل التطبيق: `/notifications/battery`.
   2. تعرض الصفحة فحصاً فورياً لـ: إذن الإشعارات (`POST_NOTIFICATIONS`)، إذن المنبهات الدقيقة (`SCHEDULE_EXACT_ALARM`)، استثناء توفير البطارية (Battery Optimization Exemption)، وحالة عمل مهمة التجديد الدورية (`WorkManager`).
@@ -207,6 +208,16 @@
   - لا يوجد مسار `POST /trigger` لإرسال الإشعارات. المسار العام الوحيد هو `POST /assistant` لأسئلة تطبيق Android، بسقف يومي على نفس `PUSH_KV` (خطة Workers المجانية).
 - **المسار الاحتياطي اليدوي في GitHub Actions (`.github/workflows/push-sender.yml`):**
   - مسار يمكن تشغيله يدويًا عند الحاجة (`workflow_dispatch`) من GitHub Actions لتشغيل السكربت الاحتياطي `node tool/push_sender.js` بواسطة Node 22.
+
+### اختبارات التكامل لوضع عدم الاتصال محليًا (`integration_test/offline_test.dart`)
+- لا يعمل اختبار `integration_test/offline_test.dart` داخل `flutter test` العادي ولا في مسار CI للوحدات لأنه يحتاج إلى جهاز أو متصفح ومحاكي Firestore. لتشغيله محليًا (بوجود Java 11+ و`firebase-tools`):
+```bash
+cd tool/rules_test && npm ci && cd ../..
+npx firebase emulators:exec --only firestore --project demo-church-portal --config firebase.json \
+  "FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node tool/seed_firestore.js && \
+   flutter test integration_test/offline_test.dart -d linux"
+```
+- وعلى محاكي أندرويد (مثل `emulator-5554`) أضف `--dart-define=FIRESTORE_EMULATOR_HOST=10.0.2.2` (انظر [`integration_test/README.md`](../integration_test/README.md)).
 
 ## 7. مهام تشغيلية مفتوحة (ملخص)
 
