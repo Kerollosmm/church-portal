@@ -277,10 +277,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final btn = find.byKey(const Key('scheduleWhatsappShare'));
+      expect(find.byKey(const Key('scheduleWhatsappShare')), findsNothing);
+      final btn = find.byKey(const Key('nextMassWhatsappShare'));
       expect(btn, findsOneWidget);
-      await tester.drag(find.byType(Scrollable).first, const Offset(0, -250));
-      await tester.pumpAndSettle();
       await tester.ensureVisible(btn);
       await tester.pumpAndSettle();
       await tester.tap(btn);
@@ -292,6 +291,55 @@ void main() {
       expect(launchedUri.queryParameters['text'], contains('https://maximos-domadios-church.web.app/mass-schedule'));
       expect(launchedUri.queryParameters['text'], isNot(contains('utm_')));
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('MassSchedulePage falls back to scheduleWhatsappShare when seasonsProvider fails', (tester) async {
+      final launched = captureLaunched(tester);
+      final now = CairoTime.at(2026, 11, 22, 6 * 60);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            repositoryProvider.overrideWithValue(SeedRepository(SeedData(const {}))),
+            liturgiesProvider.overrideWithValue(
+              const AsyncData([
+                Liturgy(
+                  id: 'm1',
+                  type: 'mass',
+                  nameAr: 'القداس الأول',
+                  nameEn: 'First Liturgy',
+                  weekday: 7,
+                  start: '07:00',
+                  end: '09:00',
+                ),
+              ]),
+            ),
+            seasonsProvider.overrideWithValue(AsyncError<List<Season>>(StateError('offline'), StackTrace.empty)),
+            nowProvider.overrideWithValue(AsyncData(now)),
+            settingsProvider.overrideWithValue(
+              const AsyncData(ChurchSettings(nameAr: 'كنيسة', nameEn: 'Church', addressAr: 'أ', addressEn: 'A')),
+            ),
+            featuresStreamProvider.overrideWithValue(const AsyncData(FeatureSettings.defaults)),
+            customPagesProvider.overrideWithValue(const AsyncData(<CustomPage>[])),
+          ],
+          child: MaterialApp(
+            locale: const Locale('ar'),
+            supportedLocales: const [Locale('ar'), Locale('en')],
+            localizationsDelegates: GlobalMaterialLocalizations.delegates,
+            theme: buildTheme(const Locale('ar')),
+            home: const Scaffold(body: MassSchedulePage()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('nextMassWhatsappShare')), findsNothing);
+      final fallback = find.byKey(const Key('scheduleWhatsappShare'));
+      expect(fallback, findsOneWidget);
+      await tester.ensureVisible(fallback);
+      await tester.tap(fallback);
+      await tester.pump();
+      expect(launched, hasLength(1));
+      expect(Uri.parse(launched.single).queryParameters['text'], contains('https://maximos-domadios-church.web.app/mass-schedule'));
     });
 
     testWidgets('ReadingsPage shares /readings/:date without overflow at 320px', (tester) async {

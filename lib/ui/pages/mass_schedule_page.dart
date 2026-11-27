@@ -68,6 +68,12 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
     final waitingForPages = primaryEmpty && linked.waiting;
     final suppressEmpty = primaryEmpty && linked.hasPages;
 
+    final showScheduleShareFallback = !suppressEmpty &&
+        !waitingForPages &&
+        lits.hasValue &&
+        ((!seasons.hasValue && seasons.hasError) ||
+            computeNextMass(liturgies: allLits, seasons: allSeasons, now: now).next == null);
+
     return PageBody(
       header: CustomizablePageHeader(
           pageKey: CustomizablePages.schedule,
@@ -78,22 +84,24 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
         const AlertBanner(),
         if (!suppressEmpty && !waitingForPages) ...[
           const NextMassCard(showFullScheduleLink: false),
-          const SizedBox(height: 10),
-          Align(
-            alignment: AlignmentDirectional.centerEnd,
-            child: ActionChipButton(
-              key: const Key('scheduleWhatsappShare'),
-              icon: Icons.chat_rounded,
-              label: context.tr('shareWhatsapp'),
-              color: whatsappGreen,
-              onTap: () => openUrl(
-                whatsappShareUri(
-                  title: context.tr('massSchedule'),
-                  path: '/mass-schedule',
-                ).toString(),
+          if (showScheduleShareFallback) ...[
+            const SizedBox(height: 10),
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: ActionChipButton(
+                key: const Key('scheduleWhatsappShare'),
+                icon: Icons.chat_rounded,
+                label: context.tr('shareWhatsapp'),
+                color: whatsappGreen,
+                onTap: () => openUrl(
+                  whatsappShareUri(
+                    title: context.tr('massSchedule'),
+                    path: '/mass-schedule',
+                  ).toString(),
+                ),
               ),
             ),
-          ),
+          ],
           const SizedBox(height: 12),
           Card(
             child: SwitchListTile(
