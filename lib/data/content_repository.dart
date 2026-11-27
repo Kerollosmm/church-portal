@@ -134,9 +134,9 @@ Map<String, dynamic> normalizeDoc(Map<String, dynamic>? data) =>
 /// seeding check that timed out on a slow cold start.
 @visibleForTesting
 class SeedGate {
-  SeedGate(this._read, {Future<bool?> Function()? readCache}) : _readCache = readCache;
+  SeedGate(this._read, {this.readCache});
   final Future<bool> Function() _read;
-  final Future<bool?> Function()? _readCache;
+  final Future<bool?> Function()? readCache;
   Future<bool>? _pending;
   Future<bool?>? _cachePending;
   Future<void>? _refreshPending;
@@ -175,9 +175,10 @@ class SeedGate {
 
   Future<bool> check() async {
     if (_seeded) return true;
-    if (_readCache != null && _pending == null) {
+    final cacheReader = readCache;
+    if (cacheReader != null && _pending == null) {
       try {
-        final cached = await (_cachePending ??= _readCache());
+        final cached = await (_cachePending ??= cacheReader());
         _cachePending = null;
         if (_seeded) return true;
         if (cached == true) {

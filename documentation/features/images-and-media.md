@@ -26,7 +26,7 @@
 - العنصر يحفظ حقل `image` (`{source: inline|url|storage, mediaId أو url, alt, w, h}`)، والمعرض `gallery`، وطريقة العرض `imageStyle`،
   والافتراضي لكل قسم `settings/features.imageStyles`.
 - العرض: `ItemImage` / `MediaImageView` (`lib/ui/widgets/item_image.dart`)، و`styled_image.dart` لطرق العرض. كل صورة
-  مضمّنة = قراءة مستند واحدة لكل زائر، مع ذاكرة مؤقتة في الجهاز لـ 60 صورة.
+  مضمّنة = قراءة مستند واحدة لكل زائر عبر `MediaRepository.load` (تفحص `Source.cache` أولاً ثم الخادم)، مع ذاكرة مؤقتة في الجهاز لـ 60 صورة (`MediaCache`)، وعلى أندرويد تُحفظ صور الروابط الخارجية (`url`/`storage`) في كاش القرص `UrlImageCache` (`<cacheDir>/url_images`، بحد أقصى 50 ميجابايت وحذف الأقدم استخدامًا LRU ومهلة 8 ثوانٍ) دون زيادة حجم نسخة الويب.
 - القواعد: `media` قراءة مستند عامة، القائمة والكتابة للمشرف فقط، مع `validMedia`. حذف عنصر يحذف صوره المضمّنة.
 - المساعد الذكي لا يرى أي بيانات صور.
 - عند الانتقال لـ Blaze: يتطلب الأمر تنفيذًا لـ Cloud Storage على واجهة `MediaRepository` ونشر `storage.rules` (ADR-017، ADR-082).

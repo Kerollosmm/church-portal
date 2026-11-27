@@ -209,7 +209,7 @@ void main() {
       CairoTime.ensureInitialized();
       // 2026-07-15 23:30 EEST (UTC+3) = 2026-07-15 20:30Z -> still 2026-07-15 in Cairo (#135),
       // while also post-18:00 (#112). Also seed pre-cached 2026-07-16 to prove missing-only fetch.
-      final fixtureFor = (String iso) => {...sampleFixture, 'date': iso};
+      Map<String, dynamic> fixtureFor(String iso) => {...sampleFixture, 'date': iso};
       SharedPreferences.setMockInitialValues({
         'church_portal_readings_2026-07-13': jsonEncode(fixtureFor('2026-07-13')), // older than yesterday -> pruned
         'church_portal_readings_2026-07-14': jsonEncode(fixtureFor('2026-07-14')), // yesterday -> kept

@@ -15,10 +15,10 @@ The `lib/data` layer manages all local persistence, remote networking, platform 
 - [`SeedRepository`](content_repository.dart#L60): Offline/unconfigured fallback content repository backed by `SeedData`.
 - [`FirestoreRepository`](content_repository.dart#L453): Live Firestore content repository with fallback guards.
 - [`ContactUnavailableException`](content_repository.dart#L14): Thrown when contact submission is attempted without live Firebase.
-- [`SeedGate`](content_repository.dart#L138): Seeding marker tracker detecting if `settings/church` exists in Firestore.
+- [`SeedGate`](content_repository.dart#L138): Seeding marker tracker detecting if `settings/church` exists in Firestore (probing `Source.cache` first and triggering a background `Source.server` refresh).
 - [`guardSeeded`](content_repository.dart#L205): Stream wrapper preventing stranded fallbacks while awaiting seeding confirmation.
-- [`settleFirst`](content_repository.dart#L378): Stream combinator delaying provisional cache reads for custom content until confirmed by server.
-- [`watchWithFallback`](stream_watchdog.dart#L15): Bounded stream watchdog for `liturgies`, `seasons`, `settings`, and `features` falling back to `Source.cache`, seed (`settings`/`features` only), or `onMissError` (time-sensitive `liturgies`/`seasons`) on listener stall while keeping the live stream subscribed.
+- [`settleFirst`](content_repository.dart#L378): Stream combinator delaying empty cache reads for custom content (`customPatience` 8 s) while settling non-empty cache reads faster (`1.5 s` or `0 ms` when `isOffline` is true).
+- [`watchWithFallback`](stream_watchdog.dart#L15): Bounded stream watchdog for `liturgies`, `seasons`, `settings`, and `features` falling back to `Source.cache` (plus optional `refreshServer`), seed (`settings`/`features` only), or `onMissError` (time-sensitive `liturgies`/`seasons`) on listener stall while keeping the live stream subscribed.
 - [`normalizeFirestoreValue`](content_repository.dart#L113), [`normalizeDoc`](content_repository.dart#L120): Normalizes Firestore `Timestamp` objects into UTC `DateTime` values.
 - [`LiveReading`](content_repository.dart#L365): Typed record describing a snapshot's value, provisional cache status, and change flag.
 - [`SeedData`](seed_data.dart#L10): Typed parser and static loader over bundled `assets/seed/seed.json`.
@@ -26,8 +26,9 @@ The `lib/data` layer manages all local persistence, remote networking, platform 
 ### Media & Image Processing
 - [`EncodedImage`](media_repository.dart#L21): Holds compressed image bytes, MIME type, width, and height.
 - [`MediaRepository`](media_repository.dart#L31): Abstract contract for loading, uploading, and deleting media files.
-- [`FirestoreMediaRepository`](media_repository.dart#L46): Spark-plan implementation storing base64 image data inline in Firestore `media/{id}`.
-- [`ReadOnlyMediaRepository`](media_repository.dart#L128): Spark-plan read-only public media loader (`upload`/`delete` throw `UnsupportedError`).
+- [`FirestoreMediaRepository`](media_repository.dart#L46): Spark-plan implementation storing base64 image data inline in Firestore `media/{id}` (`Source.cache` first on `load`).
+- [`ReadOnlyMediaRepository`](media_repository.dart#L128): Spark-plan read-only public media loader (`Source.cache` first on `load`; `upload`/`delete` throw `UnsupportedError`).
+- [`UrlImageCache`](url_image_cache.dart#L1): Conditional remote URL image disk cache (`url_image_cache_io.dart` on native with 8 s timeout, 0-byte cleanup, 50 MB LRU eviction; `url_image_cache_stub.dart` on web).
 - [`MediaCache`](media_repository.dart#L172): In-memory LRU cache of inline image bytes (default capacity 60).
 - [`decodeMediaDoc`](media_repository.dart#L83): Extracts and decodes base64 bytes from a `media/{id}` document map.
 - [`createPublicMediaRepository`](media_repository.dart#L151): Factory returning read-only `ReadOnlyMediaRepository` for public startup without Firebase Auth.
@@ -42,9 +43,9 @@ The `lib/data` layer manages all local persistence, remote networking, platform 
 ### Application Lifecycle, Firebase & Telemetry
 - [`FirebaseStatus`](firebase_bootstrap.dart#L10): Status record reporting Firebase availability, App Check configuration state, and errors.
 - [`isAppCheckConfigured`](firebase_bootstrap.dart#L20): Pure build/platform check matching `selectAppCheckPlan(...).activate` without importing `firebase_app_check`.
-- [`kFirestoreCacheSizeBytes`](firebase_bootstrap.dart#L28): Default 40 MB on-disk Firestore cache threshold.
-- [`firestoreSettings`](firebase_bootstrap.dart#L39): Platform Firestore `Settings` builder; enables `WebPersistentMultipleTabManager` on web (`isWeb == true`) while keeping native platforms unchanged (`webPersistentTabManager == null`).
-- [`bootstrapFirebase`](firebase_bootstrap.dart#L47): Safe Firebase core initialization with 40 MB offline Firestore cache (multi-tab synchronized on web, ADR-078).
+- [`kFirestoreCacheSizeBytes`](firebase_bootstrap.dart#L28): Default 40 MB web Firestore cache threshold (`kNativeFirestoreCacheSizeBytes` = 100 MB on native).
+- [`firestoreSettings`](firebase_bootstrap.dart#L39): Platform Firestore `Settings` builder; enables `WebPersistentMultipleTabManager` on web (`isWeb == true`) and 100 MB cache on native (`isWeb == false`).
+- [`bootstrapFirebase`](firebase_bootstrap.dart#L47): Safe Firebase core initialization with platform offline Firestore cache (40 MB multi-tab on web per ADR-078; 100 MB native per ADR-091).
 - [`AppCheckPlan`](app_check_providers.dart#L12): Chosen provider plan across web, Android, Apple, and debug targets.
 - [`selectAppCheckPlan`](app_check_providers.dart#L45): Provider selection algorithm based on platform and debug configuration.
 - [`ensureAppCheckActivated`](app_check_providers.dart#L83): Lazy activation of App Check on first assistant request (deferred with `/ask`).
@@ -56,7 +57,7 @@ The `lib/data` layer manages all local persistence, remote networking, platform 
 ### AI Assistant & Device Local Stores
 - [`FirebaseAssistantModel`](assistant_model.dart#L12): Stateless Gemini client communicating with Firebase AI Logic.
 - [`PrefsUsageStore`](assistant_usage_store.dart#L8): Daily quota tracker persisting usage in `SharedPreferences`.
-- [`ReadingsStore`](readings_store.dart#L12): Katameros daily readings cache and static hosting fetcher with automatic pruning.
+- [`ReadingsStore`](readings_store.dart#L12): Katameros daily readings cache and static hosting fetcher (8 s HTTP timeout, Cairo 7-day `prefetchUpcomingDays`, automatic pruning).
 - [`ReminderStore`](reminder_store.dart#L25): Local storage manager for event reminders enforcing a 30-item device cap.
 - [`remindersStorageKey`](reminder_store.dart#L6): Storage key `church_portal_reminders`.
 - [`maxDeviceReminders`](reminder_store.dart#L9): Constant device limit (30).

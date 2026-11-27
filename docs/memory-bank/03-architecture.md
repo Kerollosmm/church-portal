@@ -70,25 +70,26 @@ lib/
     app_update.dart         ApkManifest, UpdateDecision, checkForUpdate, shouldForceUpdate — ADR-058
     readings.dart           DayReadings, ReadingSection, ReadingPassage, parseKatamerosDay, formatCopticDay — ADR-058
   data/
-    firebase_bootstrap.dart firestoreSettings(isWeb:) (40 MB cache; WebPersistentMultipleTabManager on web, ADR-078), bootstrapFirebase() -> FirebaseStatus{available, appCheckActive (= configured)}
+    firebase_bootstrap.dart firestoreSettings(isWeb:) (40 MB cache on web with WebPersistentMultipleTabManager, ADR-078; 100 MB cache on native, PR 6F-1 / ADR-091), bootstrapFirebase() -> FirebaseStatus{available, appCheckActive (= configured)}
     app_check_providers.dart selectAppCheckPlan (reCAPTCHA Enterprise web / Play Integrity / App Attest / debug); ensureAppCheckActivated() (lazy, ADR-037, deferred with /ask)
     assistant_model.dart    FirebaseAssistantModel (AssistantModel on Firebase AI Logic, imported only by /ask) — PR #19
     content_repository.dart ContentRepository (interface), SeedRepository, FirestoreRepository,
                             normalizeFirestoreValue/normalizeDoc
-    stream_watchdog.dart    watchWithFallback<T> bounded stream watchdog (PR 6D, ADR-089)
+    stream_watchdog.dart    watchWithFallback<T> bounded stream watchdog with optional refreshServer (PR 6D / ADR-089, PR 6F-1 / ADR-091)
     seed_data.dart          SeedData: typed view over assets/seed/seed.json
     admin_repository.dart   AdminBackend (interface; `media`), AdminRepository (Firestore+Auth), AdminDoc, AdminRoles
-    media_repository.dart   MediaRepository, FirestoreMediaRepository (media/{id} base64), ReadOnlyMediaRepository,
+    media_repository.dart   MediaRepository, FirestoreMediaRepository & ReadOnlyMediaRepository (Source.cache first, ADR-091),
                             MediaCache (in-memory LRU), EncodedImage
+    url_image_cache*.dart   UrlImageCache (conditional import: IO = 50 MB LRU sha256 disk cache in cacheDir/url_images with 8s timeout; stub/web = 0 B no-op — ADR-091)
     image_processing.dart   prepareUpload/compressDecoded; codecs image_codec/image_codec_web.dart (canvas, WebP)
                             and image_codec_io.dart (`image` package, JPEG) via conditional import
     local_notifications*.dart LocalNotifier, PlatformLocalNotifier (flutter_local_notifications wrapper, channels, exact alarms) — ADR-058
     push_messaging*.dart    PushMessaging (conditional imports: io = FirebaseMessaging background handler + 100-nid ring buffer + event:X slot sharing; stub/web = no-op) — ADR-059
     web_push_repository.dart WebPushRepository (deferred chunk, push_queue batch writes with meta/push_rate throttle, 4-step retry with HTTP Date sync, unsubscribeAll) — ADR-060
-    readings_store.dart     ReadingsStore (local caching of /data/readings/<date>.json, offline reading fallback, prune) — ADR-058
+    readings_store.dart     ReadingsStore (8s HTTP timeout, local caching of /data/readings/<date>.json, Cairo 7-day prefetchUpcomingDays, prune) — ADR-058, ADR-091
     app_updater*.dart       AppUpdater, PlatformAppUpdater (resumable streaming download, Range resume, SHA-256 validation, FileProvider install) — ADR-058
   state/providers.dart      all Riverpod providers (see below)
-  state/notify_providers.dart localNotifierProvider, notifyPlannerProvider (debounced planner, WorkManager replenishment worker) — ADR-058
+  state/notify_providers.dart localNotifierProvider, notifyPlannerProvider (debounced planner, WorkManager replenishment & unmetered 7-day readings prefetch) — ADR-058, ADR-091
   core/                     theme.dart (AppColors, buildTheme), l10n.dart (_strings, tr/pick/isAr),
                             launch.dart (openUrl, callPhone, openWhatsApp, maps URLs), document_lang*.dart,
                             locale_storage*.dart (LanguageStore: localStorage on web, SharedPreferences on IO, ADR-058)
@@ -141,12 +142,12 @@ flowchart TD
    one `_start()` simply runs. Never throws because of Sentry.
 1. `WidgetsFlutterBinding.ensureInitialized()`, `ensureWebSemantics()` (calls `SemanticsBinding.instance.ensureSemantics()` when `kIsWeb` and retains `_webSemanticsHandle` — ADR-084), `usePathUrlStrategy()`, `CairoTime.ensureInitialized()`.
 2. `Future.wait([SeedData.load(), bootstrapFirebase(), initLanguageStore(), initInstallStore(), initPushStore()])` — never throw;
-   `bootstrapFirebase()` configures Firestore offline persistence via `firestoreSettings(isWeb: kIsWeb)` (40 MB cache; `WebPersistentMultipleTabManager` on web so concurrent tabs share the IndexedDB lease without `failed-precondition`/`b815` assertions — ADR-078; native settings unchanged);
+   `bootstrapFirebase()` configures Firestore offline persistence via `firestoreSettings(isWeb: kIsWeb)` (40 MB cache + `WebPersistentMultipleTabManager` on web so concurrent tabs share the IndexedDB lease without `failed-precondition`/`b815` assertions — ADR-078; 100 MB cache on native platforms — ADR-091);
    on native IO platforms `initPushStore()` preloads `SharedPreferences` and queries the OS notification permission state.
 3. On native non-web platforms (`Android`, `iOS`, `macOS`, `Linux`), `LocalNotifier().initialize()` runs before
    `runApp`, checks `getLaunchPayload()` to queue cold-start notification routes via `navigateToNotification`, and
    refreshes permission (`Android`, `iOS`, and `macOS` support scheduled notifications, while `Linux` skips `zonedSchedule` due to plugin limitations); on `Android`/`iOS` `PushMessaging.initialize(...)` registers foreground/background FCM handlers with foreground APNS alert banners disabled on iOS so `fln.show` never duplicates them;
-   `Workmanager` replenishment initializes on Android only (with iOS replenishing its 64-entry pending cap on app resume).
+   `Workmanager` initializes on Android only, keeping `church_portal_replenish_task` on `NetworkType.notRequired` and adding `church_portal_readings_prefetch` (`NetworkType.unmetered`, `ExistingPeriodicWorkPolicy.keep`) for 7-day readings prefetch (iOS replenishes its 64-entry pending cap on app resume).
 4. Repository choice: `status.available ? FirestoreRepository(db, seed) : SeedRepository(seed)`; `AdminRepository`
    only when Firebase is available (otherwise `/admin` shows `adminUnavailable`).
 5. `ProviderScope(overrides: [firebaseStatusProvider, repositoryProvider, adminRepositoryProvider])`.
@@ -204,9 +205,7 @@ flowchart LR
 
 - `SeedRepository`: every stream emits the bundled value once; `servingSeed` is always true; `submitContact` throws
   `ContactUnavailableException`.
-- `SeedGate` (`FirestoreRepository._gate`): `settings/church` existence check; only a positive answer is cached (a
-  missing doc or a failed/timed-out read is re-checked by the next subscription or live value). If the DB is not
-  seeded, **every** stream serves the seed.
+- `SeedGate` (`FirestoreRepository._gate`): `settings/church` existence check; probes `Source.cache` first and resolves `true` immediately when cached while firing a single background `Source.server` refresh (PR 6F-1 / ADR-091). Only a positive answer is cached (a missing doc or failed/timed-out read is re-checked by the next subscription or live value). If the DB is not seeded, **every** stream serves the seed.
 - `_guard(key, live, fallback, confirms:)` → `guardSeeded` (a `StreamController`, so a cancel takes effect at once;
   unit-tested in `test/content_guard_test.dart`): per-stream fallback on errors; `servingSeed` (a `ValueNotifier`) is true
   while any stream is on the seed → the `Footer` shows «تعرض البيانات المحفوظة مع التطبيق / Showing bundled content».
@@ -234,20 +233,17 @@ flowchart LR
 - **Settings docs prove themselves (PR #23):** `settings/features`, `settings/contact` and `settings/assistant`
   have `confirms: !identical(v, <code default>)` like `settings/church`: a stored doc replaces the default even while
   the seeding check cannot answer (before, `/contact` kept the four default types in that case).
-- **Custom content waits for loaded data (PR #23, ADR-033):** `categories`, `entries` and `pages` have no bundled
+- **Custom content waits for loaded data (PR #23, ADR-033, PR 6F-1 / ADR-091):** `categories`, `entries` and `pages` have no bundled
   copy, so `FirestoreRepository._custom` (a) listens with `includeMetadataChanges: true` through `settleFirst`
-  (`LiveReading {value, provisional: isFromCache, changed: docChanges.isNotEmpty}`): cache-only readings are held
-  back until the server answers, or for at most `customPatience` (8 s; then the held cache reading, or a
-  `Source.cache` read when the listener said nothing), after which only readings that changed something pass;
+  (`LiveReading {value, provisional: isFromCache, changed: docChanges.isNotEmpty}`): empty cache readings wait up to `customPatience` (8 s), while non-empty cache readings settle in `nonEmptyCachePatience` (1.5 s) — or `0 ms` immediately when `isOffline` is true — before emitting the held reading or `Source.cache` fallback, after which only readings that changed something pass;
   and (b) calls `guardSeeded(..., fallbackDelay: customFallbackDelay)` (13 s: longer than the 8 s patience + the 4 s
   `customCacheRead`, so the held / cached list always reaches the guard first), so an unanswered seeding check no
   longer emits the empty fallback at once; the delayed fallback is also deferred while a live value's seeding
   re-check is in flight, and goes out only if that re-check rejects the value. Result: `/section/<slug>` and `/page/<slug>` stay on their loading skeleton until the data
-  has loaded (never a premature «هذه الصفحة غير متاحة حاليًا»), and an items list can no longer stay on its
-  placeholders forever. Unit tests: `test/live_loading_test.dart`.
+  has loaded (never a premature «هذه الصفحة غير متاحة حاليًا» even offline on an empty cache), and non-empty cached custom lists render quickly without an 8 s skeleton. Unit tests: `test/live_loading_test.dart`.
 - Timestamps are normalised to UTC `DateTime` (`normalizeFirestoreValue`) before `fromMap`.
-- **Bounded stream watchdog (`lib/data/stream_watchdog.dart`, PR 6D, ADR-089):** `FirestoreRepository` wraps ONLY `liturgies()`, `seasons()`, `settings()`, and `features()` with `watchWithFallback` (`streamWatchdogTimeout = 8 s`), keeping `_guard`/`_custom` untouched:
-  - `settings()` / `features()`: after 8 s without live emission, reads `Source.cache` (4 s timeout), else falls back to `seed.settings` / `seed.features` (`_markFallback`) and keeps the live stream subscribed so late updates recover automatically.
+- **Bounded stream watchdog (`lib/data/stream_watchdog.dart`, PR 6D / ADR-089, PR 6F-1 / ADR-091):** `FirestoreRepository` wraps ONLY `liturgies()`, `seasons()`, `settings()`, and `features()` with `watchWithFallback` (`streamWatchdogTimeout = 8 s`), keeping `_guard`/`_custom` untouched:
+  - `settings()` / `features()`: after 8 s without live emission, reads `Source.cache` (4 s timeout), else falls back to `seed.settings` / `seed.features` (`_markFallback`) and keeps the live stream subscribed so late updates recover automatically; `features()` also triggers an immediate `refreshServer` (`Source.server` behind cache hits) so kill-switches and app-update build settings never stay on stale cache alone once connectivity returns.
   - `liturgies()` / `seasons()` (time-sensitive): holds back empty `isFromCache` snapshots via `snapshots(includeMetadataChanges: true)` so a cold offline empty cache triggers the watchdog; on stall, reads `Source.cache` (4 s timeout), and on cache miss emits `TimeoutException` (`onMissError`) showing `'—'` / `ErrorState` + Retry (never seed values as if live; an explicitly unseeded database with `_gate.markerAbsent == true` on an empty server snapshot still serves the seed), keeping the live listener active for automatic recovery.
 - `settings/features` missing → `seed.features` (all sections on).
 - `seed_firestore.js` writes `settings` **last** so an interrupted seed never marks the DB as seeded.

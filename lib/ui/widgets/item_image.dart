@@ -11,6 +11,7 @@ import '../../domain/media.dart';
 import '../../state/providers.dart';
 
 typedef MediaLoader = Future<Uint8List?> Function(String mediaId);
+typedef UrlMediaLoader = Future<Uint8List?> Function(String url);
 
 /// Renders a [MediaImage]: network (or native LRU disk cache via [UrlImageCache]
 /// off-web) for url/storage images, lazily fetched + cached bytes for inline
@@ -19,11 +20,11 @@ typedef MediaLoader = Future<Uint8List?> Function(String mediaId);
 class MediaImageView extends StatefulWidget {
   final MediaImage image;
   final MediaLoader? loader;
+  final UrlMediaLoader? urlLoader;
   final Widget placeholder;
   final BoxFit fit;
   final String semanticLabel;
   final MediaCache? cache;
-  final UrlImageCache? urlCache;
 
   /// Key the picture `itemImage` (tests / automation). Off for decorative
   /// copies such as a cover's blurred backdrop.
@@ -34,10 +35,10 @@ class MediaImageView extends StatefulWidget {
     required this.image,
     required this.placeholder,
     this.loader,
+    this.urlLoader,
     this.fit = BoxFit.cover,
     this.semanticLabel = '',
     this.cache,
-    this.urlCache,
     this.keyed = true,
   });
 
@@ -57,12 +58,12 @@ class _MediaImageViewState extends State<MediaImageView> {
   @override
   void didUpdateWidget(covariant MediaImageView old) {
     super.didUpdateWidget(old);
-    if (old.image != widget.image || old.loader != widget.loader || old.urlCache != widget.urlCache) _resolve();
+    if (old.image != widget.image || old.loader != widget.loader || old.urlLoader != widget.urlLoader) _resolve();
   }
 
   void _resolve() {
     if (widget.image.isRemote) {
-      _bytes = kIsWeb ? null : (widget.urlCache ?? UrlImageCache.instance).get(widget.image.url);
+      _bytes = kIsWeb ? null : (widget.urlLoader ?? UrlImageCache.instance.get)(widget.image.url);
       return;
     }
     final id = widget.image.ownedMediaId;

@@ -54,6 +54,7 @@ class _FakeMedia implements MediaRepository {
   }
 }
 
+// ignore: subtype_of_sealed_class
 class _FakeMediaSnap implements DocumentSnapshot<Map<String, dynamic>> {
   final Map<String, dynamic>? _data;
   _FakeMediaSnap(this._data);
@@ -63,6 +64,7 @@ class _FakeMediaSnap implements DocumentSnapshot<Map<String, dynamic>> {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+// ignore: subtype_of_sealed_class
 class _FakeMediaDocRef implements DocumentReference<Map<String, dynamic>> {
   final List<Source?> calls;
   final Map<String, dynamic>? Function(GetOptions?) onGet;

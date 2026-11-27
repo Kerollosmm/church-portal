@@ -161,7 +161,7 @@ void main() {
           home: MediaImageView(
             image: const MediaImage(source: MediaSource.url, url: url, alt: 'Cached Saint'),
             semanticLabel: 'Cached Saint',
-            urlCache: offlineCache,
+            urlLoader: offlineCache.get,
             placeholder: const SizedBox(key: Key('ph')),
           ),
         ),
