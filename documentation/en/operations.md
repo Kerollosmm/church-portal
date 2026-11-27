@@ -223,7 +223,7 @@ The native Android app is packaged as lightweight, split release APKs for maximu
 ### In-App Update Verification & Installation Flow
 1. When `installApkBuild` (admin) is greater than the app's build, the app fetches `/app/android/version.json` (bounded by `PlatformAppUpdater.manifestTimeout = 8 s` connection and response timeout).
 2. When `manifest.build > currentBuild`, a persistent update banner prompts the user.
-3. Resumable downloading leverages HTTP `Range` headers (with the same `8 s` `connectionTimeout` / response bound) to survive flaky network connections.
+3. Resumable downloading leverages HTTP `Range` headers (`8 s` connection/headers timeout via `manifestTimeout` and `30 s` per-chunk idle timeout via `downloadIdleTimeout`) to survive flaky or stalled network connections.
 4. The downloaded APK's SHA-256 checksum is validated against the manifest.
 5. The package signature is verified against the installed app's signing certificate using `PackageManager` before invoking the installer.
 6. The app requests `REQUEST_INSTALL_PACKAGES` permission if not already granted, and launches the Android Package Installer session via secure `FileProvider` (`${applicationId}.updates`).
@@ -272,13 +272,13 @@ The remote scheduled push delivery and readings synchronization infrastructure r
 - Paired with `.github/workflows/keepalive.yml` running monthly to prevent automated GitHub Actions schedule deactivation.
 
 ### Local Offline Integration Tests (`integration_test/offline_test.dart`)
-- Runs against the local Firestore emulator (`disableNetwork()` / `enableNetwork()`) and is excluded from headless CI `flutter test` runs (requires Java 11+ and a desktop or Android emulator target):
+- Runs against the local Firestore emulator (`disableNetwork()` / `enableNetwork()`) and is excluded from headless CI `flutter test` runs (requires Java 21+ for `firebase-tools ^15`, plus a desktop or Android emulator target):
 ```bash
-cd tool/rules_test && npm ci && cd ../..
-npx firebase emulators:exec --only firestore --project demo-church-portal --config firebase.json \
-  "FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node tool/seed_firestore.js && \
-   flutter test integration_test/offline_test.dart -d windows"   # or -d macos / an Android emulator
+npm install --prefix tool && npm ci --prefix tool/rules_test
+npx firebase-tools emulators:exec --only firestore --project demo-church-portal --config firebase.json \
+  "node tool/seed_firestore.js --project demo-church-portal && flutter test integration_test/offline_test.dart -d windows"   # or -d macos / an Android emulator
 ```
+- Or invoke the locally installed CLI directly via `./tool/rules_test/node_modules/.bin/firebase` (`tool\rules_test\node_modules\.bin\firebase` on Windows). Because `firebase emulators:exec` exports `FIRESTORE_EMULATOR_HOST` automatically, no POSIX `VAR=val` prefix is needed and the command runs cross-platform (including Windows).
 - For Android emulators, add `--dart-define=FIRESTORE_EMULATOR_HOST=10.0.2.2` (see [`integration_test/README.md`](../../integration_test/README.md)).
 
 ---
