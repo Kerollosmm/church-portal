@@ -9,6 +9,7 @@ import {
   base64UrlFromBytes,
   fromFirestoreFields,
   fromFirestoreValue,
+  isSoftDeleted,
   pemToDer,
   toFirestoreFields,
   toFirestoreValue,
@@ -60,6 +61,16 @@ describe('firestore_rest', () => {
 
     const back = fromFirestoreFields(fsFields);
     assert.deepEqual(back, jsObj);
+  });
+
+  test('isSoftDeleted mirrors Dart rule for decoded and raw REST deletedAt values', () => {
+    assert.equal(isSoftDeleted(null), false);
+    assert.equal(isSoftDeleted({}), false);
+    assert.equal(isSoftDeleted(fromFirestoreFields({})), false);
+    assert.equal(isSoftDeleted(fromFirestoreFields({ deletedAt: { nullValue: null } })), false);
+    assert.equal(isSoftDeleted({ deletedAt: { nullValue: null } }), false);
+    assert.equal(isSoftDeleted(fromFirestoreFields({ deletedAt: { timestampValue: '2026-11-14T10:00:00Z' } })), true);
+    assert.equal(isSoftDeleted({ deletedAt: { timestampValue: '2026-11-14T10:00:00Z' } }), true);
   });
 });
 
@@ -232,6 +243,68 @@ describe('push_daily', () => {
     assert.equal(resSummer.alerts.length, 1);
     assert.equal(resSummer.alerts[0].daysRemaining, 0);
     assert.equal(resSummer.alerts[0].logKey, 'season:easter:2026-08-01:0');
+  });
+
+  test('runDailySeasons skips soft-deleted seasons while keeping deletedAt null/missing (#138)', async () => {
+    const now = new Date('2026-11-08T10:00:00Z');
+    const cairo = getCairoNow(now);
+
+    const mockFetch = async (url) => {
+      if (url.includes('/seasons')) {
+        return {
+          ok: true,
+          json: async () => ({
+            documents: [
+              {
+                name: 'projects/p/databases/(default)/documents/seasons/deleted-season',
+                fields: {
+                  nameAr: { stringValue: 'موسم محذوف' },
+                  nameEn: { stringValue: 'Deleted Season' },
+                  startsAt: { timestampValue: `${cairo.dateIso}T00:00:00Z` },
+                  active: { booleanValue: true },
+                  deletedAt: { timestampValue: '2026-11-08T09:59:55Z' },
+                },
+              },
+              {
+                name: 'projects/p/databases/(default)/documents/seasons/restored-season',
+                fields: {
+                  nameAr: { stringValue: 'موسم مستعاد' },
+                  nameEn: { stringValue: 'Restored Season' },
+                  startsAt: { timestampValue: `${cairo.dateIso}T00:00:00Z` },
+                  active: { booleanValue: true },
+                  deletedAt: { nullValue: null },
+                },
+              },
+              {
+                name: 'projects/p/databases/(default)/documents/seasons/active-season',
+                fields: {
+                  nameAr: { stringValue: 'موسم قائم' },
+                  nameEn: { stringValue: 'Active Season' },
+                  startsAt: { timestampValue: `${cairo.dateIso}T00:00:00Z` },
+                  active: { booleanValue: true },
+                },
+              },
+            ],
+          }),
+        };
+      }
+      throw new Error(`Unexpected url: ${url}`);
+    };
+
+    const res = await runDailySeasons(
+      'proj',
+      'tok',
+      { push: true, pushTypes: ['seasons'] },
+      { lastSeasonDate: '2026-11-07' },
+      [],
+      mockFetch,
+      now,
+    );
+
+    assert.deepEqual(
+      res.alerts.map((a) => a.seasonId),
+      ['restored-season', 'active-season'],
+    );
   });
 });
 

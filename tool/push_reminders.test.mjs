@@ -686,4 +686,151 @@ describe('runPushReminderPlanner workflow', () => {
     assert.ok(activeKeys.includes(dartUiKey));
     assert.ok(!activeKeys.includes('season-pascha-eve'));
   });
+
+  test('skips soft-deleted liturgies, meetings, and seasons while keeping deletedAt null/missing (#138)', async () => {
+    // Tuesday 2027-04-20 (ISO weekday 2)
+    const now = new Date('2027-04-20T03:00:00Z');
+    let savedPlan = null;
+
+    const fakeFetch = async (url, options) => {
+      if (url.includes(':batchGet')) {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+      if (url.includes('/liturgies')) {
+        return new Response(
+          JSON.stringify({
+            documents: [
+              {
+                name: 'projects/test-project/databases/(default)/documents/liturgies/tue-deleted',
+                fields: {
+                  weekday: { integerValue: '2' },
+                  start: { stringValue: '07:00' },
+                  end: { stringValue: '09:00' },
+                  nameAr: { stringValue: 'قداس محذوف' },
+                  nameEn: { stringValue: 'Deleted Liturgy' },
+                  deletedAt: { timestampValue: '2027-04-20T02:59:55Z' },
+                },
+              },
+              {
+                name: 'projects/test-project/databases/(default)/documents/liturgies/tue-restored',
+                fields: {
+                  weekday: { integerValue: '2' },
+                  start: { stringValue: '08:00' },
+                  end: { stringValue: '10:00' },
+                  nameAr: { stringValue: 'قداس مستعاد' },
+                  nameEn: { stringValue: 'Restored Liturgy' },
+                  deletedAt: { nullValue: null },
+                },
+              },
+              {
+                name: 'projects/test-project/databases/(default)/documents/liturgies/tue-active',
+                fields: {
+                  weekday: { integerValue: '2' },
+                  start: { stringValue: '10:30' },
+                  end: { stringValue: '12:00' },
+                  nameAr: { stringValue: 'قداس قائم' },
+                  nameEn: { stringValue: 'Active Liturgy' },
+                },
+              },
+              {
+                name: 'projects/test-project/databases/(default)/documents/liturgies/pascha-deleted-season-lit',
+                fields: {
+                  seasonKey: { stringValue: 'pascha' },
+                  date: { stringValue: '2027-04-20' },
+                  start: { stringValue: '18:00' },
+                  end: { stringValue: '20:00' },
+                  nameAr: { stringValue: 'بصخة لموسم محذوف' },
+                  nameEn: { stringValue: 'Deleted Season Service' },
+                },
+              },
+            ],
+          }),
+          { status: 200 },
+        );
+      }
+      if (url.includes('/meetings')) {
+        return new Response(
+          JSON.stringify({
+            documents: [
+              {
+                name: 'projects/test-project/databases/(default)/documents/meetings/mtg-deleted',
+                fields: {
+                  weekday: { integerValue: '2' },
+                  start: { stringValue: '19:00' },
+                  nameAr: { stringValue: 'اجتماع محذوف' },
+                  nameEn: { stringValue: 'Deleted Meeting' },
+                  deletedAt: { timestampValue: '2027-04-20T02:59:55Z' },
+                },
+              },
+              {
+                name: 'projects/test-project/databases/(default)/documents/meetings/mtg-restored',
+                fields: {
+                  weekday: { integerValue: '2' },
+                  start: { stringValue: '20:00' },
+                  nameAr: { stringValue: 'اجتماع مستعاد' },
+                  nameEn: { stringValue: 'Restored Meeting' },
+                  deletedAt: { nullValue: null },
+                },
+              },
+            ],
+          }),
+          { status: 200 },
+        );
+      }
+      if (url.includes('/seasons')) {
+        return new Response(
+          JSON.stringify({
+            documents: [
+              {
+                name: 'projects/test-project/databases/(default)/documents/seasons/pascha',
+                fields: {
+                  key: { stringValue: 'pascha' },
+                  active: { booleanValue: true },
+                  replacesRegular: { booleanValue: true },
+                  startsAt: { stringValue: '2027-04-19T00:00:00Z' },
+                  endsAt: { stringValue: '2027-04-25T23:59:59Z' },
+                  deletedAt: { timestampValue: '2027-04-20T02:59:55Z' },
+                },
+              },
+            ],
+          }),
+          { status: 200 },
+        );
+      }
+      if (url.includes('meta/push_plan')) {
+        savedPlan = JSON.parse(options.body);
+        return new Response(JSON.stringify({ updateTime: now.toISOString() }), { status: 200 });
+      }
+      return new Response('{}', { status: 200 });
+    };
+
+    const res = await runPushReminderPlanner(
+      {},
+      {
+        serviceAccount: mockSa,
+        now,
+        mintToken: async () => 'test-token',
+        fetchImpl: fakeFetch,
+      },
+    );
+
+    assert.equal(res.status, 'ok');
+    const plannedKeys = savedPlan.fields.reminderPlan.arrayValue.values.map(
+      (v) => v.mapValue.fields.tKey.stringValue,
+    );
+    const activeKeys = savedPlan.fields.activeEventKeys.arrayValue.values.map((v) => v.stringValue);
+
+    assert.ok(!plannedKeys.includes('lit-tue-deleted'));
+    assert.ok(!plannedKeys.includes('meeting-mtg-deleted'));
+    assert.ok(!plannedKeys.includes('lit-pascha-deleted-season-lit'));
+    assert.ok(plannedKeys.includes('lit-tue-restored'));
+    assert.ok(plannedKeys.includes('lit-tue-active'));
+    assert.ok(plannedKeys.includes('meeting-mtg-restored'));
+
+    assert.ok(!activeKeys.includes('lit-tue-deleted'));
+    assert.ok(!activeKeys.includes('meeting-mtg-deleted'));
+    assert.ok(activeKeys.includes('lit-tue-restored'));
+    assert.ok(activeKeys.includes('lit-tue-active'));
+    assert.ok(activeKeys.includes('meeting-mtg-restored'));
+  });
 });
