@@ -57,7 +57,10 @@ class _LateRepo extends SeedRepository {
   @override
   Stream<ContactSettings> contactSettings() => contact.stream;
   @override
-  Future<void> submitContact(Map<String, dynamic> payload, {required String lang}) async => sent.add(payload);
+  Future<ContactSubmitResult> submitContact(Map<String, dynamic> payload, {required String lang}) async {
+    sent.add(payload);
+    return ContactSubmitResult.sent;
+  }
 }
 
 class _English extends LocaleNotifier {
