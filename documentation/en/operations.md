@@ -221,9 +221,9 @@ The native Android app is packaged as lightweight, split release APKs for maximu
   - Idempotent: Skips duplicate API fetches and writes when data is already fresh in KV unless force-synced.
 
 ### In-App Update Verification & Installation Flow
-1. When `installApkBuild` (admin) is greater than the app's build, the app fetches `/app/android/version.json`.
+1. When `installApkBuild` (admin) is greater than the app's build, the app fetches `/app/android/version.json` (bounded by `PlatformAppUpdater.manifestTimeout = 8 s` connection and response timeout).
 2. When `manifest.build > currentBuild`, a persistent update banner prompts the user.
-3. Resumable downloading leverages HTTP `Range` headers to survive flaky network connections.
+3. Resumable downloading leverages HTTP `Range` headers (with the same `8 s` `connectionTimeout` / response bound) to survive flaky network connections.
 4. The downloaded APK's SHA-256 checksum is validated against the manifest.
 5. The package signature is verified against the installed app's signing certificate using `PackageManager` before invoking the installer.
 6. The app requests `REQUEST_INSTALL_PACKAGES` permission if not already granted, and launches the Android Package Installer session via secure `FileProvider` (`${applicationId}.updates`).
@@ -270,6 +270,16 @@ The remote scheduled push delivery and readings synchronization infrastructure r
 ### Fallback GitHub Actions Workflow (`.github/workflows/push-sender.yml`)
 - Provides manual dispatch (`workflow_dispatch`) fallback running `node tool/push_sender.js` using Node.js 22 LTS if Cloudflare Worker execution requires maintenance or debugging.
 - Paired with `.github/workflows/keepalive.yml` running monthly to prevent automated GitHub Actions schedule deactivation.
+
+### Local Offline Integration Tests (`integration_test/offline_test.dart`)
+- Runs against the local Firestore emulator (`disableNetwork()` / `enableNetwork()`) and is excluded from headless CI `flutter test` runs (requires Java 11+ and a desktop or Android emulator target):
+```bash
+cd tool/rules_test && npm ci && cd ../..
+npx firebase emulators:exec --only firestore --project demo-church-portal --config firebase.json \
+  "FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node tool/seed_firestore.js && \
+   flutter test integration_test/offline_test.dart -d linux"
+```
+- For Android emulators, add `--dart-define=FIRESTORE_EMULATOR_HOST=10.0.2.2` (see [`integration_test/README.md`](../../integration_test/README.md)).
 
 ---
 

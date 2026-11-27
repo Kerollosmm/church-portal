@@ -132,7 +132,7 @@
 - الأمان والتحقق ومفاتيح الحالة: `confirm_named.dart` (نوافذ التأكيد المسماة)، و`unsaved_guard.dart` (حماية التعديلات و`PopScope` و`beforeunload`)،
   و`pending_delete.dart` (مؤقت التراجع ١٠ ثوانٍ)، و`unsaved_bar.dart` (شريط الحفظ الثابت)، و`state_switch.dart` (مفاتيح الحالة المكتوبة `AdminStateSwitch`).
 - المنطق المجرّد: `lib/domain/schedule.dart` (`liturgiesHiddenBy` لحساب القداسات المستبدلة).
-- الكتابة عبر `lib/data/admin_repository.dart` (حفظ الحقول المتغيرة فقط مع ختم الوقت والمشرف).
+- الكتابة عبر `lib/data/admin_repository.dart` (حفظ الحقول المتغيرة فقط مع ختم الوقت والمشرف)، مع قفل فوري للكتابة ورفع الوسائط عند انقطاع الاتصال التام (`_assertOnline` / `AdminOfflineException`) وإبقاء مهلة الـ 15 ثانية للشبكات الضعيفة، إلى جانب شريط التنبيه `OfflineBanner` («مفيش اتصال بالإنترنت — الحفظ واقف لحد ما النت يرجع» / `adminOfflineBanner`) داخل `AdminDashboard`.
 - اللوحة جزء JavaScript منفصل (deferred) لا يحمّله الزوار.
 
 ## الحدود والمشاكل المعروفة
