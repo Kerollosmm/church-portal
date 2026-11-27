@@ -34,9 +34,29 @@ export const DEFAULT_FORBIDDEN_MAIN_SOURCES = [
   'data/latest_10y.dart',
   'ui/widgets/update_banner_io.dart',
   'data/url_image_cache_io.dart',
+  'core/connectivity_env_io.dart',
+  'connectivity_plus',
   'firebase_auth-',
   'firebase_app_check-',
 ];
+
+function isAllowedWebPluginRegistrant(normSource, normForbidden) {
+  if (normForbidden !== 'connectivity_plus') return false;
+  // Flutter's generated web_plugin_registrant.dart always registers the
+  // federated web plugin stubs inside connectivity_plus/lib/src/web* and
+  // connectivity_plus_platform_interface, even when app code only imports
+  // connectivity_env_web.dart (which uses window.navigator.onLine). Any import
+  // of package:connectivity_plus/connectivity_plus.dart or IO code still fails.
+  return (
+    /(?:^|\/)connectivity_plus_platform_interface(?:[-/]|$)/.test(normSource) ||
+    /(?:^|\/)connectivity_plus-[^/]+\/lib\/src\/(?:connectivity_plus_web\.dart|web\/)/.test(
+      normSource
+    ) ||
+    /(?:^|\/)connectivity_plus\/src\/(?:connectivity_plus_web\.dart|web\/)/.test(
+      normSource
+    )
+  );
+}
 
 export const DEFAULT_REQUIRED_FONTS = [
   'IBMPlexSansArabic-Regular.ttf',
@@ -250,9 +270,12 @@ export function checkWebBundle(buildDir, options = {}) {
 
       for (const forbidden of forbiddenMainSources) {
         const normForbidden = forbidden.replace(/\\/g, '/');
-        const matches = mainSources.filter(
-          (s) => typeof s === 'string' && s.replace(/\\/g, '/').includes(normForbidden)
-        );
+        const matches = mainSources.filter((s) => {
+          if (typeof s !== 'string') return false;
+          const normSource = s.replace(/\\/g, '/');
+          if (!normSource.includes(normForbidden)) return false;
+          return !isAllowedWebPluginRegistrant(normSource, normForbidden);
+        });
         if (matches.length > 0) {
           deferredIsolation.forbiddenLeaks.push({ source: forbidden, matches });
           errors.push(`Forbidden source LEAKED into ${mainMapName}: ${forbidden} (${matches.join(', ')})`);

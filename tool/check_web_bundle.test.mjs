@@ -210,19 +210,37 @@ test('checkWebBundle fails when a forbidden main source leaks into main.dart.js.
   }
 });
 
-test('checkWebBundle ignores firebase_auth_web and firebase_app_check_web registrants in main.dart.js.map', (t) => {
+test('checkWebBundle ignores firebase_auth_web, firebase_app_check_web, and connectivity_plus web registrants in main.dart.js.map', (t) => {
   const dir = createSyntheticBuild(t);
   const mainMapPath = path.join(dir, 'main.dart.js.map');
   const mainMap = JSON.parse(fs.readFileSync(mainMapPath, 'utf8'));
   mainMap.sources.push(
     '../../../.pub-cache/hosted/pub.dev/firebase_auth_web-6.3.2/lib/firebase_auth_web.dart',
     '../../../.pub-cache/hosted/pub.dev/firebase_app_check_web-0.3.1+3/lib/firebase_app_check_web.dart',
+    '../../../.pub-cache/hosted/pub.dev/connectivity_plus_platform_interface-2.1.0/lib/connectivity_plus_platform_interface.dart',
+    '../../../.pub-cache/hosted/pub.dev/connectivity_plus-6.1.5/lib/src/connectivity_plus_web.dart',
+    '../../../.pub-cache/hosted/pub.dev/connectivity_plus-6.1.5/lib/src/web/dart_html_connectivity_plugin.dart',
   );
   fs.writeFileSync(mainMapPath, JSON.stringify(mainMap));
 
   const result = checkWebBundle(dir);
   assert.equal(result.success, true);
   assert.equal(result.deferredIsolation.passed, true);
+});
+
+test('checkWebBundle fails when connectivity_plus library entrypoint leaks into main.dart.js.map', (t) => {
+  const dir = createSyntheticBuild(t);
+  const mainMapPath = path.join(dir, 'main.dart.js.map');
+  const mainMap = JSON.parse(fs.readFileSync(mainMapPath, 'utf8'));
+  mainMap.sources.push(
+    '../../../.pub-cache/hosted/pub.dev/connectivity_plus-6.1.5/lib/connectivity_plus.dart',
+  );
+  fs.writeFileSync(mainMapPath, JSON.stringify(mainMap));
+
+  const result = checkWebBundle(dir);
+  assert.equal(result.success, false);
+  assert.equal(result.deferredIsolation.passed, false);
+  assert.ok(result.errors.some((e) => e.includes('Forbidden source LEAKED into main.dart.js.map: connectivity_plus')));
 });
 
 test('checkWebBundle accepts fingerprinted main.<hash>.dart.js and main.<hash>.dart.js.map while keeping .part.js pattern', (t) => {
