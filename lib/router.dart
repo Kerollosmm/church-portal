@@ -10,8 +10,10 @@ import 'core/theme.dart';
 import 'core/document_lang.dart';
 import 'core/l10n.dart';
 import 'data/error_reporting.dart';
+import 'domain/cairo_time.dart';
 import 'domain/item_detail.dart';
 import 'domain/notify_plan.dart';
+import 'domain/reminders.dart' show isoDate;
 import 'state/providers.dart';
 // Deferred (plan PR 3, 3.3): separate web chunks, fetched only on /admin and
 // /ask, so the public bundle excludes the admin dashboard and the AI SDK.
@@ -248,6 +250,15 @@ GoRouter buildAppRouter(Ref ref, {bool? isWeb, String initialLocation = '/'}) {
                 builder: (_) => health_page.NotificationHealthPage(),
               ),
             ),
+          ),
+          GoRoute(
+            path: '/readings',
+            redirect: (_, s) {
+              final now = ref.read(nowProvider).value;
+              final cairoNow = now == null ? CairoTime.now() : CairoTime.fromInstant(now);
+              final todayIso = isoDate(CairoTime.calendarDate(cairoNow));
+              return _redirectWithQuery('/readings/$todayIso', s);
+            },
           ),
           GoRoute(
             path: '/readings/:date',

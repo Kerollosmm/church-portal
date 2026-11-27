@@ -277,10 +277,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final btn = find.byKey(const Key('scheduleWhatsappShare'));
+      expect(find.byKey(const Key('scheduleWhatsappShare')), findsNothing);
+      final btn = find.byKey(const Key('nextMassWhatsappShare'));
       expect(btn, findsOneWidget);
-      await tester.drag(find.byType(Scrollable).first, const Offset(0, -250));
-      await tester.pumpAndSettle();
       await tester.ensureVisible(btn);
       await tester.pumpAndSettle();
       await tester.tap(btn);

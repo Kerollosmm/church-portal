@@ -212,7 +212,7 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   now are listed first, then the rest by `startsAt`; title + date range + "Active now" pill +
   `LiturgyCard(showDate: true)`.
 - `LiturgyCard`: name, single-line Western-digit bidi-isolated time range (`TimeRangeText`), place, audience, weekday/date (no sample badge since ADR-046).
-- **Plain-link WhatsApp share (PR 6E, ADR-090):** `whatsappShareUri` (`lib/domain/share.dart`) creates a clean `https://wa.me/?text=...` link carrying the canonical page URL (`https://maximos-domadios-church.web.app/...`) with zero tracking query parameters; wired on `NextMassCard` (`nextMassWhatsappShare`), `MassSchedulePage` (`scheduleWhatsappShare`), and `ReadingsPage` (`readingsWhatsappShare` / `verseWhatsappShare`).
+- **Plain-link WhatsApp share (PR 6E, ADR-090):** `whatsappShareUri` (`lib/domain/share.dart`) creates a clean `https://wa.me/?text=...` link carrying the canonical page URL (`https://maximos-domadios-church.web.app/...`) with zero tracking query parameters; wired on `NextMassCard` (`nextMassWhatsappShare`, shown on `/` and `/mass-schedule`), and `ReadingsPage` (`readingsWhatsappShare` / `verseWhatsappShare`).
 
 #### Programme details & parallel services (PR #32, ADR-041)
 
@@ -596,7 +596,7 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
   - `HeroVideo` (`lib/ui/widgets/hero_video_io.dart`) wrapped in `RepaintBoundary` to isolate 60 fps video rendering from ancestor repaint layers.
 - Arabic scripture text (Van Dyck) and English chapter:verse references (`refs-only`).
 - Offline caching via `ReadingsStore` (SharedPreferences on mobile, in-memory on web) with automatic pruning of dates older than yesterday.
-- Accessible directly via the «اقرأ القراءات» action on the Today card or direct link `/readings/YYYY-MM-DD`.
+- Accessible directly via the «اقرأ القراءات» action on the Today card, direct link `/readings/YYYY-MM-DD`, or bare `/readings` (redirects to today's Cairo date `/readings/YYYY-MM-DD`, preserving query parameters).
 
 ### Notification Preferences & Reminders (`/notifications`, `notifications_page.dart`, ADR-057, ADR-064, ADR-065, ADR-067)
 - Screen manages user notification channel subscriptions (`announcements`, `verse_daily`, `katameros_daily`, `seasons`, `feasts`) and personal reminders (`RemindMeButton`, «تذكيراتي»).

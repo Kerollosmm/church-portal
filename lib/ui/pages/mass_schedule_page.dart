@@ -2,7 +2,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
-import '../../core/launch.dart';
 import '../../core/theme.dart';
 import '../../domain/custom_content.dart' show BuiltInSections;
 import '../../domain/features.dart';
@@ -10,7 +9,6 @@ import '../../domain/image_style.dart';
 import '../../domain/cairo_time.dart';
 import '../../domain/models.dart';
 import '../../domain/schedule.dart';
-import '../../domain/share.dart';
 import '../../domain/time_format.dart';
 import '../../state/providers.dart';
 import '../widgets/cards.dart';
@@ -78,22 +76,6 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
         const AlertBanner(),
         if (!suppressEmpty && !waitingForPages) ...[
           const NextMassCard(showFullScheduleLink: false),
-          const SizedBox(height: 10),
-          Align(
-            alignment: AlignmentDirectional.centerEnd,
-            child: ActionChipButton(
-              key: const Key('scheduleWhatsappShare'),
-              icon: Icons.chat_rounded,
-              label: context.tr('shareWhatsapp'),
-              color: whatsappGreen,
-              onTap: () => openUrl(
-                whatsappShareUri(
-                  title: context.tr('massSchedule'),
-                  path: '/mass-schedule',
-                ).toString(),
-              ),
-            ),
-          ),
           const SizedBox(height: 12),
           Card(
             child: SwitchListTile(

@@ -354,6 +354,28 @@ void main() {
       expect(applied.last.noIndex, isFalse);
     });
 
+    testWidgets('/readings without date redirects to today in Cairo time and preserves query params', (tester) async {
+      final applied = <DocumentHeadSpec>[];
+      debugOnRouteMeta = applied.add;
+      addTearDown(() => debugOnRouteMeta = null);
+      final (container, _) = await _pumpApp(tester);
+      final router = container.read(routerProvider);
+
+      router.go('/readings');
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(router.routerDelegate.currentConfiguration.uri.path, '/readings/2026-11-01');
+      expect(applied.last.canonicalUrl, 'https://maximos-domadios-church.web.app/readings/2026-11-01');
+      expect(applied.last.noIndex, isFalse);
+
+      router.go('/readings/?lang=en&tab=verse');
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(router.routerDelegate.currentConfiguration.uri.toString(), '/readings/2026-11-01?lang=en&tab=verse');
+    });
+
     test('resolveLangSync keeps the URL fragment', () {
       expect(resolveLangSync(Uri.parse('/about?lang=ar#altars'), english: true).redirect, '/about#altars');
       expect(resolveLangSync(Uri.parse('/about#altars'), english: true).redirect, '/about?lang=en#altars');
