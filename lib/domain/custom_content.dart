@@ -166,6 +166,13 @@ List<String> entryIdsToHide(String categoryId, Iterable<({String id, Map<String,
         if (e.data['categoryId'] == categoryId && e.data['visible'] != false) e.id,
     ];
 
+/// Page ids placed inside [categoryId] (`placement == 'section'`) that must be
+/// unlinked back to `'link'` when [categoryId] is deleted.
+List<String> pageIdsToUnlink(String categoryId, Iterable<({String id, Map<String, dynamic> data})> pages) => [
+      for (final p in pages)
+        if (p.data['placement'] == PagePlacements.section && p.data['categoryId'] == categoryId) p.id,
+    ];
+
 // ------------------------------------------------------------ custom pages
 
 /// Block types of a custom page body.
