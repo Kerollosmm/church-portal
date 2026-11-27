@@ -621,13 +621,13 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
   - In a standard Safari browser tab on iOS, Web Push is blocked prior to PWA installation; the screen renders a 3-step "Add to Home Screen" visual guide.
   - Once launched from the Home Screen (`isStandalone == true`), the page seamlessly transitions to expose the Web Push permission prompt card and channel switches.
 - **Denied Permission Recovery (ADR-065):**
-  - When `permission == 'denied'`, the screen displays a browser site settings guide (padlock / site settings instructions) and an «إعادة فحص الإذن» / "Re-check permission" button to re-evaluate without reloading.
-- Standalone OEM battery health diagnostics remain available on the dedicated route `/notifications/battery` (`notification_health_page.dart`, ADR-058, ADR-062).
+  - When `permission == 'denied'`, the screen branches instructions by platform (`NotificationsPage.blockedInstructionsKey`: Android Chrome, desktop browser, iOS/iPadOS PWA, native Android/iOS) and renders a «التحقق من الإذن مجددًا» / "Check permission again" button to re-evaluate without reloading.
+- Standalone OEM battery health diagnostics remain available on the dedicated route `/notifications/battery` on Android (`notification_health_page.dart`, ADR-058, ADR-062; non-Android platforms redirect to `/notifications`).
 - **Offline Banner & Admin Offline Hint (PR 6F-2 / ADR-092):** `OfflineBanner` (`lib/ui/widgets/offline_banner.dart`, `Key('offlineBanner')`) is a `ConsumerWidget` watching `connectivityProvider` (`ConnectivityEnv` hint only) inside `AppShell` and web-only `AdminDashboard` (`adminOfflineBanner`). Offline in `/admin` is a banner hint only — there is **no** connectivity-based write lock (`navigator.onLine` has false positives), existing server-ack timeouts are the guard, and `formatAdminError` (`admin_validators.dart`) maps `TimeoutException` to `adminTimeoutError`. Failed native FCM topic sync (`pendingTopicSyncKey`, written solely in `PushMessaging.updateSubscriptions` with a 20 s per-topic timeout) retries once per `offline -> online` transition or app resume (`AppLifecycleListener`) via `NotifyPlanner` (`notify_providers.dart`).
 
 ### Notification Health & OEM Guidance (`/notifications/battery`, `notification_health_page.dart`, ADR-058, ADR-062)
 - Screen uses unified `PageBody` + `PageHeader` (ADR-062, `INV-NAV-01`; no nested `Scaffold` or custom top bar) with localized strings registered via dedicated deferred string table `notificationHealthStrings`. `parentRouteOf('/notifications/battery')` routes back to `/notifications` with tooltip «العودة إلى الإشعارات» / "Back to Notifications".
-- Diagnostic check for Android background delivery: notification permissions, exact alarms capability, battery optimization exemption, and background replenishment worker recency (< 48 hours).
+- Diagnostic check for Android background delivery: notification permissions, exact alarms capability (defaulting to `null` / neutral unknown until the channel answers), battery optimization exemption, and background replenishment worker recency (< 48 hours).
 - OEM vendor detection (Xiaomi/Redmi/POCO, Oppo/Realme/OnePlus, Vivo/iQOO, Huawei/Honor, Samsung, Other).
 - Step-by-step guidance tailored to the user's phone brand with one-click intent launcher buttons (`church_portal/device` platform channel) falling back to App Info settings.
 
@@ -635,7 +635,7 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
 - Native Android app fetches `/app/android/version.json` when `installApkBuild` > its own build. The download is the device ABI (`arm64-v8a` when the phone lists it, else `armeabi-v7a`), because those splits use versionCodes `2000+build` and `1000+build`. The package installer runs only when the APK certificate matches the installed app (ADR-068). apk-v1.0.0's debug certificate does not match later releases.
 - If a newer build is published (`installApkBuild > currentBuild`), a dismissable bottom banner appears.
 - If `currentBuild < minSupportedBuild`, the update is mandatory and non-dismissable.
-- Tapping «تحديث الآن» opens `UpdateSheet` displaying Arabic release notes, file size, download progress bar with speed/percentage, and triggers APK installation via Android `FileProvider`.
+- Tapping «تحديث الآن» opens `UpdateSheet` displaying Arabic release notes, file size, download progress bar with speed/percentage, and triggers APK installation via Android `FileProvider`; forced updates wrap the sheet in `PopScope(canPop: false)`, and resuming from Settings in `permissionNeeded` re-checks `canRequestPackageInstalls()`.
 - Streaming download supports HTTP `Range` resume on network dropouts, verifies SHA-256 hash before renaming `.apk.part` to `.apk`, bounds manifest and download connection/response headers by `PlatformAppUpdater.manifestTimeout` (`8 s`), and bounds the download stream by `PlatformAppUpdater.downloadIdleTimeout` (`30 s` per-chunk idle timeout, PR 6F-2 / ADR-092).
 
 ### Android Native Shell (`app_shell.dart`, `router.dart`, ADR-058)

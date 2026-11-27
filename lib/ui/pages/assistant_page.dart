@@ -370,7 +370,16 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
     final visible = ref.watch(assistantVisibleProvider);
     final settings = ref.watch(settingsProvider);
     if (visible) _watchGrounding();
-    if (settings.isLoading) return const Center(child: CircularProgressIndicator());
+    if (settings.hasError && !settings.hasValue) {
+      return PageBody(
+        header: CustomizablePageHeader(
+            pageKey: CustomizablePages.ask, title: context.tr('askTitle'), icon: Icons.auto_awesome_rounded),
+        children: [ErrorState(onRetry: () => ref.invalidate(settingsProvider))],
+      );
+    }
+    if (!settings.hasValue && settings.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
     if (!visible) {
       return PageBody(
         header: CustomizablePageHeader(

@@ -241,6 +241,7 @@ class _UpdateSheetState extends ConsumerState<UpdateSheet> with WidgetsBindingOb
   String? _errorMessage;
   String? _downloadedFilePath;
   StreamSubscription<UpdateDownloadProgress>? _downloadSub;
+  bool _checkingPermissionOnResume = false;
 
   @override
   void initState() {
@@ -263,10 +264,31 @@ class _UpdateSheetState extends ConsumerState<UpdateSheet> with WidgetsBindingOb
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _status == _UpdateStatus.installing) {
+    if (state != AppLifecycleState.resumed) return;
+    if (_status == _UpdateStatus.installing) {
       setState(() {
         _status = _UpdateStatus.readyToInstall;
       });
+    } else if (_status == _UpdateStatus.permissionNeeded) {
+      _recheckPermissionOnResume();
+    }
+  }
+
+  Future<void> _recheckPermissionOnResume() async {
+    if (_checkingPermissionOnResume) return;
+    _checkingPermissionOnResume = true;
+    try {
+      final updater = ref.read(appUpdaterProvider);
+      final canInstall = await updater.canRequestPackageInstalls();
+      if (!mounted || _status != _UpdateStatus.permissionNeeded || !canInstall) return;
+      final path = _downloadedFilePath;
+      if (path != null) {
+        _install(path);
+      } else {
+        setState(() => _status = _UpdateStatus.idle);
+      }
+    } finally {
+      _checkingPermissionOnResume = false;
     }
   }
 
@@ -377,105 +399,108 @@ class _UpdateSheetState extends ConsumerState<UpdateSheet> with WidgetsBindingOb
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
     final maxSheetHeight = MediaQuery.sizeOf(context).height * 0.90;
 
-    return SafeArea(
-      child: Center(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: 520, maxHeight: maxSheetHeight),
-          child: Container(
-            margin: EdgeInsets.fromLTRB(12, 12, 12, 12 + bottomInset),
-            decoration: BoxDecoration(
-              color: pal.surface,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: pal.hairline, width: 1.0),
-              boxShadow: pal.panelShadow,
-            ),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Handle bar
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: pal.hairline,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Header row
-                  Row(
-                    children: [
-                      Icon(Icons.system_update_rounded, color: pal.primary, size: 26),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              context.tr('updateSheetTitle'),
-                              style: TextStyle(
-                                color: pal.ink,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 18,
-                              ),
-                            ),
-                            Text(
-                              'v${widget.decision.targetVersion}',
-                              style: TextStyle(
-                                color: pal.muted,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
+    return PopScope(
+      canPop: !widget.decision.isForced,
+      child: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: 520, maxHeight: maxSheetHeight),
+            child: Container(
+              margin: EdgeInsets.fromLTRB(12, 12, 12, 12 + bottomInset),
+              decoration: BoxDecoration(
+                color: pal.surface,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: pal.hairline, width: 1.0),
+                boxShadow: pal.panelShadow,
+              ),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Handle bar
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: pal.hairline,
+                          borderRadius: BorderRadius.circular(2),
                         ),
-                      ),
-                      if (!widget.decision.isForced)
-                        IconButton(
-                          icon: const Icon(Icons.close_rounded),
-                          color: pal.muted,
-                          onPressed: () => Navigator.of(context).pop(),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Divider(color: pal.hairline, height: 1),
-                  const SizedBox(height: 14),
-
-                  // Release notes section
-                  if (notes.isNotEmpty) ...[
-                    Text(
-                      context.tr('updateWhatsNew'),
-                      style: TextStyle(
-                        color: pal.ink,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: pal.notice.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        notes,
-                        style: TextStyle(color: pal.ink, fontSize: 13, height: 1.4),
                       ),
                     ),
                     const SizedBox(height: 16),
-                  ],
 
-                  // Dynamic state widgets
-                  _buildStateContent(context, pal),
-                ],
+                    // Header row
+                    Row(
+                      children: [
+                        Icon(Icons.system_update_rounded, color: pal.primary, size: 26),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                context.tr('updateSheetTitle'),
+                                style: TextStyle(
+                                  color: pal.ink,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 18,
+                                ),
+                              ),
+                              Text(
+                                'v${widget.decision.targetVersion}',
+                                style: TextStyle(
+                                  color: pal.muted,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (!widget.decision.isForced)
+                          IconButton(
+                            icon: const Icon(Icons.close_rounded),
+                            color: pal.muted,
+                            onPressed: () => Navigator.of(context).pop(),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    Divider(color: pal.hairline, height: 1),
+                    const SizedBox(height: 14),
+
+                    // Release notes section
+                    if (notes.isNotEmpty) ...[
+                      Text(
+                        context.tr('updateWhatsNew'),
+                        style: TextStyle(
+                          color: pal.ink,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: pal.notice.withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          notes,
+                          style: TextStyle(color: pal.ink, fontSize: 13, height: 1.4),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+
+                    // Dynamic state widgets
+                    _buildStateContent(context, pal),
+                  ],
+                ),
               ),
             ),
           ),

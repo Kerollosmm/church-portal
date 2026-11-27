@@ -27,8 +27,9 @@ const Map<String, List<String>> notificationsPageStrings = {
   'notificationsAllowPromptTitleApp': ['تفعيل إشعارات التطبيق', 'Enable app notifications'],
   'notificationsBatteryGuideLink': ['إذا لم تصلك الإشعارات في وقتها — فحص البطارية والإعدادات', 'Not getting notifications on time? Battery & settings check'],
   'notificationsBlockedAndroid': ['من إعدادات الهاتف ← التطبيقات ← كنيسة مكسيموس ودوماديوس ← الإشعارات ← سماح', 'Open Device Settings → Apps → Church App → Notifications → Allow'],
-  'notificationsBlockedChrome': ['اضغط أيقونة 🔒 بجوار عنوان الموقع ← الأذونات ← الإشعارات ← سماح', 'Tap the 🔒 icon next to the address bar → Permissions → Notifications → Allow'],
-  'notificationsBlockedIos': ['من إعدادات الهاتف ← الإشعارات ← كنيسة مكسيموس ودوماديوس ← السماح بالإشعارات', 'Go to iPhone Settings → Notifications → Church App → Allow Notifications'],
+  'notificationsBlockedChrome': ['اضغط أيقونة إعدادات الموقع (أو 🔒) بجوار عنوان الموقع في Chrome ← الأذونات ← الإشعارات ← سماح', 'Tap the site settings / 🔒 icon next to the address bar in Chrome → Permissions → Notifications → Allow'],
+  'notificationsBlockedDesktop': ['اضغط أيقونة 🔒 أو إعدادات الموقع بجوار شريط العنوان في المتصفح ← الأذونات ← الإشعارات ← سماح', 'Click the 🔒 or site settings icon next to your browser address bar → Permissions → Notifications → Allow'],
+  'notificationsBlockedIos': ['من إعدادات iPhone أو iPad ← الإشعارات ← كنيسة مكسيموس ودوماديوس ← السماح بالإشعارات', 'Go to iPhone or iPad Settings → Notifications → Church App → Allow Notifications'],
   'notificationsBlockedTitle': ['الإشعارات محظورة في متصفحك', 'Notifications are blocked in your browser'],
   'notificationsBlockedTitleApp': ['الإشعارات غير مفعلة لهذا التطبيق', 'Notifications are blocked for this app'],
   'notificationsComingSoon': ['خدمة الإشعارات عبر المتصفح قادمة قريبًا', 'Web push notifications are coming soon'],
@@ -105,6 +106,25 @@ class NotificationsPage extends ConsumerStatefulWidget {
       ).toString();
     }
     return 'https://maximos-domadios-church.web.app/notifications';
+  }
+
+  /// Returns the localization key for denied-permission steps on the active platform.
+  @visibleForTesting
+  static String blockedInstructionsKey({
+    required bool isWeb,
+    required InstallOs os,
+    TargetPlatform? targetPlatform,
+  }) {
+    if (!isWeb) {
+      return (targetPlatform ?? defaultTargetPlatform) == TargetPlatform.iOS
+          ? 'notificationsBlockedIos'
+          : 'notificationsBlockedAndroid';
+    }
+    return switch (os) {
+      InstallOs.ios => 'notificationsBlockedIos',
+      InstallOs.android => 'notificationsBlockedChrome',
+      InstallOs.desktop || InstallOs.other => 'notificationsBlockedDesktop',
+    };
   }
 
   @override
@@ -456,6 +476,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> with Widg
             // Re-read the permission so a grant or denial shows right away.
             () => ref.invalidate(pushPermissionProvider),
             isWeb: web,
+            os: osInfo.os,
           ),
 
           if (!web && defaultTargetPlatform == TargetPlatform.android)
@@ -588,6 +609,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> with Widg
     WidgetRef ref,
     VoidCallback onPermissionChanged, {
     required bool isWeb,
+    required InstallOs os,
   }) {
     switch (state) {
       case PushPermissionState.inAppBrowser:
@@ -745,12 +767,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> with Widg
               ),
               const SizedBox(height: 8),
               Text(
-                context.tr(isWeb ? 'notificationsBlockedChrome' : 'notificationsBlockedAndroid'),
-                style: TextStyle(fontSize: 12.5, color: pal.ink, height: 1.4),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                context.tr('notificationsBlockedIos'),
+                context.tr(NotificationsPage.blockedInstructionsKey(isWeb: isWeb, os: os)),
                 style: TextStyle(fontSize: 12.5, color: pal.ink, height: 1.4),
               ),
               const SizedBox(height: 12),

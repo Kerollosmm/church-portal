@@ -142,6 +142,13 @@ final isWebProvider = Provider<bool>((ref) => _detectIsWeb());
 /// Uses [CairoTime.now] at redirect execution time; override in tests.
 final routeClockProvider = Provider<DateTime Function()>((_) => CairoTime.now);
 
+/// Preloads deferred notification routes outside `FakeAsync` test zones.
+@visibleForTesting
+Future<void> preloadNotificationRoutesForTest() => Future.wait([
+      health_page.loadLibrary(),
+      notifications_page.loadLibrary(),
+    ]);
+
 final routerProvider = Provider<GoRouter>((ref) {
   final isWeb = ref.watch(isWebProvider);
   return buildAppRouter(ref, isWeb: isWeb);
@@ -246,6 +253,9 @@ GoRouter buildAppRouter(Ref ref, {bool? isWeb, String initialLocation = '/'}) {
           ),
           GoRoute(
             path: '/notifications/battery',
+            redirect: (_, s) => (!web && defaultTargetPlatform == TargetPlatform.android)
+                ? null
+                : _redirectWithQuery('/notifications', s),
             pageBuilder: (c, s) => _page(
               s,
               DeferredLoader(

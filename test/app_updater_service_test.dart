@@ -467,7 +467,124 @@ void main() {
       expect(find.text('تحديث التطبيق'), findsOneWidget);
       expect(find.text('تحديث منفرد'), findsOneWidget);
     });
+
+    testWidgets('forced update sheet blocks Android Back', (tester) async {
+      const forcedDecision = UpdateDecision(
+        hasUpdate: true,
+        forced: true,
+        targetVersion: '2.1.0',
+        targetBuild: 210,
+        asset: ApkAsset(url: 'https://example.com/test.apk', sha256: 'abc', size: 1000),
+      );
+
+      await tester.pumpWidget(buildBannerWrapper(decision: forcedDecision));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('updateNowButton')));
+      await tester.pumpAndSettle();
+      expect(find.byType(UpdateSheet), findsOneWidget);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byType(UpdateSheet), findsOneWidget);
+    });
+
+    testWidgets('optional update sheet pops on Android Back', (tester) async {
+      const optionalDecision = UpdateDecision(
+        hasUpdate: true,
+        forced: false,
+        targetVersion: '2.1.0',
+        targetBuild: 210,
+        asset: ApkAsset(url: 'https://example.com/test.apk', sha256: 'abc', size: 1000),
+      );
+      await tester.pumpWidget(buildBannerWrapper(decision: optionalDecision));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('updateNowButton')));
+      await tester.pumpAndSettle();
+      expect(find.byType(UpdateSheet), findsOneWidget);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byType(UpdateSheet), findsNothing);
+    });
+
+    testWidgets('permissionNeeded re-checks install permission on app resume', (tester) async {
+      final fakeUpdater = _FakeResumeAppUpdater(cacheDirectory: tempDir);
+      const decision = UpdateDecision(
+        hasUpdate: true,
+        forced: true,
+        targetVersion: '2.1.0',
+        targetBuild: 210,
+        asset: ApkAsset(url: 'https://example.com/test.apk', sha256: 'abc', size: 1000),
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [appUpdaterProvider.overrideWithValue(fakeUpdater)],
+          child: MaterialApp(
+            locale: const Locale('ar'),
+            theme: buildTheme(const Locale('ar')),
+            supportedLocales: const [Locale('ar'), Locale('en')],
+            localizationsDelegates: GlobalMaterialLocalizations.delegates,
+            home: const Scaffold(
+              body: SingleChildScrollView(
+                child: UpdateSheet(decision: decision, autoStart: true),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('openSettingsButton')), findsOneWidget);
+      expect(fakeUpdater.installCalls, 0);
+
+      // Resuming before permission is granted keeps the permission prompt.
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('openSettingsButton')), findsOneWidget);
+      expect(fakeUpdater.installCalls, 0);
+
+      // Grant permission in Settings and resume again -> triggers install.
+      fakeUpdater.canInstall = true;
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.pump();
+      expect(fakeUpdater.installCalls, 1);
+    });
   });
 }
 
 class _RealHttpOverrides extends HttpOverrides {}
+
+class _FakeResumeAppUpdater extends AppUpdater {
+  bool canInstall = false;
+  int installCalls = 0;
+
+  _FakeResumeAppUpdater({super.cacheDirectory});
+
+  @override
+  Stream<UpdateDownloadProgress> downloadUpdate(
+    ApkAsset asset, {
+    required int build,
+    void Function()? onCancel,
+  }) =>
+      Stream.value(
+        const UpdateDownloadProgress(
+          downloadedBytes: 1000,
+          totalBytes: 1000,
+          percent: 1.0,
+          isDone: true,
+          filePath: '/tmp/church-portal-210.apk',
+        ),
+      );
+
+  @override
+  Future<bool> canRequestPackageInstalls() async => canInstall;
+
+  @override
+  Future<void> installDownloadedUpdate(String filePath, {String? expectedCertSha256}) async {
+    installCalls++;
+  }
+}
