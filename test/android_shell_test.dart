@@ -6,6 +6,7 @@ import 'package:church_portal/data/seed_data.dart';
 import 'package:church_portal/domain/assistant_quota.dart';
 import 'package:church_portal/domain/assistant_settings.dart';
 import 'package:church_portal/domain/cairo_time.dart';
+import 'package:church_portal/domain/custom_content.dart';
 import 'package:church_portal/domain/features.dart';
 import 'package:church_portal/domain/models.dart';
 import 'package:church_portal/state/providers.dart';
@@ -81,12 +82,56 @@ void main() {
       expect(parentRouteOf('/contact'), '/');
       expect(parentRouteOf('/'), '/');
     });
+
+    test('section-placed custom pages navigate back to their parent section', () {
+      const pages = [
+        CustomPage(
+          id: 'p1',
+          slug: 'choir-guide',
+          titleAr: 'دليل الكورال',
+          placement: PagePlacements.section,
+          categoryId: BuiltInSections.activities,
+        ),
+        CustomPage(
+          id: 'p2',
+          slug: 'youth-camp',
+          titleAr: 'معسكر الشباب',
+          placement: PagePlacements.section,
+          categoryId: 'cat-youth',
+        ),
+        CustomPage(
+          id: 'p3',
+          slug: 'standalone',
+          titleAr: 'صفحة مستقلة',
+          placement: PagePlacements.link,
+        ),
+      ];
+      const cats = [
+        CustomCategory(id: 'cat-youth', slug: 'youth', nameAr: 'الشباب', nameEn: 'Youth'),
+      ];
+
+      expect(parentRouteOf('/page/choir-guide', FeatureSettings.defaults, pages, cats), '/church-activities');
+      expect(parentRouteOf('/page/youth-camp', FeatureSettings.defaults, pages, cats), '/section/youth');
+      expect(parentRouteOf('/page/standalone', FeatureSettings.defaults, pages, cats), '/');
+
+      // Falls back to '/' when the parent section or customPages/customSections switch is off.
+      const activitiesOff = FeatureSettings(sections: {Sections.activities: false});
+      expect(parentRouteOf('/page/choir-guide', activitiesOff, pages, cats), '/');
+      const customSectionsOff = FeatureSettings(sections: {Sections.customSections: false});
+      expect(parentRouteOf('/page/youth-camp', customSectionsOff, pages, cats), '/');
+      const customPagesOff = FeatureSettings(sections: {Sections.customPages: false});
+      expect(parentRouteOf('/page/choir-guide', customPagesOff, pages, cats), '/');
+    });
   });
 
   group('AppShell Android back navigation (PopScope)', () {
     late GoRouter testRouter;
 
-    Widget buildTestApp({required String initialLocation}) {
+    Widget buildTestApp({
+      required String initialLocation,
+      List<CustomPage> pages = const [],
+      List<CustomCategory> categories = const [],
+    }) {
       testRouter = GoRouter(
         initialLocation: initialLocation,
         routes: [
@@ -100,6 +145,9 @@ void main() {
               GoRoute(path: '/about', builder: (context, state) => const Text('AboutScreen')),
               GoRoute(path: '/church-education', builder: (context, state) => const Text('EducationScreen')),
               GoRoute(path: '/church-education/:id', builder: (context, state) => const Text('EducationDetailScreen')),
+              GoRoute(path: '/church-activities', builder: (context, state) => const Text('ActivitiesScreen')),
+              GoRoute(path: '/section/:slug', builder: (context, state) => Text('Section:${state.pathParameters['slug']}')),
+              GoRoute(path: '/page/:slug', builder: (context, state) => Text('Page:${state.pathParameters['slug']}')),
               GoRoute(path: '/notifications', builder: (context, state) => const Text('NotificationsScreen')),
               GoRoute(path: '/notifications/battery', builder: (context, state) => const Text('BatteryScreen')),
             ],
@@ -112,6 +160,8 @@ void main() {
           repositoryProvider.overrideWithValue(SeedRepository(SeedData(const {}))),
           featuresProvider.overrideWithValue(FeatureSettings.defaults),
           featuresReadyProvider.overrideWithValue(true),
+          customPagesProvider.overrideWithValue(AsyncData(pages)),
+          categoriesProvider.overrideWithValue(AsyncData(categories)),
           nowProvider.overrideWith((ref) => Stream.value(cairo(2026, 11, 7, 10))),
         ],
         child: MaterialApp.router(
@@ -162,6 +212,44 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('HomeScreen'), findsOneWidget);
+    });
+
+    testWidgets('section-placed custom pages navigate back to built-in or custom section', (tester) async {
+      const pages = [
+        CustomPage(
+          id: 'p1',
+          slug: 'choir-guide',
+          titleAr: 'دليل الكورال',
+          placement: PagePlacements.section,
+          categoryId: BuiltInSections.activities,
+        ),
+        CustomPage(
+          id: 'p2',
+          slug: 'youth-camp',
+          titleAr: 'معسكر الشباب',
+          placement: PagePlacements.section,
+          categoryId: 'cat-youth',
+        ),
+      ];
+      const cats = [
+        CustomCategory(id: 'cat-youth', slug: 'youth', nameAr: 'الشباب', nameEn: 'Youth'),
+      ];
+
+      await tester.pumpWidget(buildTestApp(initialLocation: '/page/choir-guide', pages: pages, categories: cats));
+      await tester.pumpAndSettle();
+      expect(find.text('Page:choir-guide'), findsOneWidget);
+      expect(find.byTooltip('العودة إلى الأنشطة'), findsOneWidget);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.text('ActivitiesScreen'), findsOneWidget);
+
+      await tester.pumpWidget(buildTestApp(initialLocation: '/page/youth-camp', pages: pages, categories: cats));
+      await tester.pumpAndSettle();
+      expect(find.text('Page:youth-camp'), findsOneWidget);
+      expect(find.byTooltip('العودة إلى الشباب'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('backParent')));
+      await tester.pumpAndSettle();
+      expect(find.text('Section:youth'), findsOneWidget);
     });
 
     testWidgets('home route shows exit toast on single back and exits on double back within 2s', (tester) async {

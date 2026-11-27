@@ -33,6 +33,7 @@ import 'package:church_portal/ui/admin/contact_admin.dart';
 import 'package:church_portal/ui/admin/doc_editor.dart';
 import 'package:church_portal/ui/admin/page_preview.dart';
 import 'package:church_portal/ui/pages/category_page.dart' show CustomPageCard;
+import 'package:church_portal/ui/pages/contact_page.dart' show resetContactRateLimiterForTest;
 import 'package:church_portal/ui/pages/custom_page.dart' show CustomPageView, PageBlockView;
 import 'package:church_portal/ui/widgets/cards.dart' show NextMassCard;
 import 'package:church_portal/ui/widgets/common.dart';
@@ -114,14 +115,18 @@ class _Arabic extends LocaleNotifier {
 }
 
 Future<(GoRouter, _Repo)> _pump(WidgetTester tester, String path,
-    {Size size = const Size(420, 3000), _Repo? repo, bool settle = true, Locale locale = const Locale('en')}) async {
+    {Size size = const Size(420, 3000),
+    _Repo? repo,
+    bool settle = true,
+    Locale locale = const Locale('en'),
+    DateTime? now}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final r = repo ?? _Repo();
   final container = ProviderContainer(overrides: [
     repositoryProvider.overrideWithValue(r),
-    nowProvider.overrideWith((ref) => Stream.value(CairoTime.at(2026, 11, 1, 12 * 60).toUtc())),
+    nowProvider.overrideWith((ref) => Stream.value(now ?? CairoTime.at(2026, 11, 1, 12 * 60).toUtc())),
     localeProvider.overrideWith(locale.languageCode == 'en' ? _English.new : _Arabic.new),
   ]);
   addTearDown(container.dispose);
@@ -885,6 +890,47 @@ void main() {
       expect(find.text('Choose the occasion'), findsOneWidget);
       expect(find.text('A mobile number is required for a booking request'), findsOneWidget);
       expect(find.text('Choose a valid date from today on'), findsOneWidget);
+    });
+
+    testWidgets('contact form date picker uses Cairo today consistently with submit validation', (tester) async {
+      resetContactRateLimiterForTest();
+      addTearDown(resetContactRateLimiterForTest);
+      // 22:30 UTC on 2026-11-01 is 00:30 Cairo time on 2026-11-02.
+      final (_, repo) = await _pump(
+        tester,
+        '/contact',
+        size: const Size(420, 4000),
+        now: DateTime.utc(2026, 11, 1, 22, 30),
+      );
+      await tester.tap(find.byKey(const Key('contactCategory')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Hall booking').last);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('preferredDate')));
+      await tester.pumpAndSettle();
+      expect(find.byType(DatePickerDialog), findsOneWidget);
+
+      // Day 1 (yesterday in Cairo) is before firstDate (2026-11-02) and cannot be selected.
+      await tester.tap(find.text('1').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<TextField>(find.byKey(const Key('preferredDate'))).controller!.text,
+        '2026-11-02',
+      );
+
+      await tester.tap(find.byKey(const ValueKey('subtype-wedding')));
+      await tester.enterText(find.widgetWithText(TextField, 'Name'), 'Mina');
+      await tester.enterText(find.widgetWithText(TextField, 'Mobile number *'), '01012345678');
+      await tester.enterText(find.widgetWithText(TextField, 'Your message'), 'Booking on Cairo today');
+      await tester.tap(find.byType(CheckboxListTile));
+      await tester.pump();
+      await tester.tap(find.text('Send'));
+      await tester.pumpAndSettle();
+
+      expect(repo.sent.single['preferredDate'], '2026-11-02');
     });
   });
 
