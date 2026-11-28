@@ -1254,6 +1254,17 @@ service cloud.firestore {
       return ['web_announcements_ar', 'web_announcements_en', 'web_seasons_ar', 'web_seasons_en'];
     }
 
+    function isValidWantTopic(t) {
+      return t is string && (t in webTopics() || t.matches('^test_[a-z0-9_]{3,20}$'));
+    }
+
+    function validWantList(w) {
+      return w is list && w.size() <= 3
+        && (w.size() <= 0 || isValidWantTopic(w[0]))
+        && (w.size() <= 1 || isValidWantTopic(w[1]))
+        && (w.size() <= 2 || isValidWantTopic(w[2]));
+    }
+
     function remList() {
       return '^$|^web_rem_(lit|meeting|day|season)-[a-z0-9-]{1,40}(_[0-9]{8})?_(0|5|10|15|30|60|120|180|1440)_(ar|en)(,web_rem_(lit|meeting|day|season)-[a-z0-9-]{1,40}(_[0-9]{8})?_(0|5|10|15|30|60|120|180|1440)_(ar|en)){0,29}$';
     }
@@ -1263,7 +1274,7 @@ service cloud.firestore {
         && d.keys().hasAll(['token', 'want', 'createdAt'])
         && d.token is string && d.token.matches('^[A-Za-z0-9:_-]{100,400}$')
         && (!('prevToken' in d) || (d.prevToken is string && d.prevToken.matches('^[A-Za-z0-9:_-]{100,400}$')))
-        && d.want is list && d.want.size() <= 2 && d.want.hasOnly(webTopics())
+        && validWantList(d.want)
         && (!('rem' in d) || (d.rem is string && d.rem.size() <= 2600 && d.rem.matches(remList())))
         && (!('drop' in d) || (d.drop is string && d.drop.size() <= 2600 && d.drop.matches(remList())))
         && d.createdAt == request.time;

@@ -5,6 +5,9 @@
 import { batchGetDocs, patchDoc, getCachedAccessToken } from './firestore_rest.js';
 import { getCairoNow, runDailySeasons } from './push_daily.js';
 import { cairoToUtc, getCairoParts } from './push_reminders.js';
+import { isValidTestTopic } from './push_test_topic.js';
+
+export { isValidTestTopic };
 
 export const MAX_FCM_SENDS_PER_RUN = 16;
 export const MAX_SENT_LOG_SIZE = 30;
@@ -199,7 +202,7 @@ export async function sendFcmMessage(projectId, token, target, data, fetchImpl =
  * @param {typeof fetch} [options.fetchImpl] Custom fetch function.
  * @param {Date} [options.now] Custom current time.
  * @param {boolean} [options.dryRun=false] Run without sending or mutating Firestore.
- * @param {string} [options.topicOverride=''] Test topic override (must start with 'test_').
+ * @param {string} [options.topicOverride=''] Test topic override (must match `^test_[a-z0-9_]{3,20}$`).
  * @param {Function} [options.mintToken] Custom token minter.
  * @returns {Promise<object>} Summary of the run.
  */
@@ -223,14 +226,61 @@ export async function runPushSender(env, options = {}) {
   const sa = typeof rawSa === 'string' ? JSON.parse(rawSa) : rawSa;
   const projectId = env.FIREBASE_PROJECT_ID || sa.project_id || 'asafra-church-portal';
 
-  // Guard: topicOverride must start with 'test_'
-  const topicOverride = (options.topicOverride || '').trim();
-  if (topicOverride && !topicOverride.startsWith('test_')) {
-    throw new Error(`topic_override must start with 'test_': got '${topicOverride}'`);
+  // Dedicated isolated test-topic path: never walks due rows, never reads/writes Firestore,
+  // and works regardless of settings/features.push.
+  const topicOverride = typeof options.topicOverride === 'string' ? options.topicOverride.trim() : '';
+  if (topicOverride) {
+    if (!isValidTestTopic(topicOverride)) {
+      throw new Error(`topic_override must match ^test_[a-z0-9_]{3,20}$: got '${topicOverride}'`);
+    }
+
+    if (options.dryRun) {
+      await sentryCheckIn(sentryUrl, 'ok', fetchImpl);
+      return {
+        status: 'success',
+        reason: 'dry_run',
+        testTopic: topicOverride,
+        fcmSends: 0,
+      };
+    }
+
+    let token = 'test-token';
+    if (options.mintToken) {
+      token = await options.mintToken(sa, fetchImpl, nowMs);
+    } else {
+      token = await getCachedAccessToken(sa, env, fetchImpl, nowMs);
+    }
+
+    const subrequestBudget = { count: 0, max: MAX_SUBREQUESTS_PER_RUN - 1 };
+    const sendRes = await sendFcmMessage(
+      projectId,
+      token,
+      topicOverride,
+      {
+        nid: `test_${nowMs}`,
+        type: 'announcements',
+        lang: 'ar',
+        title: 'تجربة',
+        body: 'هذا إشعار تجريبي. لن يصل لغير أجهزة التجربة.',
+        link: '/notifications',
+        eventKey: '',
+        sentAt: nowIso,
+      },
+      fetchImpl,
+      subrequestBudget,
+    );
+
+    await sentryCheckIn(sentryUrl, 'ok', fetchImpl);
+    return {
+      status: sendRes.status === 'ok' || sendRes.status === 'unconfirmed' ? 'success' : 'error',
+      testTopic: topicOverride,
+      fcmSends: 1,
+      sendStatus: sendRes.status,
+      ...(sendRes.name ? { messageName: sendRes.name } : {}),
+    };
   }
 
-  // Force dry-run on schedule mutations when testing with topicOverride
-  const dryRun = options.dryRun || (topicOverride.length > 0);
+  const dryRun = Boolean(options.dryRun);
 
   // Retrieve cached access token
   let token = 'test-token';
@@ -409,14 +459,12 @@ export async function runPushSender(env, options = {}) {
         const title = lang === 'en' && row.titleEn ? row.titleEn : row.titleAr;
         const body = lang === 'en' && row.bodyEn ? row.bodyEn : row.bodyAr;
 
-        const effectiveTopic = topicOverride || t;
-
         let res = { status: 'dry_run' };
         if (!dryRun) {
           res = await sendFcmMessage(
             projectId,
             token,
-            effectiveTopic,
+            t,
             {
               nid: row.id,
               type: 'announcements',
@@ -510,14 +558,13 @@ export async function runPushSender(env, options = {}) {
         const lang = st.endsWith('_en') ? 'en' : 'ar';
         const title = lang === 'en' ? alert.titleEn : alert.titleAr;
         const body = lang === 'en' ? alert.bodyEn : alert.bodyAr;
-        const effectiveTopic = topicOverride || st;
 
         if (!dryRun) {
           const ttlSeconds = String(Math.max(300, secondsUntilCairoEndOfDay(nowMs)));
           const res = await sendFcmMessage(
             projectId,
             token,
-            effectiveTopic,
+            st,
             {
               nid: alert.nid,
               type: 'seasons',
@@ -622,9 +669,7 @@ export async function runPushSender(env, options = {}) {
 
         // Target: combine once + recurring topics if both might have subscribers
         let target;
-        if (topicOverride) {
-          target = topicOverride;
-        } else if (useOnce && useRecurring) {
+        if (useOnce && useRecurring) {
           target = { condition: `'${onceTopic}' in topics || '${recurringTopic}' in topics` };
         } else if (useOnce) {
           target = onceTopic;

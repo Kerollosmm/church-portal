@@ -11,6 +11,9 @@ import {
   queryCollection,
   setDocRest,
 } from './firestore_rest.js';
+import { isValidTestTopic } from './push_test_topic.js';
+
+export { isValidTestTopic };
 
 export const QUEUE_QUERY_LIMIT = 60;
 export const MAX_IID_CALLS_PER_RUN = 20;
@@ -247,13 +250,21 @@ export async function runPushQueueDrain(env, options = {}) {
     const newestDoc = docs[docs.length - 1];
     const wantSet = new Set(Array.isArray(newestDoc.data?.want) ? newestDoc.data.want : []);
 
-    // Union rem and drop across all docs for this token
+    // Union rem, drop, prevTokens, and valid test_* want topics across all docs for this token
     const remTopics = new Set();
     const dropTopics = new Set();
     const prevTokens = new Set();
+    const seenTestTopics = new Set();
 
     for (const d of docs) {
       const data = d.data || {};
+      if (Array.isArray(data.want)) {
+        for (const t of data.want) {
+          if (isValidTestTopic(t)) {
+            seenTestTopics.add(t);
+          }
+        }
+      }
       if (typeof data.rem === 'string' && data.rem.trim()) {
         for (const t of data.rem.split(',')) {
           const s = t.trim();
@@ -277,12 +288,31 @@ export async function runPushQueueDrain(env, options = {}) {
       }
     }
 
+    const wantedTestTopics = new Set();
+    for (const t of wantSet) {
+      if (isValidTestTopic(t)) {
+        wantedTestTopics.add(t);
+      }
+    }
+
     // Subscribe to want fixed topics
     for (const t of FIXED_TOPICS) {
       if (wantSet.has(t)) {
         if (!addMap.has(t)) addMap.set(t, new Set());
         addMap.get(t).add(tok);
       } else {
+        if (!removeMap.has(t)) removeMap.set(t, new Set());
+        removeMap.get(t).add(tok);
+      }
+    }
+
+    // Subscribe to valid test_* topics in newest want; unsubscribe from any seen in older docs but absent now
+    for (const t of wantedTestTopics) {
+      if (!addMap.has(t)) addMap.set(t, new Set());
+      addMap.get(t).add(tok);
+    }
+    for (const t of seenTestTopics) {
+      if (!wantedTestTopics.has(t)) {
         if (!removeMap.has(t)) removeMap.set(t, new Set());
         removeMap.get(t).add(tok);
       }
@@ -300,13 +330,17 @@ export async function runPushQueueDrain(env, options = {}) {
       removeMap.get(t).add(tok);
     }
 
-    // Unsubscribe prevToken from fixed topics and all rem topics
+    // Unsubscribe prevToken from fixed topics, rem topics, and any test_* topics
     for (const pt of prevTokens) {
       for (const t of FIXED_TOPICS) {
         if (!removeMap.has(t)) removeMap.set(t, new Set());
         removeMap.get(t).add(pt);
       }
       for (const t of remTopics) {
+        if (!removeMap.has(t)) removeMap.set(t, new Set());
+        removeMap.get(t).add(pt);
+      }
+      for (const t of seenTestTopics) {
         if (!removeMap.has(t)) removeMap.set(t, new Set());
         removeMap.get(t).add(pt);
       }
