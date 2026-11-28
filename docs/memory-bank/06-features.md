@@ -211,7 +211,7 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   and 2028 docs sharing a key never cross-attach); equal start times tie-break by `order` (BUG-03). Seasons in effect
   now are listed first, then the rest by `startsAt`; title + date range + "Active now" pill +
   `LiturgyCard(showDate: true)`.
-- `LiturgyCard`: name, single-line Western-digit bidi-isolated time range (`TimeRangeText`), place, audience, weekday/date (no sample badge since ADR-046).
+- `LiturgyCard`: name, single-line Western-digit bidi-isolated time range (`TimeRangeText`), place, audience, weekday/date (no sample badge since ADR-046), plus `AddToCalendarButton` (`liturgyCalendar-<id>`, deferred `.ics` download on web / `singleCalendarUrl` on native, weekly `RRULE` for weekly items or single event for dated items).
 - **Plain-link WhatsApp share (PR 6E, ADR-090):** `whatsappShareUri` (`lib/domain/share.dart`) creates a clean `https://wa.me/?text=...` link carrying the canonical page URL (`https://maximos-domadios-church.web.app/...`) with zero tracking query parameters; wired on `NextMassCard` (`nextMassWhatsappShare`, shown on `/` and `/mass-schedule`, with `scheduleWhatsappShare` rendered only as a fallback on `/mass-schedule` when `NextMassCard` has no upcoming service or seasons fail), and `ReadingsPage` (`readingsWhatsappShare` / `verseWhatsappShare`).
 
 #### Programme details & parallel services (PR #32, ADR-041)
@@ -261,7 +261,7 @@ the same day with overlapping times in different venues (`parallelServices`) get
   on ≥ 900 px.
 
 ### `/section/<slug>` — `category_page.dart` `CategoryPage` (PR #18, ADR-027)
-An admin-defined category: poster header with its name, optional intro panel, then its visible items
+An admin-defined category: poster header with its name, optional intro panel, `ShareLinkButton` (`Key('categoryShare')`, copying `shareableUrlForPath` with title semantic label), then its visible items
 (`entriesOf`) as `EntryCard`s in the `ResponsiveGrid` with `CardCover` / `CardLead` (collection `entries`, the
 item's `imageStyle` else the category's), description, call / WhatsApp, and a link button (in-app path via
 `context.go`, else `openUrl`), plus any visible custom pages with `placement == 'section'` (`sectionPages`) as
@@ -274,7 +274,7 @@ flashes «غير متاحة» from a stale cache, and the items can no longer st
 
 ### `/page/<slug>` — `custom_page.dart` `CustomPageView` (PR #18, ADR-027)
 Header (title + subtitle), then a centered reading column constrained to `maxWidth: 700` containing the optional hero
-`FittedCover` (aspect ratio 16/7, `maxHeight: 420`) and the blocks (`PageBlockView`): heading (`BlockTypes.heading`,
+`FittedCover` (aspect ratio 16/7, `maxHeight: 420`), `ShareLinkButton` (`Key('pageShare')`, copying `shareableUrlForPath` with title semantic label), and the blocks (`PageBlockView`): heading (`BlockTypes.heading`,
 semantic header, Arabic heading text strictly required via `validateHeadingBlock` and `validateDocument` with `'blockHeadingRequired'`, `fontSize: 26`, `fontWeight: FontWeight.w800`, line height 1.45, `top: 12` spacing when following
 another block or hero, `bottom: 16`), paragraph (`BlockTypes.paragraph`, selectable, `fontSize: 16`, line height 1.8),
 image (https link + caption), button (`FilledButton`), text link, donation info (`DonationInfoCard`: bank account /
@@ -336,10 +336,8 @@ counter in `AssistantConversation` still runs first (default 3 per Cairo day, 6 
   `showImageViewer`; **«المعلومات الأساسية / Key information»** card (`Key('detailFacts')`, PR #14: labelled rows —
   icon, small label, value — Day / Time / Place / Notes for meetings, Schedule / Ages for activities, Hours for services, Ordained / Hegumen since / Departed for priests,
   Feast / Gregorian date for saints, Year for milestones; empty rows dropped); **quick actions** (`detailActions`,
-  PR #14): «أضف إلى التقويم» (`detailAddToCalendar`, meetings with a weekday + start:
-  Google Calendar template link, weekly `RRULE`, next occurrence, `ctz=Africa/Cairo`, location = church name +
-  address, details = page URL — `weeklyCalendarUrl`), «ذكّرني» (`RemindMeButton` on meeting detail pages only; activity/facility reminders are not supported yet — no `reminderSources` or Worker planner entry), «الاتجاهات (GPS)» to the church (`detailDirections`, on-site
-  items — meetings, activities, services — while `contactInfo` is on), «مشاركة الرابط» (`detailShare`,
+  PR #14): «أضف إلى التقويم» (`detailAddToCalendar`, meetings with a weekday + start: deferred `.ics` download on web via `buildReminderIcs` + `downloadIcsFile` or Google Calendar `singleCalendarUrl` on native), «ذكّرني» (`RemindMeButton` on meeting detail pages only; activity/facility reminders are not supported yet — no `reminderSources` or Worker planner entry), «الاتجاهات (GPS)» to the church (`detailDirections`, on-site
+  items — meetings, activities, services — while `contactInfo` is on), «مشاركة الرابط» (`detailShare` via `ShareLinkButton`,
   every page: copies `absoluteDetailUrl` — canonical origin, `?lang=en` in English — and shows «تم نسخ الرابط»); summary
   (desc/bio); long text `detailsAr/En` as `SelectableText` (line height 1.8); custom fields (`extraFields`) as cream
   cards in a `ResponsiveGrid` (title primary bold, value body text, `context.pick`).
