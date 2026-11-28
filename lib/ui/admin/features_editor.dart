@@ -8,7 +8,9 @@ import '../../domain/features.dart';
 import '../../domain/image_style.dart';
 import 'admin_strings.dart';
 import 'admin_validators.dart';
+import 'confirm_named.dart';
 import 'occasion_editor.dart';
+import 'save_diff.dart';
 import 'screen_header.dart';
 import 'state_switch.dart';
 import 'unsaved_bar.dart';
@@ -338,13 +340,23 @@ class FeaturesEditorState extends State<FeaturesEditor> {
       _openInvalidPages();
       return;
     }
+    final collected = collect();
+    final diff = buildFeaturesSaveDiffRows(
+      _savedBaseline,
+      collected,
+      isAr: context.isAr,
+      tr: context.tr,
+    );
+    if (diff.isNotEmpty) {
+      final confirmed = await confirmSaveDiff(context, diff);
+      if (!confirmed || !mounted) return;
+    }
     final messenger = ScaffoldMessenger.of(context);
     final ok = context.tr('saved');
     final failed = context.tr('saveFailed', {'e': '{e}'});
     final isAr = context.isAr;
     setState(() => _saving = true);
     try {
-      final collected = collect();
       await widget.onSave(collected);
       messenger.showSnackBar(SnackBar(content: Text(ok)));
       if (mounted) {
