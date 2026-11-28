@@ -249,8 +249,8 @@ Two tabs: «الإشعارات» (`NotificationsAdminSection`, kept alive across
 5. **Sent log** — last 30 entries with Cairo time, kind (announcement / automatic season alert) and a result chip;
    owner-only clear with confirmation.
 6. **Technical settings** (collapsed) — VAPID key with where to find it and format validation.
-Cards 1, 3, 4, 6 share the bottom bar «لديك تعديلات لم تُحفظ — حفظ الإعدادات / تراجع» (writes `settings/features`);
-loading a snapshot never marks the form dirty.
+Cards 1, 3, 4, 6 share the bottom bar «لديك تعديلات لم تُحفظ — حفظ الإعدادات / تراجع» (writes only changed push keys to `settings/features` via `saveDocsFresh` with `updatedAt` guard);
+loading a snapshot never marks the form dirty, and remote `settings/features` changes while dirty surface the `updatedElsewhere` + `reload` banner.
 
 ### Church info (`ChurchInfoScreen`) → `settings/church`
 (`ChurchInfoScreen` takes a `DocDef doc` — default `churchInfoDoc` — and an optional `header`; PR #19 reuses it for
@@ -351,7 +351,7 @@ For each `CollectionDef`:
   `validateDocument`: `requireAnyOf` (weekday or date → «needWeekdayOrDate»), end after start (except liturgies),
   `endsAt` after `startsAt`.
 - New docs write all collected values (+ `newDefaults`); **existing docs write only changed fields**
-  (`changedFields`, deep compare) with merge — never overwriting another admin's concurrent edits to other fields.
+  (`changedFields`, deep compare) via `saveFresh` (`saveDocsFresh` transaction checking `updatedAt`, throwing `StaleDocumentException` -> `staleDocError` if another admin modified or deleted the doc) while watching the live doc (`watchDoc`) to show the `updatedElsewhere` + `reload` banner when dirty — never overwriting another admin's concurrent edits.
 - **Hidden EN drafts exclusion (PR 3G, P2-27b):** When `englishEnabled` is false, `DocEditor.collect` preserves `_initialValues[f.key]` for top-level English fields (`f.lang == 'en'`) and `_Row.collect` preserves `initial[f.key]` for object-list rows, so typed or pre-existing English drafts in hidden fields are excluded from the collected payload and never overwrite stored data or trigger validation errors.
 - **Top-of-form layout, Field groups & Advanced options (PR #12, PR 3F / P2-24):** `FieldDef.group` — `basic` fields stay open at the top, and on item/service collections (`priests`, `meetings`, `facilities`, `activities`, `categories`) cover `image` and primary phone (`contactPhone` / `phone`) sit open at the top of `basic` (`saints` and `milestones` keep `_plainContactsGroup`). Secondary fields (English names/descriptions, `order`, `slug`, secondary links, `imageStyle`) carry `advanced: true` and sit in the collapsed **«خيارات متقدمة» (`advancedGroup`)** card (`maintainState: true`); on Save, `_openInvalidGroups()` expands any closed `FieldGroup` or `advancedGroup` containing an invalid field before `_formKey.currentState!.validate()`. On the 6 detail collections
   `details` (**«صفحة التفاصيل والحقول الإضافية»**: «إظهار صفحة التفاصيل / Show the detail page» switch — **on by default** since PR #14 (missing field = on, new items saved with `true`; hint explains that tapping the card opens the full page and that switching it off hides the page and the «التفاصيل» link), details AR/EN ≤ 10,000, up to
@@ -448,7 +448,7 @@ English rows, ≤ 8, keys kept stable — `newSubtypeKey`), move up / down, remo
 message type** (≤ 12; since PR #19 a fresh stable id from `ContactSettings.newId`, never an id removed in the
 editor — `_retired` — so old messages of a deleted type are never re-labelled). Any edit sets dirty state, reveals the
 sticky `UnsavedBar` (`unsaved-bar-save` / `unsaved-bar-cancel`), and shows the `saveContactCats` primary-highlighted FAB.
-**Save** writes the whole `categories` map (`saveDoc`, one string per id, `order` renumbered 10, 20…).
+**Save** writes the `categories` map via `saveDocsFresh` checking `updatedAt` (`StaleDocumentException` if modified elsewhere), one string per id, `order` renumbered 10, 20…; remote edits while dirty show the `updatedElsewhere` + `reload` banner.
 
 ### AI assistant (`AssistantAdminScreen`, `assistant_admin.dart`) → `settings/assistant` (PR #19, ADR-029)
 Top card `AssistantSwitches`: **"Ask the church" section shown** (`assistantSectionSwitch`, a field-path `update` of
