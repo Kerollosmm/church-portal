@@ -1437,29 +1437,60 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     );
   }
 
-  /// Deleting a custom category hides its items (visible: false) first and
-  /// never deletes them (ADR-027); they can be moved to another category.
+  /// Deleting a custom category hides its items (visible: false), detaches
+  /// section-placed pages back to `'link'`, and deletes the category in one
+  /// atomic WriteBatch (ADR-027); items and pages are never deleted.
   Future<void> _deleteCategory(AdminDoc d) async {
     final messenger = _messenger;
     final failedMsg = context.tr('deleteFailed', {'e': '{e}'});
     final deletedMsg = context.tr('catDeleted');
+    final deletedWithPagesMsg = context.tr('catDeletedWithPages');
     final isAr = context.isAr;
-    List<AdminDoc> entries;
+    late final List<AdminDoc> entries;
+    late final List<AdminDoc> pages;
     try {
-      entries = await widget.repo.watch('entries').first.timeout(const Duration(seconds: 15));
+      final results = await Future.wait([
+        widget.repo.watch('entries').first.timeout(const Duration(seconds: 15)),
+        widget.repo.watch('pages').first.timeout(const Duration(seconds: 15)),
+      ]);
+      entries = results[0];
+      pages = results[1];
     } catch (e) {
       if (!mounted) return;
       _undo.showSnack(messenger, SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e, isAr: isAr)))));
       return;
     }
-    final inCat = entries.where((e) => e.data['categoryId'] == d.id).length;
+    final inCat = entries.where((e) => !isSoftDeleted(e.data) && e.data['categoryId'] == d.id).length;
+    final linkedPages = [
+      for (final p in pages)
+        if (!isSoftDeleted(p.data) && p.data['placement'] == PagePlacements.section && p.data['categoryId'] == d.id) p,
+    ];
+    final pagesDef = collectionById('pages') ?? def;
     if (!mounted) return;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         key: const Key('deleteCategoryDialog'),
         title: Text(_title(d)),
-        content: Text(context.tr('catDeleteConfirm', {'n': _title(d), 'c': '$inCat'})),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(context.tr('catDeleteConfirm', {'n': _title(d), 'c': '$inCat'})),
+              if (linkedPages.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(context.tr('catDeletePagesWarn', {'p': '${linkedPages.length}'})),
+                const SizedBox(height: 6),
+                for (final p in linkedPages)
+                  Padding(
+                    padding: const EdgeInsetsDirectional.only(start: 8, bottom: 2),
+                    child: Text('• ${_title(p, pagesDef)}', key: ValueKey('deleteCatPage-${p.id}')),
+                  ),
+              ],
+            ],
+          ),
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
           FilledButton(
@@ -1472,11 +1503,14 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     );
     if (ok != true || !mounted) return;
     try {
-      for (final id in entryIdsToHide(d.id, [for (final e in entries) (id: e.id, data: e.data)])) {
-        await widget.repo.update('entries', id, {'visible': false});
-      }
-      await widget.repo.delete(def.name, d.id);
-      _undo.showSnack(messenger, SnackBar(content: Text(deletedMsg)));
+      final updates = <(String, String), Map<String, dynamic>>{
+        for (final id in entryIdsToHide(d.id, [for (final e in entries) (id: e.id, data: e.data)]))
+          ('entries', id): {'visible': false},
+        for (final id in pageIdsToUnlink(d.id, [for (final p in pages) (id: p.id, data: p.data)]))
+          ('pages', id): {'placement': PagePlacements.link, 'categoryId': ''},
+      };
+      await widget.repo.batchWrite(updates: updates, deletes: [(def.name, d.id)]);
+      _undo.showSnack(messenger, SnackBar(content: Text(linkedPages.isEmpty ? deletedMsg : deletedWithPagesMsg)));
     } catch (e) {
       if (!mounted) return;
       _undo.showSnack(messenger, SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e, isAr: isAr)))));
@@ -1598,6 +1632,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         ? (cachedPages ?? await _read('pages'))
         : const <AdminDoc>[];
     final seasonDocs = editDef.name == 'liturgies' ? await _read('seasons') : const <AdminDoc>[];
+    final liturgyDocs = editDef.name == 'seasons' && d != null ? await _read('liturgies') : const <AdminDoc>[];
     // Venues / audiences (ADR-041): the admin lists in settings/features
     // (defaults when none), read once when the editor opens.
     final settings = needsProgram ? await _read('settings') : const <AdminDoc>[];
@@ -1661,6 +1696,10 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       for (final s in seasonDocs)
         if (!isSoftDeleted(s.data)) Season.fromMap(s.id, s.data),
     ];
+    final linkedServices = [
+      for (final l in liturgyDocs)
+        if (!isSoftDeleted(l.data)) l,
+    ];
     List<(String, String)> optChoices(List<ProgramOption> l) => [for (final o in l) (o.key, context.pick(o.labelAr, o.labelEn))];
     _pushEditor(
       context,
@@ -1679,6 +1718,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       linkTargets: needsLinks ? targets : const [],
       takenSlugs: taken,
       seasons: seasons,
+      linkedServices: linkedServices,
       titleOverride: titleOverride,
       initialNotice: resolvedNotice,
     );
@@ -1693,6 +1733,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     List<(String, String)> linkTargets = const [],
     Set<String> takenSlugs = const {},
     List<Season> seasons = const [],
+    List<AdminDoc> linkedServices = const [],
     String? titleOverride,
     String? initialNotice,
   }) {
@@ -1731,6 +1772,16 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         takenSlugs: takenSlugs,
         existingDocs: existingDocs,
         seasons: seasons,
+        linkedServices: linkedServices,
+        onSaveWithMovedServices: editDef.name == 'seasons' && d != null
+            ? (seasonData, fromKey, toKey, serviceIds) async {
+                final seasonId = id!;
+                await repo.batchWrite(updates: {
+                  (editDef.name, seasonId): seasonData,
+                  for (final sid in serviceIds) ('liturgies', sid): {'seasonKey': toKey},
+                });
+              }
+            : null,
         englishEnabled: englishEnabled,
         initialNotice: initialNotice,
         popMessenger: popMessenger,

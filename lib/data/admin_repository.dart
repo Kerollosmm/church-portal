@@ -66,6 +66,22 @@ abstract class AdminBackend {
   Future<void> update(String collection, String id, Map<String, dynamic> data);
   Future<void> delete(String collection, String id);
 
+  /// Atomically applies document updates and deletions in one WriteBatch.
+  /// [updates] maps `(collection, id)` to fields to merge; [deletes] lists
+  /// `(collection, id)` pairs to delete. The default runs sequentially for
+  /// in-memory test backends.
+  Future<void> batchWrite({
+    Map<(String, String), Map<String, dynamic>> updates = const {},
+    List<(String, String)> deletes = const [],
+  }) async {
+    for (final e in updates.entries) {
+      await update(e.key.$1, e.key.$2, e.value);
+    }
+    for (final d in deletes) {
+      await delete(d.$1, d.$2);
+    }
+  }
+
   /// Writes `order` = [base] + 10, 20, 30… following [ids].
   Future<void> reorder(String collection, List<String> ids, {int base = 0});
 
@@ -188,6 +204,26 @@ class AdminRepository implements AdminBackend {
 
   @override
   Future<void> delete(String collection, String id) => db.collection(collection).doc(id).delete();
+
+  @override
+  Future<void> batchWrite({
+    Map<(String, String), Map<String, dynamic>> updates = const {},
+    List<(String, String)> deletes = const [],
+  }) {
+    final batch = db.batch();
+    for (final e in updates.entries) {
+      final stamped = _stamp(e.value);
+      batch.set(
+        db.collection(e.key.$1).doc(e.key.$2),
+        stamped,
+        SetOptions(mergeFields: stamped.keys.toList()),
+      );
+    }
+    for (final d in deletes) {
+      batch.delete(db.collection(d.$1).doc(d.$2));
+    }
+    return batch.commit();
+  }
 
   @override
   Future<void> reorder(String collection, List<String> ids, {int base = 0}) async {

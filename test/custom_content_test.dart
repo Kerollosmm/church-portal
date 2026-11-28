@@ -165,6 +165,7 @@ class _Backend extends AdminBackend {
   final saves = <(String, String?, Map<String, dynamic>)>[];
   final updates = <(String, String, Map<String, dynamic>)>[];
   final deletes = <(String, String)>[];
+  final batchCalls = <({Map<(String, String), Map<String, dynamic>> updates, List<(String, String)> deletes})>[];
   final watchedDocs = <String>[];
   final savedDocs = <String, Map<String, dynamic>>{};
 
@@ -188,6 +189,14 @@ class _Backend extends AdminBackend {
   Future<void> update(String collection, String id, Map<String, dynamic> data) async => updates.add((collection, id, data));
   @override
   Future<void> delete(String collection, String id) async => deletes.add((collection, id));
+  @override
+  Future<void> batchWrite({
+    Map<(String, String), Map<String, dynamic>> updates = const {},
+    List<(String, String)> deletes = const [],
+  }) async {
+    batchCalls.add((updates: updates, deletes: deletes));
+    await super.batchWrite(updates: updates, deletes: deletes);
+  }
   @override
   Future<void> reorder(String collection, List<String> ids, {int base = 0}) async {}
   @override
@@ -237,6 +246,14 @@ void main() {
             (id: 'd', data: {'categoryId': 'k1', 'visible': true}),
           ]),
           ['a', 'd']);
+      expect(
+          pageIdsToUnlink('k1', [
+            (id: 'p1', data: {'placement': 'section', 'categoryId': 'k1'}),
+            (id: 'p2', data: {'placement': 'section', 'categoryId': 'k2'}),
+            (id: 'p3', data: {'placement': 'link', 'categoryId': 'k1'}),
+            (id: 'p4', data: {'placement': 'nav', 'categoryId': 'k1'}),
+          ]),
+          ['p1']);
     });
 
     test('page blocks: tolerant reader, unknown types dropped, empty blocks detected', () {
@@ -1182,6 +1199,73 @@ void main() {
       expect(b.updates.map((u) => '${u.$1}/${u.$2}'), ['entries/e1']);
       expect(b.updates.single.$3, {'visible': false});
       expect(b.deletes, [('categories', 'k1')]);
+    });
+
+    testWidgets('deleting a custom category warns about linked section pages and unlinks them in one batchWrite',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 1400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final b = _Backend(lists: {
+        'categories': [AdminDoc('k1', {'nameAr': 'رحلات', 'nameEn': 'Trips', 'slug': 'trips', 'order': 10})],
+        'entries': [
+          AdminDoc('e1', {'categoryId': 'k1', 'titleAr': 'أ'}),
+          AdminDoc('e2', {'categoryId': 'k1', 'titleAr': 'ب', 'visible': false}),
+        ],
+        'pages': [
+          AdminDoc('p1', {
+            'titleAr': 'صفحة ١',
+            'titleEn': 'Linked Page 1',
+            'slug': 'linked-1',
+            'placement': 'section',
+            'categoryId': 'k1',
+          }),
+          AdminDoc('p2', {
+            'titleAr': 'صفحة أخرى',
+            'titleEn': 'Other Page',
+            'slug': 'other',
+            'placement': 'section',
+            'categoryId': 'k9',
+          }),
+          AdminDoc('p3', {
+            'titleAr': 'صفحة لينك',
+            'titleEn': 'Link Page',
+            'slug': 'link-only',
+            'placement': 'link',
+            'categoryId': 'k1',
+          }),
+          AdminDoc('p4', {
+            'titleAr': 'محذوفة',
+            'titleEn': 'Soft Deleted Page',
+            'slug': 'soft-del',
+            'placement': 'section',
+            'categoryId': 'k1',
+            'deletedAt': DateTime.utc(2026, 1, 1),
+          }),
+        ],
+      });
+      await tester.pumpWidget(_admin(CollectionListScreen(repo: b, def: collectionById('categories')!)));
+      await tester.pumpAndSettle();
+      final delBtn = find.byKey(const ValueKey('delete-k1'));
+      await tester.ensureVisible(delBtn);
+      await tester.tap(delBtn);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('deleteCategoryDialog')), findsOneWidget);
+      expect(find.textContaining('1 linked page(s) will also be detached'), findsOneWidget);
+      expect(find.byKey(const ValueKey('deleteCatPage-p1')), findsOneWidget);
+      expect(find.byKey(const ValueKey('deleteCatPage-p2')), findsNothing);
+      expect(find.byKey(const ValueKey('deleteCatPage-p3')), findsNothing);
+      expect(find.byKey(const ValueKey('deleteCatPage-p4')), findsNothing);
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+      await tester.pumpAndSettle();
+      expect(b.batchCalls.length, 1);
+      final batch = b.batchCalls.single;
+      expect(batch.updates[('entries', 'e1')], {'visible': false});
+      expect(batch.updates[('pages', 'p1')], {'placement': 'link', 'categoryId': ''});
+      expect(batch.updates.containsKey(('pages', 'p2')), isFalse);
+      expect(batch.updates.containsKey(('pages', 'p3')), isFalse);
+      expect(batch.deletes, [('categories', 'k1')]);
     });
 
     testWidgets('editors: category choice for items, link picker for notices', (tester) async {
