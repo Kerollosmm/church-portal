@@ -150,11 +150,50 @@ abstract class AdminBackend {
   Future<void> removeAdmin(String uid);
 }
 
+/// Splits [updates] and [deletes] into [chunkSize]-sized calls to
+/// [AdminBackend.batchWrite] so large bulk operations stay under Firestore's
+/// 500-operation WriteBatch limit (default chunk size 400).
+Future<void> batchWriteChunked(
+  AdminBackend repo, {
+  Map<(String, String), Map<String, dynamic>> updates = const {},
+  List<(String, String)> deletes = const [],
+  int chunkSize = AdminRepository.maxBatchOps,
+}) async {
+  assert(chunkSize > 0);
+  if (updates.isEmpty && deletes.isEmpty) return;
+  if (updates.length + deletes.length <= chunkSize) {
+    await repo.batchWrite(updates: updates, deletes: deletes);
+    return;
+  }
+  var chunkUpdates = <(String, String), Map<String, dynamic>>{};
+  var chunkDeletes = <(String, String)>[];
+  var count = 0;
+  Future<void> flush() async {
+    if (count == 0) return;
+    await repo.batchWrite(updates: chunkUpdates, deletes: chunkDeletes);
+    chunkUpdates = <(String, String), Map<String, dynamic>>{};
+    chunkDeletes = <(String, String)>[];
+    count = 0;
+  }
+
+  for (final e in updates.entries) {
+    chunkUpdates[e.key] = e.value;
+    if (++count >= chunkSize) await flush();
+  }
+  for (final d in deletes) {
+    chunkDeletes.add(d);
+    if (++count >= chunkSize) await flush();
+  }
+  await flush();
+}
+
 /// Content editing for signed-in admins (admins/{uid} must exist; enforced
 /// by firestore.rules). Admin lives on web only; offline connectivity is shown
 /// via [OfflineBanner] as a hint, while Firestore server-ack timeouts remain
 /// the guard against stalled writes.
 class AdminRepository implements AdminBackend {
+  static const int maxBatchOps = 400;
+
   final FirebaseFirestore db;
   final FirebaseAuth auth;
 
@@ -297,8 +336,17 @@ class AdminRepository implements AdminBackend {
   Future<void> batchWrite({
     Map<(String, String), Map<String, dynamic>> updates = const {},
     List<(String, String)> deletes = const [],
-  }) {
-    final batch = db.batch();
+  }) async {
+    if (updates.isEmpty && deletes.isEmpty) return;
+    var batch = db.batch();
+    var count = 0;
+    Future<void> flush() async {
+      if (count == 0) return;
+      await batch.commit();
+      batch = db.batch();
+      count = 0;
+    }
+
     for (final e in updates.entries) {
       final stamped = _stamp(e.value);
       batch.set(
@@ -306,11 +354,13 @@ class AdminRepository implements AdminBackend {
         stamped,
         SetOptions(mergeFields: stamped.keys.toList()),
       );
+      if (++count >= maxBatchOps) await flush();
     }
     for (final d in deletes) {
       batch.delete(db.collection(d.$1).doc(d.$2));
+      if (++count >= maxBatchOps) await flush();
     }
-    return batch.commit();
+    await flush();
   }
 
   @override

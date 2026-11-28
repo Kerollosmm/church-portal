@@ -819,6 +819,28 @@ const Map<String, List<String>> adminStrings = {
   'confirmSaveChanged': ['تم التعديل', 'Changed'],
   'confirmSaveMore': ['و {n} تعديلات أخرى', 'and {n} more'],
   'themeOccasionsDiff': ['إعدادات الثيم والمناسبات', 'Theme & occasion schedule'],
+  // Bulk selection mode (CollectionListScreen & MessagesScreen)
+  'selectItems': ['تحديد', 'Select'],
+  'selectAll': ['تحديد الكل', 'Select all'],
+  'deselectAll': ['إلغاء تحديد الكل', 'Deselect all'],
+  'selectedCount': ['{n} محدد', '{n} selected'],
+  'selectItemLabel': ['تحديد {n}', 'Select {n}'],
+  'bulkShow': ['إظهار', 'Show'],
+  'bulkHide': ['إخفاء', 'Hide'],
+  'bulkConfirm': ['تأكيد', 'Confirm'],
+  'bulkShown': ['تم إظهار {n} عناصر', 'Shown {n} item(s)'],
+  'bulkHidden': ['تم إخفاء {n} عناصر', 'Hidden {n} item(s)'],
+  'bulkConfirmed': ['تم تأكيد {n} عناصر', 'Confirmed {n} item(s)'],
+  'bulkHandled': ['تمت متابعة {n} رسائل', 'Marked {n} message(s) handled'],
+  'deleteSelectedConfirm': ['حذف {n} عناصر؟ يمكنك التراجع خلال ١٠ ثوانٍ.', 'Delete {n} item(s)? You can undo for 10 seconds.'],
+  'deleteSelectedCatsConfirm': [
+    'حذف {n} أقسام؟ ستُخفى عناصرها ({c}) من الموقع ولن تُحذف، وتظهر تحت «عناصر بدون قسم».',
+    'Delete {n} section(s)? Their {c} item(s) are hidden from the site, never deleted, and stay under "Unassigned items".',
+  ],
+  'deleteSelectedMessagesConfirm': [
+    'حذف {n} رسائل؟ يمكنك التراجع خلال ١٠ ثوانٍ.',
+    'Delete {n} message(s)? You can undo for 10 seconds.',
+  ],
 };
 
 /// Idempotently registers [adminStrings] in the runtime localization table.
