@@ -16,6 +16,7 @@ import 'admin_validators.dart';
 import 'admin_strings.dart';
 import 'collection_list.dart';
 import 'doc_editor.dart' show choiceLabel;
+import 'schedule_date_preview.dart';
 import 'screen_header.dart';
 
 /// Combined «المواسم» screen merging the seasons list and pre-season preset
@@ -59,6 +60,19 @@ class _SeasonsHubScreenState extends State<SeasonsHubScreen> with SingleTickerPr
           title: context.pick(def.labelAr, def.labelEn),
           help: context.pick(def.helpAr, def.helpEn),
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: TextButton.icon(
+              key: const Key('admin-previewScheduleDate'),
+              style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+              icon: const Icon(Icons.visibility_outlined),
+              label: Text(context.tr('previewScheduleDate')),
+              onPressed: () => showScheduleDatePreview(context, repo: widget.repo),
+            ),
+          ),
         ),
         Material(
           color: context.pal.background,

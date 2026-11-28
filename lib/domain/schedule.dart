@@ -96,6 +96,30 @@ bool isSeasonActiveOnDay(Season s, tz.TZDateTime dayStart) {
 List<Season> activeSeasonsAt(Iterable<Season> seasons, DateTime instant) =>
     seasons.where((s) => isSeasonActiveAt(s, instant)).toList();
 
+/// [s] with [Season.active] forced on, so a not-yet-enabled season can be
+/// previewed on a date inside its window. The window itself is unchanged.
+Season seasonForcedActive(Season s) => Season(
+      id: s.id,
+      key: s.key,
+      nameAr: s.nameAr,
+      nameEn: s.nameEn,
+      startsAt: s.startsAt,
+      endsAt: s.endsAt,
+      active: true,
+      replacesRegular: s.replacesRegular,
+      replaceDates: s.replaceDates,
+      image: s.image,
+      imageStyle: s.imageStyle,
+      program: s.program,
+    );
+
+/// Seasons as a visitor would see them, optionally treating inactive seasons
+/// as enabled (start/end still apply).
+List<Season> seasonsForVisitorPreview(Iterable<Season> seasons, {required bool includeInactive}) {
+  if (!includeInactive) return List<Season>.from(seasons);
+  return [for (final s in seasons) s.active ? s : seasonForcedActive(s)];
+}
+
 /// The enabled season that starts soonest after [instant] (ADR-055): the
 /// «الموسم القادم» line of the seasonal view's empty state. Null when no
 /// enabled season has a start in the future. Works on the seasons already
