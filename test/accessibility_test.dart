@@ -877,7 +877,10 @@ void main() {
       await tester.pumpAndSettle();
       final offset = tester.state<ScrollableState>(scrollable).position.pixels;
       expect(offset, greaterThan(0));
-      expect(await before.save(), isTrue);
+      final saving = before.save();
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+      expect(await saving, isTrue);
       await tester.pumpAndSettle();
       expect(tester.state<DocEditorState>(find.byType(DocEditor)), same(before));
       expect(tester.state<ScrollableState>(scrollable).position.pixels, offset);
@@ -896,6 +899,8 @@ void main() {
       final before = tester.state<FeaturesEditorState>(find.byType(FeaturesEditor));
       await tester.tap(find.byKey(const ValueKey('theme-navy')));
       await tester.tap(find.byKey(const Key('features-save')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('confirm-ok')));
       await tester.pumpAndSettle();
       expect(tester.state<FeaturesEditorState>(find.byType(FeaturesEditor)), same(before));
     });
@@ -920,6 +925,8 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('features-save')));
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+      await tester.pumpAndSettle();
       expect(tester.state<FeaturesEditorState>(find.byType(FeaturesEditor)), same(before));
       expect(before.dirty, isFalse);
       final saved = repo.stored('settings/features')!;
@@ -941,6 +948,8 @@ void main() {
       expect(up.onPressed, isNull);
       await tester.tap(find.byKey(ValueKey('home-$second-up')));
       await tester.tap(find.byKey(const Key('features-save')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('confirm-ok')));
       await tester.pumpAndSettle();
       expect(saved!.homeOrder.first, second);
     });
