@@ -580,8 +580,16 @@ class DirectoryCard extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
+  final int? subtitleMaxLines;
   final VoidCallback onTap;
-  const DirectoryCard({super.key, required this.icon, required this.title, required this.subtitle, required this.onTap});
+  const DirectoryCard({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    this.subtitleMaxLines,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -608,8 +616,15 @@ class DirectoryCard extends StatelessWidget {
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(title, style: displayStyle(context, size: 21, color: primary, height: 1.35)),
-                const SizedBox(height: 2),
-                Text(subtitle, style: TextStyle(color: context.pal.muted, fontSize: 13.5, height: 1.55)),
+                if (subtitle.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    maxLines: subtitleMaxLines,
+                    overflow: subtitleMaxLines != null ? TextOverflow.ellipsis : null,
+                    style: TextStyle(color: context.pal.muted, fontSize: 13.5, height: 1.55),
+                  ),
+                ],
                 const SizedBox(height: 6),
                 // Flexible: "Learn more" wraps instead of overflowing at 320 px / 200% text.
                 Row(children: [

@@ -813,6 +813,15 @@ const Map<String, List<String>> adminStrings = {
   ],
   'seasonKeyChangeMoveBtn': ['نقل الخدمات وحفظ', 'Move services & save'],
   'seasonKeyChangeKeepBtn': ['حفظ بدون نقل', 'Save without moving'],
+  'alertNoEndWarning': [
+    'تنبيه: هذا التنويه مُفعّل بدون تاريخ انتهاء، وسيبقى ظاهرًا حتى توقفه يدويًا.',
+    'Warning: this active alert has no end date and will stay visible until turned off manually.',
+  ],
+  'programOptionInUseTitle': ['الخيار مستخدم في القداسات', 'Option in use by liturgies'],
+  'programOptionInUseBody': [
+    'المفتاح «{key}» مستخدم حاليًا في {c} قداس/صلاة. هل تريد حذفه على أي حال؟',
+    'The key "{key}" is currently used by {c} service(s). Remove it anyway?',
+  ],
   // Save confirmation diff summary for high-impact docs (features, today, church)
   'confirmSaveTitle': ['تأكيد حفظ التغييرات', 'Confirm saving changes'],
   'confirmSaveSummary': ['سيتم نشر التعديلات التالية مباشرةً على الموقع:', 'The following changes will go live on the site:'],

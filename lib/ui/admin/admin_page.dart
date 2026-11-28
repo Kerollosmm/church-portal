@@ -23,6 +23,7 @@ import 'advanced_owner_screen.dart';
 import 'assistant_admin.dart';
 import 'contact_admin.dart';
 import 'collection_list.dart';
+import 'doc_editor.dart' show AdminLiturgiesScope;
 import 'features_editor.dart';
 import 'notifications_admin.dart';
 import 'pending_delete.dart';
@@ -750,7 +751,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
         return ChurchInfoScreen(key: const ValueKey('today'), repo: repo, doc: todaySettingsDoc);
       case 'seasonSettings':
         return _isOwner
-            ? ChurchInfoScreen(key: const ValueKey('seasonSettings'), repo: repo, doc: seasonSettingsDoc)
+            ? AdminLiturgiesScope(
+                loadLiturgies: () => repo.watch('liturgies').first,
+                child: ChurchInfoScreen(key: const ValueKey('seasonSettings'), repo: repo, doc: seasonSettingsDoc),
+              )
             : _ownerOnly();
       case 'seasons':
         return SeasonsHubScreen(key: const ValueKey('seasons'), repo: repo, initialTab: 0);
