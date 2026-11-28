@@ -181,6 +181,7 @@ const Map<String, List<String>> _strings = {
   'dir_contact': ['التليفونات والخريطة والمواصلات', 'Phones, map and directions'],
   'dir_ask': ['مساعد ذكي يجيب عن أسئلتك', 'Smart assistant for your questions'],
   'menu': ['القائمة', 'Menu'],
+  'search': ['بحث', 'Search'],
   'otherStages': ['مراحل واجتماعات أخرى', 'Other stages & meetings'],
   'showAllAlerts': ['عرض كل التنبيهات والإعلانات ({n})', 'Show all notices & announcements ({n})'],
   'showFewerAlerts': ['عرض أقل', 'Show fewer'],
