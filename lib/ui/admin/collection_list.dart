@@ -16,6 +16,7 @@ import '../../domain/cairo_time.dart';
 import '../../domain/custom_content.dart';
 import '../../domain/features.dart';
 import '../../domain/models.dart';
+import '../../domain/site_search.dart' show normalizeSearchText;
 import 'admin_schema.dart';
 import 'admin_strings.dart';
 import 'admin_validators.dart';
@@ -56,7 +57,7 @@ List<AdminDoc> filterAdminDocs(
   ListFilter filter = ListFilter.all,
   PriestStatusFilter statusFilter = PriestStatusFilter.all,
 }) {
-  final q = query.trim().toLowerCase();
+  final q = normalizeSearchText(query);
   return [
     for (final d in docs)
       if (def.matches(d.data) &&
@@ -69,7 +70,7 @@ List<AdminDoc> filterAdminDocs(
             ListFilter.hidden => d.data['visible'] == false,
             ListFilter.unconfirmed => d.data['sample'] == true,
           } &&
-          (q.isEmpty || searchableText(d.data).contains(q) || d.id.toLowerCase().contains(q)))
+          (q.isEmpty || searchableText(d.data).contains(q) || normalizeSearchText(d.id).contains(q)))
         d,
   ];
 }
@@ -418,7 +419,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                                 c,
                           ]
                         : visible;
-                    final q = _search.text.trim().toLowerCase();
+                    final q = normalizeSearchText(_search.text);
                     final shownBuiltIns = [
                       for (final b in BuiltInSections.all)
                         if ((allSectionPagesByCat[b.id]?.isNotEmpty ?? false) &&
@@ -426,10 +427,10 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                                 (sectionPagesByCat[b.id]?.isNotEmpty ?? false) ||
                                 (q.isNotEmpty &&
                                     (_filter == ListFilter.all || _filter == ListFilter.visible) &&
-                                    (b.nameAr.toLowerCase().contains(q) ||
-                                        b.nameEn.toLowerCase().contains(q) ||
-                                        b.id.toLowerCase().contains(q) ||
-                                        b.slug.toLowerCase().contains(q)))))
+                                    (normalizeSearchText(b.nameAr).contains(q) ||
+                                        normalizeSearchText(b.nameEn).contains(q) ||
+                                        normalizeSearchText(b.id).contains(q) ||
+                                        normalizeSearchText(b.slug).contains(q)))))
                           b,
                     ];
                     final builtInWithPages = BuiltInSections.all

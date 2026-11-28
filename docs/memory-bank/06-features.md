@@ -324,6 +324,11 @@ Logic with reCAPTCHA Enterprise. Android sends the same instruction to the Cloud
 counter in `AssistantConversation` still runs first (default 3 per Cairo day, 6 in an exceptional season, 4 per minute).
 **Allowed topics & grounding:** only switched-on built-in topics plus visible usable custom sections (`Sections.customSections`) and custom pages (`Sections.customPages`) are listed under `Allowed topics:` in `buildAssistantInstruction` (PR 3I / P2-29); hidden or disabled ones never appear. Details in `05-firebase.md`.
 
+### `/search` — `search_page.dart` `SearchPage`
+
+Client-side search over collections already loaded on the device (no extra Firestore reads). Arabic normalization is shared with the admin list filter (`normalizeSearchText`). The page is a deferred chunk; a search icon in the app bar and a drawer row open `/search`. Results are grouped by type and link to the existing detail or list route. The page is `noindex`.
+
+
 ### Item detail pages (PR #13, ADR-020) — `item_detail_page.dart` `ItemDetailPage`
 - Routes: `/church-education/:id`, `/church-activities/:id`, `/public-services/:id`,
   `/about/priests/:id`, `/about/saints/:id`, `/about/milestones/:id` (shareable; `detailPathFor(kind, id)`).

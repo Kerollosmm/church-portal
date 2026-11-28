@@ -416,7 +416,7 @@ class _AppShellState extends ConsumerState<AppShell> {
 
     // Dynamic nav max width so that AppBar.title is guaranteed enough width
     // for tabSpace + readable title slot across 1024px–1400px, avoiding clipping or starvation.
-    final otherActionsWidth =
+    final otherActionsWidth = 54.0 /* search */ +
         (showBarLang ? 54.0 : 0.0) + (showMass ? (wide ? 166.0 : 54.0) : 0.0) + (wide ? 32.0 : 10.0);
     final minTitleSlot = tabSpace + 200.0;
     final maxNavWidth = wide
@@ -492,6 +492,15 @@ class _AppShellState extends ConsumerState<AppShell> {
           ),
           const SizedBox(width: 8),
         ],
+        IconButton(
+          key: const Key('appBarSearch'),
+          tooltip: context.tr('search'),
+          style: IconButton.styleFrom(minimumSize: const Size(48, 48)),
+          icon: Icon(Icons.search_rounded, color: primary),
+          onPressed: () {
+            if (!location.startsWith('/search')) context.go('/search');
+          },
+        ),
         if (showBarLang) ...[
           IconButton(
             key: const Key('appBarLanguageToggle'),
@@ -728,7 +737,7 @@ class _NavLabel extends StatelessWidget {
       if (caret) Icon(Icons.expand_more_rounded, size: 18, color: context.pal.goldText),
     ]);
     final decorated = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
         color: selected ? context.pal.primary.withValues(alpha: 0.10) : null,
         borderRadius: BorderRadius.circular(999),
@@ -738,7 +747,7 @@ class _NavLabel extends StatelessWidget {
     if (onTap == null) return Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: decorated);
     return TextButton(
       onPressed: onTap,
-      style: TextButton.styleFrom(foregroundColor: color, padding: const EdgeInsets.symmetric(horizontal: 4)),
+      style: TextButton.styleFrom(foregroundColor: color, padding: const EdgeInsets.symmetric(horizontal: 2)),
       child: decorated,
     );
   }
@@ -898,7 +907,8 @@ class _AppDrawer extends ConsumerWidget {
       child: Stack(children: [
         const Positioned.fill(child: WarmBackdrop()),
         SafeArea(
-          child: ListView(padding: EdgeInsets.zero, children: [
+          child: SingleChildScrollView(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             // Maroon header with the seal (the posters' tab, laid flat).
             Container(
               padding: const EdgeInsetsDirectional.fromSTEB(16, 18, 8, 20),
@@ -925,6 +935,20 @@ class _AppDrawer extends ConsumerWidget {
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                       style: displayStyle(context, size: 17, color: context.pal.onBar, height: 1.4)),
+                ),
+                IconButton(
+                  key: const Key('drawerSearch'),
+                  tooltip: context.tr('search'),
+                  color: context.pal.onBar,
+                  style: IconButton.styleFrom(
+                    minimumSize: const Size(48, 48),
+                    backgroundColor: context.pal.onBar.withValues(alpha: 0.14),
+                  ),
+                  icon: const Icon(Icons.search_rounded),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    context.go('/search');
+                  },
                 ),
                 IconButton(
                   tooltip: context.tr('close'),
@@ -979,7 +1003,8 @@ class _AppDrawer extends ConsumerWidget {
                 ),
               ),
             const SizedBox(height: 16),
-          ]),
+            ]),
+          ),
         ),
       ]),
     );

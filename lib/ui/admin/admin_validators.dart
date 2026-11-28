@@ -21,6 +21,7 @@ import '../../domain/media.dart' show MediaImage, MediaSource, isValidImageUrl;
 import '../../domain/models.dart' show isSoftDeleted, parseDate;
 import '../../domain/push.dart';
 import '../../domain/rules.dart' show normalizeDigits;
+import '../../domain/site_search.dart' show normalizeSearchText;
 import 'admin_schema.dart';
 import 'admin_strings.dart' show adminStrings;
 
@@ -803,9 +804,9 @@ Map<String, dynamic> changedFields(Map<String, dynamic> initial, Map<String, dyn
         if (!initial.containsKey(e.key) || !sameValue(initial[e.key], e.value)) e.key: e.value,
     };
 
-/// Lower-cased text used by the admin list search.
+/// Normalized, lower-cased text used by the admin list search.
 String searchableText(Map<String, dynamic> data) =>
-    data.values.whereType<String>().join(' ').toLowerCase();
+    normalizeSearchText(data.values.whereType<String>().join(' '));
 
 /// Keys saved in a write of their own: Firestore evaluates at most 1,000
 /// rule expressions per request, and a full gallery (8 photos) plus a full
