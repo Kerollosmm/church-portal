@@ -1125,7 +1125,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
             key: ValueKey('duplicateSectionPage-${p.id}'),
             tooltip: context.tr('duplicate'),
             icon: const Icon(Icons.copy_outlined),
-            onPressed: () => _duplicatePage(context, p, pagesDef: pagesDef),
+            onPressed: () => _duplicateDoc(context, p, targetDef: pagesDef),
           ),
           _visibilityButton(context, p, key: ValueKey('visibilitySectionPage-${p.id}'), targetDef: pagesDef),
         ],
@@ -1178,12 +1178,26 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       ),
       Padding(
         padding: const EdgeInsetsDirectional.fromSTEB(44, 0, 8, 4),
-        child: Align(
-          alignment: AlignmentDirectional.centerEnd,
-          child: _namedDeleteButton(
-            context,
-            key: ValueKey('deleteEntry-${e.id}'),
-            onPressed: () => _confirmDelete(e, targetDef: entriesDef),
+        child: SizedBox(
+          width: double.infinity,
+          child: Wrap(
+            alignment: WrapAlignment.end,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              TextButton.icon(
+                key: ValueKey('duplicateEntry-${e.id}'),
+                onPressed: () => _duplicateDoc(context, e, targetDef: entriesDef),
+                icon: const Icon(Icons.copy_outlined, size: 18),
+                label: Text(context.tr('duplicate')),
+              ),
+              _namedDeleteButton(
+                context,
+                key: ValueKey('deleteEntry-${e.id}'),
+                onPressed: () => _confirmDelete(e, targetDef: entriesDef),
+              ),
+            ],
           ),
         ),
       ),
@@ -1296,10 +1310,10 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
               runSpacing: 4,
               children: [
                 ?openItem,
-                if (def.name == 'pages')
+                if (duplicatableCollections.contains(def.name))
                   TextButton.icon(
                     key: ValueKey('duplicate-${d.id}'),
-                    onPressed: () => _duplicatePage(context, d, pagesDef: def),
+                    onPressed: () => _duplicateDoc(context, d, targetDef: def),
                     icon: const Icon(Icons.copy_outlined, size: 18),
                     label: Text(context.tr('duplicate')),
                   ),
@@ -1570,18 +1584,18 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     );
   }
 
-  Future<void> _duplicatePage(
+  Future<void> _duplicateDoc(
     BuildContext _,
     AdminDoc source, {
-    required CollectionDef pagesDef,
+    required CollectionDef targetDef,
   }) async {
     if (_openingEditor) return;
     _openingEditor = true;
     try {
-      final editorTitle = '${context.tr('duplicate')} — ${context.pick(pagesDef.labelAr, pagesDef.labelEn)}';
+      final editorTitle = '${context.tr('duplicate')} — ${context.pick(targetDef.labelAr, targetDef.labelEn)}';
       await _openEditorBody(
         null,
-        targetDef: pagesDef,
+        targetDef: targetDef,
         titleOverride: editorTitle,
         duplicateSource: source,
       );
@@ -1688,7 +1702,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     var resolvedExtra = extraDefaults;
     var resolvedNotice = initialNotice;
     if (duplicateSource != null) {
-      final dup = buildDuplicatePageDefaults(duplicateSource.data, takenSlugs: taken);
+      final dup = buildDuplicateDocDefaults(editDef.name, duplicateSource.data, takenSlugs: taken);
       resolvedExtra = {...extraDefaults, ...dup.defaults};
       if (dup.droppedOwnedImage) resolvedNotice = context.tr('duplicateDroppedImage');
     }
