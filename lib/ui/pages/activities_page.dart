@@ -34,11 +34,23 @@ IconData activityIcon(String c) => switch (c) {
       _ => Icons.event_rounded,
     };
 
-class ActivitiesPage extends ConsumerWidget {
+class ActivitiesPage extends ConsumerStatefulWidget {
   const ActivitiesPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ActivitiesPage> createState() => _ActivitiesPageState();
+}
+
+class _ActivitiesPageState extends ConsumerState<ActivitiesPage> {
+  String _category = '';
+
+  static String _normalizeCategory(String c) => _categoryOrder.contains(c) ? c : 'other';
+
+  static String _categoryLabel(BuildContext context, String c) =>
+      context.trOrNull('opt_$c') ?? context.tr('opt_other');
+
+  @override
+  Widget build(BuildContext context) {
     return PageBody(
       header: CustomizablePageHeader(
           pageKey: CustomizablePages.activities,
@@ -62,8 +74,51 @@ class ActivitiesPage extends ConsumerWidget {
                 final c = idx(a.value.category).compareTo(idx(b.value.category));
                 return c != 0 ? c : a.key.compareTo(b.key);
               });
-            final sorted = [for (final e in indexed) e.value];
-            return ResponsiveGrid(children: [for (final a in sorted) _ActivityCard(a)]);
+            final grouped = <String, List<Activity>>{};
+            for (final e in indexed) {
+              final cat = _normalizeCategory(e.value.category);
+              grouped.putIfAbsent(cat, () => []).add(e.value);
+            }
+            final categories = grouped.keys.toList();
+            final selected = categories.length >= 2 && categories.contains(_category) ? _category : '';
+            final visibleCategories = selected.isEmpty ? categories : [selected];
+
+            return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              if (categories.length >= 2)
+                Padding(
+                  padding: const EdgeInsets.only(top: Space.s),
+                  child: Wrap(spacing: 8, runSpacing: 8, children: [
+                    ChoiceChip(
+                      key: const Key('activityCat-all'),
+                      label: Text(context.tr('allCategories')),
+                      selected: selected.isEmpty,
+                      showCheckmark: false,
+                      labelStyle: TextStyle(
+                        color: selected.isEmpty ? context.pal.onBar : context.pal.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      onSelected: (_) => setState(() => _category = ''),
+                    ),
+                    for (final cat in categories)
+                      ChoiceChip(
+                        key: Key('activityCat-$cat'),
+                        label: Text(_categoryLabel(context, cat)),
+                        selected: selected == cat,
+                        showCheckmark: false,
+                        labelStyle: TextStyle(
+                          color: selected == cat ? context.pal.onBar : context.pal.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        onSelected: (_) => setState(() => _category = cat),
+                      ),
+                  ]),
+                ),
+              for (final cat in visibleCategories) ...[
+                SectionTitle(_categoryLabel(context, cat),
+                    key: Key('activityHeader-$cat'), icon: activityIcon(cat)),
+                ResponsiveGrid(children: [for (final a in grouped[cat]!) _ActivityCard(a)]),
+              ],
+            ]);
           },
         ),
       ],

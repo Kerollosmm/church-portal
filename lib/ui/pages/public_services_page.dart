@@ -7,6 +7,7 @@ import '../../core/theme.dart';
 import '../../domain/features.dart';
 import '../../domain/item_detail.dart';
 import '../../domain/models.dart';
+import '../../domain/rules.dart';
 import '../../state/providers.dart';
 import '../widgets/cards.dart';
 import '../widgets/common.dart';
@@ -88,14 +89,33 @@ class _FacilityCard extends StatelessWidget {
             ],
             if (context.pick(f.hoursAr, f.hoursEn).isNotEmpty) const SizedBox(height: Space.xs),
             IconLine(Icons.schedule_rounded, context.pick(f.hoursAr, f.hoursEn)),
-            if (f.phone.isNotEmpty && f.details.showContacts) ...[
-              const SizedBox(height: 8),
-              ActionChipButton(
-                  icon: Icons.call,
-                  label: '${context.tr('call')} ${f.phone}',
-                  semanticLabel: actionSemanticLabel('${context.tr('call')} ${f.phone}', name),
-                  color: context.pal.bar,
-                  onTap: () => callPhone(f.phone)),
+            if (f.details.showContacts) ...[
+              Builder(builder: (context) {
+                final phone = f.phone.trim();
+                final wa = f.details.whatsapp.trim().isNotEmpty
+                    ? f.details.whatsapp.trim()
+                    : (isEgyptianMobile(phone) ? phone : '');
+                if (phone.isEmpty && wa.isEmpty) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Wrap(spacing: 8, runSpacing: 8, children: [
+                    if (phone.isNotEmpty)
+                      ActionChipButton(
+                          icon: Icons.call,
+                          label: '${context.tr('call')} $phone',
+                          semanticLabel: actionSemanticLabel('${context.tr('call')} $phone', name),
+                          color: context.pal.bar,
+                          onTap: () => callPhone(phone)),
+                    if (wa.isNotEmpty)
+                      ActionChipButton(
+                          icon: Icons.chat_rounded,
+                          label: context.tr('whatsapp'),
+                          semanticLabel: actionSemanticLabel(context.tr('whatsapp'), name),
+                          color: whatsappGreen,
+                          onTap: () => openWhatsApp(wa)),
+                  ]),
+                );
+              }),
             ],
             if (detail != null) DetailsLink(path: detail, title: name, id: f.id),
           ]),

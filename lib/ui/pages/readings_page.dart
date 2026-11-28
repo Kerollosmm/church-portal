@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../core/document_lang.dart';
 import '../../core/l10n.dart';
 import '../../core/launch.dart';
 import '../../core/theme.dart';
@@ -66,6 +67,7 @@ class ReadingsPage extends ConsumerStatefulWidget {
 
 class _ReadingsPageState extends ConsumerState<ReadingsPage> {
   late DateTime _currentDate;
+  late bool _dateValid;
   int _selectedTab = 0; // 0 = katameros, 1 = verse
   bool _isLoading = true;
   DayReadings? _readings;
@@ -77,7 +79,9 @@ class _ReadingsPageState extends ConsumerState<ReadingsPage> {
   @override
   void initState() {
     super.initState();
-    _currentDate = _parseDate(widget.dateIso);
+    final parsed = _tryParseIsoDate(widget.dateIso);
+    _dateValid = parsed != null;
+    _currentDate = parsed ?? _todayCairoDate();
     if (widget.initialTab == 'verse') {
       _selectedTab = 1;
     } else {
@@ -90,11 +94,13 @@ class _ReadingsPageState extends ConsumerState<ReadingsPage> {
   void didUpdateWidget(ReadingsPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.dateIso != widget.dateIso) {
-      _currentDate = _parseDate(widget.dateIso);
+      final parsed = _tryParseIsoDate(widget.dateIso);
+      _dateValid = parsed != null;
+      _currentDate = parsed ?? _todayCairoDate();
       _resetScroll(postFrame: true);
       _loadReadings();
     }
-    if (oldWidget.initialTab != widget.initialTab && widget.initialTab != null) {
+    if (oldWidget.initialTab != widget.initialTab) {
       final newTab = widget.initialTab == 'verse' ? 1 : 0;
       if (_selectedTab != newTab) {
         if (newTab == 1) {
@@ -163,16 +169,20 @@ class _ReadingsPageState extends ConsumerState<ReadingsPage> {
     return false;
   }
 
-  DateTime _parseDate(String iso) {
-    try {
-      final parts = iso.split('-');
-      if (parts.length == 3) {
-        final y = int.parse(parts[0]);
-        final m = int.parse(parts[1]);
-        final d = int.parse(parts[2]);
-        return DateTime.utc(y, m, d);
-      }
-    } catch (_) {}
+  static final RegExp _isoDateRe = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$');
+
+  static DateTime? _tryParseIsoDate(String iso) {
+    final m = _isoDateRe.firstMatch(iso.trim());
+    if (m == null) return null;
+    final y = int.parse(m[1]!);
+    final mo = int.parse(m[2]!);
+    final d = int.parse(m[3]!);
+    final dt = DateTime.utc(y, mo, d);
+    if (dt.year != y || dt.month != mo || dt.day != d) return null;
+    return dt;
+  }
+
+  static DateTime _todayCairoDate() {
     final now = CairoTime.now();
     return DateTime.utc(now.year, now.month, now.day);
   }
@@ -219,6 +229,26 @@ class _ReadingsPageState extends ConsumerState<ReadingsPage> {
     }
   }
 
+  void _syncRoute({String? iso, int? tab}) {
+    final targetIso = iso ?? _currentIso;
+    final targetTab = (tab ?? _selectedTab) == 1 ? 'verse' : 'katameros';
+    final router = GoRouter.maybeOf(context);
+    if (router == null) return;
+    final uri = router.routerDelegate.currentConfiguration.uri;
+    final qp = Map<String, String>.from(uri.queryParameters);
+    qp['tab'] = targetTab;
+    router.go(Uri(path: '/readings/$targetIso', queryParameters: qp).toString());
+  }
+
+  void _selectTab(int tab) {
+    if (_selectedTab == tab) return;
+    if (tab == 1) {
+      ref.read(readerFocusModeProvider.notifier).setFocus(false);
+    }
+    setState(() => _selectedTab = tab);
+    _syncRoute(tab: tab);
+  }
+
   void _shiftDay(int deltaDays) {
     _resetScroll();
     final next = _currentDate.add(Duration(days: deltaDays));
@@ -226,12 +256,13 @@ class _ReadingsPageState extends ConsumerState<ReadingsPage> {
     final m = next.month.toString().padLeft(2, '0');
     final d = next.day.toString().padLeft(2, '0');
     final targetIso = '$y-$m-$d';
-    final tabParam = _selectedTab == 1 ? '?tab=verse' : '?tab=katameros';
-    try {
-      context.go('/readings/$targetIso$tabParam');
-    } catch (_) {
+    final router = GoRouter.maybeOf(context);
+    if (router != null) {
+      _syncRoute(iso: targetIso);
+    } else {
       setState(() {
         _currentDate = next;
+        _dateValid = true;
       });
       _loadReadings();
     }
@@ -284,6 +315,7 @@ class _ReadingsPageState extends ConsumerState<ReadingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    setDocumentRouteMeta(path: '/readings/$_currentIso', indexable: _dateValid);
     final pal = context.pal;
     final isAr = context.isAr;
     final textScale = ref.watch(readingTextScaleProvider);
@@ -391,11 +423,7 @@ class _ReadingsPageState extends ConsumerState<ReadingsPage> {
             child: InkWell(
               key: const Key('katamerosTabButton'),
               borderRadius: BorderRadius.circular(999),
-              onTap: () {
-                if (_selectedTab != 0) {
-                  setState(() => _selectedTab = 0);
-                }
-              },
+              onTap: () => _selectTab(0),
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 decoration: BoxDecoration(
@@ -418,12 +446,7 @@ class _ReadingsPageState extends ConsumerState<ReadingsPage> {
             child: InkWell(
               key: const Key('verseTabButton'),
               borderRadius: BorderRadius.circular(999),
-              onTap: () {
-                if (_selectedTab != 1) {
-                  ref.read(readerFocusModeProvider.notifier).setFocus(false);
-                  setState(() => _selectedTab = 1);
-                }
-              },
+              onTap: () => _selectTab(1),
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 decoration: BoxDecoration(

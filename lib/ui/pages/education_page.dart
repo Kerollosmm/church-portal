@@ -8,9 +8,11 @@ import '../../domain/features.dart';
 import '../../domain/cairo_time.dart';
 import '../../domain/item_detail.dart';
 import '../../domain/models.dart';
+import '../../domain/reminders.dart';
 import '../../state/providers.dart';
 import '../widgets/cards.dart';
 import '../widgets/common.dart';
+import '../widgets/remind_me.dart';
 
 const stageOrder = [
   'angels', 'primary', 'preparatory', 'secondary', //
@@ -102,6 +104,15 @@ class _TimelineItem extends ConsumerWidget {
   final int todayWeekday;
   const _TimelineItem({required this.meeting, required this.isLast, required this.todayWeekday});
 
+  static DateTime? _nextWeeklyStart(int? weekday, int? startMinutes, DateTime now) {
+    if (weekday == null || weekday < 1 || weekday > 7 || startMinutes == null) return null;
+    final cNow = CairoTime.fromInstant(now);
+    final daysAhead = (weekday - cNow.weekday + 7) % 7;
+    var t = CairoTime.at(cNow.year, cNow.month, cNow.day + daysAhead, startMinutes);
+    if (t.isBefore(cNow)) t = CairoTime.at(cNow.year, cNow.month, cNow.day + daysAhead + 7, startMinutes);
+    return t;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final m = meeting;
@@ -110,6 +121,11 @@ class _TimelineItem extends ConsumerWidget {
     final detail = cardDetailPath(DetailKind.meeting, m.id, m.details);
     // The meeting's own Facebook / WhatsApp links are "socials" (ADR-020).
     final socials = itemSocialsShown(m.details, ref.watch(featuresProvider));
+    final now = ref.watch(nowProvider).value ?? DateTime.now();
+    final nextStart = _nextWeeklyStart(m.weekday, parseHm(m.start), now);
+    final showRemind = nextStart != null &&
+        !nextStart.isBefore(now) &&
+        ref.watch(pushSettingsProvider.select((p) => p.remindsFor(EventKey.meeting(m.id))));
     return IntrinsicHeight(
       child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         SizedBox(
@@ -184,6 +200,16 @@ class _TimelineItem extends ConsumerWidget {
                             onTap: () => openUrl(m.whatsappUrl)),
                     ]),
                   ],
+                  if (showRemind)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: RemindMeButton(
+                        eventKey: EventKey.meeting(m.id),
+                        title: {'ar': m.nameAr, 'en': m.nameEn},
+                        startsAt: nextStart,
+                        recurring: true,
+                      ),
+                    ),
                   if (detail != null) DetailsLink(path: detail, title: name, id: m.id),
                 ]),
               ),
