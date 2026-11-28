@@ -84,5 +84,8 @@ The `lib/core` package delivers foundational platform abstractions, cross-platfo
 - **Native Disk I/O**: Reads and asynchronously flushes preferences to disk via `SharedPreferences` ([`install_env_io.dart`](install_env_io.dart), [`locale_storage_io.dart`](locale_storage_io.dart)).
 - **External Application Launches**: Invokes `url_launcher` launching system browsers, phone dialer intents, and WhatsApp messaging protocols ([`launch.dart`](launch.dart)).
 
+- **In-app Back navigation (`back_navigation.dart`)**:
+  - `decideBackAction`: web Back pops browser history (`browserHistoryBack`, `browser_history_web.dart`) when the visitor came from the target page, else replaces the current entry; native apps `go`. Used by `goBackTo` in `ui/widgets/app_shell.dart`.
+
 ## Verification
 - Run: `flutter test`

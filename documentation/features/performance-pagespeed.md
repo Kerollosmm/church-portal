@@ -41,6 +41,7 @@
     محمّلتين مسبقًا (ومعهما `<img>` مخفية) لترسمها واجهة Flutter من الذاكرة.
   - نص مخفي بصريًا `role="status"` «جارٍ التحميل…» لقارئات الشاشة.
   - تلاشٍ ناعم `opacity 0.6s cubic-bezier(0.4, 0.0, 0.2, 1)`؛ وعند استدعاء `splashDone()` تُضاف الفئة `gone` ثم يُحذف العنصر `#splash` بالكامل من شجرة الـ DOM.
+  - عند أول إطار من Flutter (`flutter-first-frame`) تُضاف الفئة `passthrough` فيصبح `#splash` بـ `pointer-events: none`: تبقى الشاشة ظاهرة حتى يظهر المحتوى لكنها لا تمنع النقرات.
   - تبقى الشاشة حتى الحدث `app-content-ready` الذي يرسله التطبيق (`lib/core/content_ready.dart`) بعد إطارين من جاهزية الإعدادات والمفاتيح (`contentReadyProvider` / `firstContentArrived` في `lib/state/providers.dart`: `settings/church` و `settings/features` عبر `featuresReadyProvider` دون انتظار قراءة ملف آيات اليوم `dailyVersesProvider` — ADR-088)، وبحد أقصى 9 ثوانٍ بعد `flutter-first-frame`.
   - يضيف `web/index.html` روابط `preconnect` لـ `www.gstatic.com` و `firestore.googleapis.com` وتحميلًا مسبقًا (`modulepreload`) لحزم Firebase JS المثبتة على نسخة `firebase_core_web` (يفحصها CI) دون تحميل مسبق لملف `daily_verses.json`.
   - الأداة `tool/fingerprint_web_bundle.py` تبصّم `main.dart.js` إلى `main.<hash>.dart.js` (`immutable` في `firebase.json`) لتفادي إعادة تحميل الحزمة للزوار العائدين.

@@ -54,6 +54,20 @@ jobs:
             fi
             flutter build web --release "${DEFINES[@]}"
           fi
+      # Which commit is live: Flutter's version.json plus the built SHA, so a
+      # visitor / QA run can tell exactly which deploy they are looking at.
+      - name: Stamp commit SHA in version.json
+        env:
+          GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          p = 'build/web/version.json'
+          d = json.load(open(p))
+          d['commit'] = os.environ['GIT_SHA']
+          json.dump(d, open(p, 'w'), separators=(',', ':'))
+          PY
+          cat build/web/version.json; echo
       # sitemap.xml from Firestore (ADR-038): the Spark plan has no Cloud
       # Functions, so the sitemap is built here, READ-ONLY (get() calls only),
       # with the deploy key. Any failure keeps the static web/sitemap.xml.
