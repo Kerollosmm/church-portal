@@ -219,6 +219,13 @@ void main() {
       expect(
           parentRouteOf('/about/milestones/since-1980',
               const FeatureSettings(sections: {'history': false, 'saints': false, 'priests': false, 'departedPriests': false})),
+          '/about');
+      expect(
+          parentRouteOf(
+              '/about/milestones/since-1980',
+              const FeatureSettings(
+                  aboutMilestones: false,
+                  sections: {'history': false, 'saints': false, 'priests': false, 'departedPriests': false})),
           '/');
       for (final top in ['/', '/about', '/contact', '/ask', '/nope/x/y', '/about/priests']) {
         expect(parentRouteOf(top), '/', reason: top);

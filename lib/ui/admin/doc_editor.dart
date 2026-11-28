@@ -39,6 +39,19 @@ Future<Uint8List?> pickImageFromDevice() async {
   return x?.readAsBytes();
 }
 
+/// Optional loader supplying `liturgies` docs to [DocEditor] when embedded
+/// in `ChurchInfoScreen` for `seasonSettingsDoc`.
+class AdminLiturgiesScope extends InheritedWidget {
+  final Future<List<AdminDoc>> Function() loadLiturgies;
+  const AdminLiturgiesScope({super.key, required this.loadLiturgies, required super.child});
+
+  static Future<List<AdminDoc>> Function()? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<AdminLiturgiesScope>()?.loadLiturgies;
+
+  @override
+  bool updateShouldNotify(AdminLiturgiesScope oldWidget) => loadLiturgies != oldWidget.loadLiturgies;
+}
+
 /// Generic form editor driven by [FieldDef]s. Used for collection documents
 /// and for the church-info document.
 class DocEditor extends StatefulWidget {
@@ -952,16 +965,9 @@ class DocEditorState extends State<DocEditor> {
     );
   }
 
-  Widget _seasonOverlapWarningBanner(BuildContext context, List<AdminDoc> overlapping) {
-    final names = [
-      for (final o in overlapping)
-        (() {
-          final v = context.pick('${o.data['nameAr'] ?? ''}', '${o.data['nameEn'] ?? ''}').trim();
-          return v.isEmpty ? o.id : v;
-        })(),
-    ].join(context.isAr ? '، ' : ', ');
+  Widget _warningCard(BuildContext context, {required Key key, required String message}) {
     return Card(
-      key: const Key('season-overlap-warning'),
+      key: key,
       color: context.pal.goldText.withValues(alpha: 0.1),
       margin: const EdgeInsets.only(top: 4, bottom: 8),
       shape: RoundedRectangleBorder(
@@ -976,13 +982,28 @@ class DocEditorState extends State<DocEditor> {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                context.tr('seasonOverlapWarning', {'names': names}),
+                message,
                 style: TextStyle(color: context.pal.ink, fontWeight: FontWeight.w600),
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _seasonOverlapWarningBanner(BuildContext context, List<AdminDoc> overlapping) {
+    final names = [
+      for (final o in overlapping)
+        (() {
+          final v = context.pick('${o.data['nameAr'] ?? ''}', '${o.data['nameEn'] ?? ''}').trim();
+          return v.isEmpty ? o.id : v;
+        })(),
+    ].join(context.isAr ? '، ' : ', ');
+    return _warningCard(
+      context,
+      key: const Key('season-overlap-warning'),
+      message: context.tr('seasonOverlapWarning', {'names': names}),
     );
   }
 
@@ -1914,7 +1935,29 @@ class DocEditorState extends State<DocEditor> {
       case FieldType.imageList:
         return _galleryEditor(f);
       default:
-        return _textField(f, _text[f.key]!, focusNode: _focusNode(f.key));
+        final input = _textField(f, _text[f.key]!, focusNode: _focusNode(f.key));
+        if (widget.def?.name == 'alerts' && f.key == 'endsAt') {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              input,
+              ListenableBuilder(
+                listenable: _text[f.key]!,
+                builder: (context, _) {
+                  if (_values['active'] != true || _text[f.key]!.text.trim().isNotEmpty) {
+                    return const SizedBox.shrink();
+                  }
+                  return _warningCard(
+                    context,
+                    key: const Key('alert-no-endsAt-warning'),
+                    message: context.tr('alertNoEndWarning'),
+                  );
+                },
+              ),
+            ],
+          );
+        }
+        return input;
     }
   }
 
@@ -2463,8 +2506,57 @@ class DocEditorState extends State<DocEditor> {
     });
   }
 
-  void _removeObjectRow(FieldDef f, int index) {
+  Future<void> _removeObjectRow(FieldDef f, int index) async {
     final rows = _rows[f.key]!;
+    if (index < 0 || index >= rows.length) return;
+    if (identical(widget.fields, seasonSettingsDoc.fields) && (f.key == 'venues' || f.key == 'audiences')) {
+      final row = rows[index];
+      final key = row.text['key']?.text.trim() ?? '';
+      if (key.isNotEmpty) {
+        final fieldKey = f.key == 'venues' ? 'venue' : 'audience';
+        List<AdminDoc> docs = widget.linkedServices;
+        if (docs.isEmpty) {
+          final loader = AdminLiturgiesScope.maybeOf(context);
+          if (loader != null) {
+            try {
+              docs = await loader().timeout(const Duration(seconds: 3));
+            } catch (_) {
+              docs = const [];
+            }
+          }
+        }
+        if (!mounted) return;
+        final usedCount =
+            docs.where((d) => !isSoftDeleted(d.data) && '${d.data[fieldKey] ?? ''}'.trim() == key).length;
+        if (usedCount > 0) {
+          final confirmed = await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              key: const Key('programOptionInUseDialog'),
+              title: Text(context.tr('programOptionInUseTitle')),
+              content: Text(context.tr('programOptionInUseBody', {'c': '$usedCount', 'key': key})),
+              actions: [
+                TextButton(
+                  key: const Key('programOptionInUse-cancel'),
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: Text(context.tr('cancel')),
+                ),
+                FilledButton(
+                  key: const Key('programOptionInUse-confirm'),
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: Text(context.tr('remove')),
+                ),
+              ],
+            ),
+          );
+          if (confirmed != true || !mounted) return;
+          final currentRows = _rows[f.key];
+          if (currentRows == null || !currentRows.contains(row)) return;
+          index = currentRows.indexOf(row);
+        }
+      }
+    }
+    if (!mounted) return;
     setState(() {
       final removed = rows.removeAt(index);
       if (_pendingErrorFocus != null && removed.ownsFocusNode(_pendingErrorFocus!.focusNode)) {
