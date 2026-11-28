@@ -813,6 +813,12 @@ const Map<String, List<String>> adminStrings = {
   ],
   'seasonKeyChangeMoveBtn': ['نقل الخدمات وحفظ', 'Move services & save'],
   'seasonKeyChangeKeepBtn': ['حفظ بدون نقل', 'Save without moving'],
+  // Save confirmation diff summary for high-impact docs (features, today, church)
+  'confirmSaveTitle': ['تأكيد حفظ التغييرات', 'Confirm saving changes'],
+  'confirmSaveSummary': ['سيتم نشر التعديلات التالية مباشرةً على الموقع:', 'The following changes will go live on the site:'],
+  'confirmSaveChanged': ['تم التعديل', 'Changed'],
+  'confirmSaveMore': ['و {n} تعديلات أخرى', 'and {n} more'],
+  'themeOccasionsDiff': ['إعدادات الثيم والمناسبات', 'Theme & occasion schedule'],
 };
 
 /// Idempotently registers [adminStrings] in the runtime localization table.

@@ -23,7 +23,9 @@ import 'admin_schema.dart';
 import 'admin_strings.dart';
 import 'admin_validators.dart';
 import 'block_editors.dart';
+import 'confirm_named.dart';
 import 'page_preview.dart';
+import 'save_diff.dart';
 import 'screen_header.dart';
 import 'state_switch.dart';
 import 'unsaved_bar.dart';
@@ -113,6 +115,10 @@ class DocEditor extends StatefulWidget {
   /// queues on the caller's [ScaffoldMessenger] when [popOnSave] pops back.
   final ScaffoldMessengerState? popMessenger;
 
+  /// Whether saving prompts a field-diff confirmation dialog first (used for
+  /// high-impact singleton docs `church` and `today`).
+  final bool confirmSave;
+
   const DocEditor({
     super.key,
     required this.title,
@@ -139,6 +145,7 @@ class DocEditor extends StatefulWidget {
     this.englishEnabled = true,
     this.initialNotice,
     this.popMessenger,
+    this.confirmSave = false,
   });
 
   @override
@@ -1163,6 +1170,22 @@ class DocEditorState extends State<DocEditor> {
           if (choice == null || !mounted) return false;
           moveServices = choice && widget.onSaveWithMovedServices != null;
         }
+      }
+    }
+    final needsConfirm = widget.confirmSave ||
+        identical(widget.fields, churchInfoDoc.fields) ||
+        identical(widget.fields, todaySettingsDoc.fields);
+    if (needsConfirm) {
+      final diff = buildSaveDiffRows(
+        widget.fields,
+        _initialValues,
+        data,
+        isAr: context.isAr,
+        tr: context.tr,
+      );
+      if (diff.isNotEmpty) {
+        final confirmed = await confirmSaveDiff(context, diff);
+        if (!confirmed || !mounted) return false;
       }
     }
     setState(() => _saving = true);

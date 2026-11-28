@@ -890,6 +890,7 @@ class _ChurchInfoScreenState extends State<ChurchInfoScreen> {
               data: doc?.data ?? const {},
               popOnSave: false,
               englishEnabled: englishEnabled,
+              confirmSave: identical(widget.doc, churchInfoDoc) || identical(widget.doc, todaySettingsDoc),
               onSave: (data) => widget.repo.saveDoc(widget.doc.path, data),
             ),
           ),

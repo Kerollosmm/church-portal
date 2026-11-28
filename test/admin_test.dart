@@ -1246,6 +1246,8 @@ void main() {
       await tester.pump();
       await tester.tap(find.byKey(const Key('features-save')));
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+      await tester.pumpAndSettle();
       expect(saved, isNotNull);
       expect(saved!.enabled(Sections.meetings), isFalse);
       expect(saved!.enabled(Sections.schedule), isTrue);
@@ -1310,6 +1312,8 @@ void main() {
       expect(find.byKey(const ValueKey('pageReset-ask')), findsNothing, reason: 'nothing left to reset');
       await tester.tap(find.byKey(const Key('features-save')));
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+      await tester.pumpAndSettle();
       expect(saved!.pageHeaders.keys, ['about', 'education']);
       expect(saved!.pageHeader('education'), const PageCustom(titleEn: 'Our education', introAr: 'اجتماعات الكنيسة'));
       expect(saved!.pageHeader('about'), const PageCustom(subtitleAr: 'تاريخنا'));
@@ -1340,6 +1344,8 @@ void main() {
       await tester.enterText(page('contact', 'subtitleEn'), 's' * 300);
       await tester.tap(find.byKey(const Key('features-save')));
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+      await tester.pumpAndSettle();
       expect(saved!.pageHeader('contact').introEn.length, 1500);
     });
 
@@ -1361,6 +1367,8 @@ void main() {
       expect(saved, isNull, reason: 'note over 500 chars');
       await tester.enterText(find.byKey(const ValueKey('footer-noteEn')), '  All services are free  ');
       await tester.tap(find.byKey(const Key('features-save')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('confirm-ok')));
       await tester.pumpAndSettle();
       expect(saved!.footer.toMap(), {
         'showPhones': false,
@@ -1460,6 +1468,8 @@ void main() {
       await tester.tap(down);
       await tester.pump();
       await tester.tap(find.byKey(const Key('features-save')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('confirm-ok')));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       expect(saved!.homeOrder.indexOf('banner'), 1);
@@ -6159,6 +6169,8 @@ void main() {
 
       await tester.tap(find.byKey(const Key('features-save')));
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+      await tester.pumpAndSettle();
       expect(saved?.englishEnabled, isFalse);
 
       // featuresSaveWrites omits englishEnabled when unchanged from stored doc (safe for editors).
@@ -6219,6 +6231,8 @@ void main() {
       await tester.enterText(find.byKey(const ValueKey('field-addressAr')), 'شارع ٤٥، العصافرة');
       await tester.tap(find.byKey(const Key('editor-save')));
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+      await tester.pumpAndSettle();
       expect(saved, isNotNull);
       expect(saved!['nameAr'], 'كنيسة العصافرة');
 
@@ -6243,6 +6257,8 @@ void main() {
 
       await tester.enterText(find.byKey(const ValueKey('field-nameAr')).first, 'كنيسة القديسين الجديدة');
       await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('confirm-ok')));
       await tester.pumpAndSettle();
       expect(saved, {'nameAr': 'كنيسة القديسين الجديدة'});
 
@@ -6365,6 +6381,8 @@ void main() {
       await tester.enterText(find.byKey(const ValueKey('field-nameAr')), 'كنيسة محدثة');
       await tester.tap(find.byKey(const Key('editor-save')));
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+      await tester.pumpAndSettle();
 
       expect(saved, {'nameAr': 'كنيسة محدثة'});
     });
@@ -6472,6 +6490,8 @@ void main() {
       final saveBtn = find.byKey(const Key('features-save'));
       await tester.ensureVisible(saveBtn);
       await tester.tap(saveBtn);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('confirm-ok')));
       await tester.pumpAndSettle();
 
       expect(saved, isNotNull);
@@ -6838,6 +6858,8 @@ void main() {
       await tester.enterText(find.byKey(const ValueKey('field-whatsapp')), '01012345678');
 
       await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('confirm-ok')));
       await tester.pumpAndSettle();
 
       expect(saved, isNotNull);
@@ -7254,8 +7276,10 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.byKey(const ValueKey('unsaved-bar')), findsOneWidget);
 
-        // Trigger Save -> save is in flight
+        // Trigger Save -> confirm diff -> save is in flight
         await tester.tap(find.byKey(const Key('features-save')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('confirm-ok')));
         await tester.pump();
 
         // Simulate browser back discard while save is in flight
@@ -7898,6 +7922,8 @@ void main() {
 
         // Save
         await tester.tap(find.byKey(const Key('features-save')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('confirm-ok')));
         await tester.pumpAndSettle();
 
         // Verify updatedElsewhere banner is NEVER shown

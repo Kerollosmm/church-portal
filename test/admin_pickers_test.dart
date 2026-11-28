@@ -254,6 +254,8 @@ void main() {
       await pickDay(tester, 'date', 30); // opens on the row's April 2027
       await tester.tap(find.byKey(const Key('editor-save')));
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+      await tester.pumpAndSettle();
       expect(saved?['dayStartsAt'], '17:45');
       final row = (saved?['dayEvents'] as List).single as String;
       final parts = row.split('\u001f');
@@ -469,6 +471,8 @@ void main() {
       await tester.pump();
 
       await tester.tap(find.byKey(const Key('editor-save-top')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('confirm-ok')));
       await tester.pump();
       // Top bar Action + UnsavedBar + saveButton all reflect Saving… while in flight.
       expect(find.text('Saving…'), findsNWidgets(3));

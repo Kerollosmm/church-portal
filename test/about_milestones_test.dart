@@ -181,6 +181,8 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(const Key('features-save')));
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+    await tester.pumpAndSettle();
     expect(saved!.aboutMilestones, isFalse);
 
     await tester.pumpWidget(app(const FeatureSettings(sections: {'milestones': false})));
