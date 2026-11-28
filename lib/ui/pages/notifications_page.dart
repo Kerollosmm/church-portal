@@ -36,6 +36,12 @@ const Map<String, List<String>> notificationsPageStrings = {
   'notificationsCopyFailed': ['تعذّر النسخ التلقائي — انسخ الرابط يدويًا:', 'Auto-copy blocked — copy link manually:'],
   'notificationsCopyLink': ['نسخ الرابط للمتصفح', 'Copy link for browser'],
   'notificationsOpenSettingsButton': ['فتح إعدادات التطبيق', 'Open app settings'],
+  'notificationsAllowing': ['جارٍ طلب الإذن…', 'Requesting permission…'],
+  'notificationsAllowedNow': ['تم السماح بالإشعارات.', 'Notifications allowed.'],
+  'notificationsPromptDismissed': [
+    'لم يتم اختيار إذن بعد (ربما أُغلقت نافذة المتصفح أو منعها المتصفح). اضغط الزر مرة أخرى، أو افتح إعدادات الموقع (أيقونة القفل بجانب العنوان) واسمح بالإشعارات ثم أعد تحميل الصفحة.',
+    'No permission was chosen yet (the browser prompt may have been closed or blocked). Tap the button again, or open the site settings (lock icon next to the address bar), allow notifications, then reload the page.'
+  ],
   'notificationsPermissionDisabled': [
     'الإشعارات غير مفعلة. يُرجى السماح بالإشعارات من إعدادات المتصفح أو النظام.',
     'Notifications disabled. Please allow notifications in device or browser settings.',
@@ -136,6 +142,12 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> with Widg
   PushEnv? _webPushEnv;
   Future<bool>? _syncInFlight;
   bool _copyFailed = false;
+
+  /// The browser permission prompt is open (the button shows progress).
+  bool _requestingPermission = false;
+
+  /// The last prompt ended with no choice (still `default`).
+  bool _promptDismissed = false;
 
   @override
   void initState() {
@@ -831,15 +843,34 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> with Widg
               ),
               const SizedBox(height: 14),
               FilledButton.icon(
-                icon: const Icon(Icons.notifications_active),
-                label: Text(context.tr(isWeb ? 'notificationsAllowBrowserButton' : 'notificationsEnableButton')),
+                icon: _requestingPermission
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.notifications_active),
+                label: Text(_requestingPermission
+                    ? context.tr('notificationsAllowing')
+                    : context.tr(isWeb ? 'notificationsAllowBrowserButton' : 'notificationsEnableButton')),
                 style: FilledButton.styleFrom(
                   minimumSize: const Size(48, 48),
                 ),
-                onPressed: canRequest
+                onPressed: canRequest && !_requestingPermission
                     ? () async {
-                        final res = await pushEnv.requestPermission();
+                        // Called straight from the tap: browsers only show the
+                        // prompt for a user gesture.
+                        setState(() {
+                          _requestingPermission = true;
+                          _promptDismissed = false;
+                        });
+                        String res;
+                        try {
+                          res = await pushEnv.requestPermission();
+                        } catch (_) {
+                          res = 'default';
+                        }
                         if (!mounted) return;
+                        setState(() {
+                          _requestingPermission = false;
+                          _promptDismissed = res != 'granted' && res != 'denied';
+                        });
                         if (res == 'granted') {
                           prefsNotifier.firstOptIn();
                           if (isWeb && context.mounted) {
@@ -853,12 +884,36 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> with Widg
                             if (!mounted || !context.mounted) return;
                             _showSyncErrorIfNeeded(context, syncOk);
                           }
+                          if (mounted && context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(context.tr('notificationsAllowedNow')),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          }
+                        } else if (res == 'denied' && context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(context.tr('notificationsPermissionDisabled')),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
                         }
                         if (!mounted) return;
                         onPermissionChanged();
                       }
                     : null,
               ),
+              if (_promptDismissed && !_requestingPermission)
+                Padding(
+                  key: const Key('notificationsPromptDismissed'),
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    context.tr('notificationsPromptDismissed'),
+                    style: TextStyle(fontSize: 12.5, color: pal.alert, height: 1.5),
+                  ),
+                ),
               if (isWeb && !pushSettings.canRequestPermission)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),

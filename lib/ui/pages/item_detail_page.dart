@@ -337,7 +337,7 @@ class _BackLink extends StatelessWidget {
         alignment: AlignmentDirectional.centerStart,
         child: TextButton.icon(
           key: const Key('detailBackLink'),
-          onPressed: () => context.go(parent),
+          onPressed: () => goBackTo(context, parent),
           icon: const Icon(Icons.arrow_back_rounded, size: 18),
           label: Text(backToLabel(context, parent)),
         ),
@@ -361,7 +361,7 @@ class _Unavailable extends StatelessWidget {
         Center(
           child: FilledButton(
             key: const Key('unavailableBack'),
-            onPressed: () => context.go(parent),
+            onPressed: () => goBackTo(context, parent),
             child: Text(backToLabel(context, parent)),
           ),
         ),
@@ -574,6 +574,7 @@ class _DetailView extends ConsumerWidget {
           eventKey: EventKey.meeting(id),
           title: e.reminderTitle.isNotEmpty ? e.reminderTitle : {'ar': e.title, 'en': e.title},
           startsAt: nextStart,
+          endsAt: calendarEndsAt(nextStart, startMinutes: startMin!, endMinutes: parseHm(e.end)),
           recurring: true,
         ),
       if (e.onSite && settings != null && _hasDestination(settings))
