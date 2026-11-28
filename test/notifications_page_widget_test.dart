@@ -150,6 +150,18 @@ class _FailingInstallEnv extends FakeTestInstallEnv {
   void writeJson(String key, Map<String, dynamic> data) => throw StateError('QuotaExceededError');
 }
 
+/// A browser that closes / blocks the prompt: the permission stays `default`.
+class _DismissingPushEnv extends FakeTestPushEnv {
+  _DismissingPushEnv() : super(permission: 'default');
+
+  @override
+  Future<String> requestPermission() async {
+    requestCalls++;
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    return 'default';
+  }
+}
+
 class _DenyingPushEnv extends FakeTestPushEnv {
   _DenyingPushEnv() : super(permission: 'default');
 
@@ -753,6 +765,45 @@ void main() {
 
     expect(pushEnv.requestCalls, 1);
     expect(find.text('الإشعارات مفعلة'), findsOneWidget);
+  });
+
+  testWidgets('allow button shows progress, then explains a prompt that ended with no choice', (tester) async {
+    final pushEnv = _DismissingPushEnv();
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(enabled: true, vapidKey: 'k'),
+      pushEnv: pushEnv,
+      installEnv: FakeTestInstallEnv(),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('notificationsPromptDismissed')), findsNothing);
+
+    await tester.tap(find.text('السماح بإشعارات المتصفح'));
+    await tester.pump();
+    // While the browser prompt is open: progress, button disabled.
+    expect(find.text('جارٍ طلب الإذن…'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pumpAndSettle();
+
+    expect(pushEnv.requestCalls, 1);
+    expect(find.text('السماح بإشعارات المتصفح'), findsOneWidget);
+    expect(find.byKey(const Key('notificationsPromptDismissed')), findsOneWidget);
+  });
+
+  testWidgets('allowing the browser shows a confirmation snackbar', (tester) async {
+    final pushEnv = FakeTestPushEnv(permission: 'default');
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(enabled: true, vapidKey: 'k'),
+      pushEnv: pushEnv,
+      installEnv: FakeTestInstallEnv(),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('السماح بإشعارات المتصفح'));
+    await tester.pumpAndSettle();
+    expect(find.text('الإشعارات مفعلة'), findsOneWidget);
+    expect(find.text('تم السماح بالإشعارات.'), findsOneWidget);
   });
 
   testWidgets('NotificationsPage never requests permission automatically on load', (tester) async {
@@ -1681,6 +1732,8 @@ void main() {
             eventKey: 'lit-fri',
             title: const {'ar': 'قداس الجمعة', 'en': 'Friday Liturgy'},
             startsAt: startsAt,
+            // 12:30–14:00 Cairo: the entry must end there, not 1 h after the start.
+            endsAt: CairoTime.at(2026, 11, 6, 14 * 60).toUtc(),
             recurring: true,
             isWeb: true,
           ),
@@ -1703,6 +1756,7 @@ void main() {
     await tester.pump();
     expect(launched, hasLength(1));
     expect(Uri.parse(launched.single).queryParameters['recur'], isNull);
+    expect(Uri.parse(launched.single).queryParameters['dates'], '20261106T123000/20261106T140000');
 
     await tester.ensureVisible(find.text('Download calendar file (.ics)'));
     await tester.tap(find.text('Download calendar file (.ics)'));
@@ -1712,6 +1766,9 @@ void main() {
     expect(downloaded.single.filename, 'lit-fri.ics');
     expect(downloaded.single.content, contains('BEGIN:VCALENDAR'));
     expect(downloaded.single.content, isNot(contains('RRULE:FREQ=WEEKLY')));
+    // 12:30 and 14:00 Cairo (UTC+2 in November) in UTC.
+    expect(downloaded.single.content, contains('DTSTART:20261106T103000Z'));
+    expect(downloaded.single.content, contains('DTEND:20261106T120000Z'));
 
     // Toggle "Every time (recurring)": leads are no longer marked past, Save becomes enabled.
     await tester.ensureVisible(find.text('Every time (recurring)'));
