@@ -592,6 +592,14 @@ class FeatureSettings {
   /// `/church-education/<id>`) is available. Unknown routes are always allowed.
   bool routeEnabled(String path) {
     if (path == '/notifications' || path.startsWith('/notifications/')) return pushSettings.enabled;
+    final p = _normalizePath(path);
+    if (p == '/about') {
+      return enabled(Sections.history) ||
+          enabled(Sections.saints) ||
+          enabled(Sections.priests) ||
+          enabled(Sections.departedPriests) ||
+          showAboutMilestones;
+    }
     final sections = sectionsForPath(path);
     if (sections == null) return true;
     return sections.any(enabled);
@@ -617,7 +625,7 @@ const routeSections = <String, List<String>>{
   '/church-education': [Sections.meetings],
   '/church-activities': [Sections.activities],
   '/public-services': [Sections.services],
-  '/about': [Sections.history, Sections.saints, Sections.priests, Sections.departedPriests],
+  '/about': [Sections.history, Sections.saints, Sections.priests, Sections.departedPriests, Sections.milestones],
   '/contact': [Sections.contactInfo, Sections.socials, Sections.contactForm],
   '/ask': [Sections.assistant],
   // Admin-defined content (ADR-027): `/section/<slug>` and `/page/<slug>`

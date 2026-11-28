@@ -19,7 +19,7 @@ import '../widgets/map_embed.dart';
 import '../widgets/milestone_card.dart';
 import '../widgets/golden.dart';
 import '../widgets/today_widgets.dart';
-import 'category_page.dart' show CustomPageCard;
+import 'category_page.dart' show CustomPageCard, categoryIcon;
 
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
@@ -77,7 +77,7 @@ class HomePage extends ConsumerWidget {
     }
     if (!patronsPlaced) children.add(const KeyedSubtree(key: ValueKey('home-patrons'), child: _PatronsTeaser()));
     return PageBody(
-      header: _Hero(settings: settings.value, features: features),
+      header: _Hero(settings: settings, features: features),
       children: children,
     );
   }
@@ -107,6 +107,15 @@ class HomePage extends ConsumerWidget {
         ]);
       case HomeBlocks.directory:
         final showAsk = ref.watch(assistantVisibleProvider);
+        final customCats = f.enabled(Sections.customSections)
+            ? publicNonEmptyCategories(
+                ref.watch(categoriesProvider).value ?? const [],
+                ref.watch(entriesProvider).value ?? const [],
+                f.enabled(Sections.customPages)
+                    ? (ref.watch(customPagesProvider).value ?? const [])
+                    : const [],
+              )
+            : const <CustomCategory>[];
         final cards = [
           for (final d in _directory)
             if (f.routeEnabled(d.path))
@@ -115,6 +124,14 @@ class HomePage extends ConsumerWidget {
                   title: context.tr(d.title),
                   subtitle: context.tr(d.subtitle),
                   onTap: () => context.go(d.path)),
+          for (final c in customCats)
+            DirectoryCard(
+                key: ValueKey('dir-cat-${c.slug}'),
+                icon: categoryIcon(c.icon),
+                title: context.pick(c.nameAr, c.nameEn),
+                subtitle: context.pick(c.introAr.trim(), c.introEn.trim()),
+                subtitleMaxLines: 3,
+                onTap: () => context.go(c.path)),
           if (showAsk)
             DirectoryCard(
                 icon: Icons.auto_awesome_rounded,
@@ -230,13 +247,14 @@ class _AnnouncementBanner extends StatelessWidget {
 /// name on a cream scrim, the optional subtitle / address ribbon, the verse
 /// of the day and the CTAs.
 class _Hero extends ConsumerWidget {
-  final ChurchSettings? settings;
+  final AsyncValue<ChurchSettings> settings;
   final FeatureSettings features;
   const _Hero({required this.settings, required this.features});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final s = settings;
+    final s = settings.value;
+    final hasError = s == null && settings.hasError;
     final w = MediaQuery.sizeOf(context).width;
     final wide = w >= 900;
     final narrow = w < 600;
@@ -248,7 +266,15 @@ class _Hero extends ConsumerWidget {
     final heroLine = subtitle.isNotEmpty ? subtitle : (f.heroShowAddress ? address : '');
 
     final text = Column(crossAxisAlignment: CrossAxisAlignment.center, mainAxisSize: MainAxisSize.min, children: [
-      if (s == null) ...[
+      if (hasError)
+        TextScrim(
+          opacity: 0.84,
+          child: ErrorState(
+            key: const Key('heroError'),
+            onRetry: () => ref.invalidate(settingsProvider),
+          ),
+        )
+      else if (s == null) ...[
         const SkeletonBox(height: 34, width: 300),
         const SizedBox(height: 12),
         const SkeletonBox(height: 20, width: 220),
