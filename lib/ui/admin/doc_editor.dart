@@ -57,6 +57,16 @@ class DocEditor extends StatefulWidget {
   /// Persists the collected values. Throwing shows "save failed".
   final Future<void> Function(Map<String, dynamic> data) onSave;
 
+  /// Optional guarded save for existing documents: receives [data] and the
+  /// `updatedAt` timestamp currently loaded in the editor, and returns the
+  /// document's new `updatedAt` after the write. When provided and [_persisted]
+  /// is true, [save] calls this instead of [onSave].
+  final Future<DateTime?> Function(Map<String, dynamic> data, DateTime? expectedUpdatedAt)? onSaveFresh;
+
+  /// Optional live stream of this existing document so edits made elsewhere
+  /// surface the "updated elsewhere" banner with a reload action.
+  final Stream<AdminDoc?> Function()? watchDoc;
+
   /// Pop the route after a successful save (false when embedded in a page).
   final bool popOnSave;
 
@@ -109,6 +119,8 @@ class DocEditor extends StatefulWidget {
     this.help = '',
     required this.fields,
     required this.onSave,
+    this.onSaveFresh,
+    this.watchDoc,
     this.data,
     this.docId,
     this.newDefaults = const {},
@@ -192,6 +204,12 @@ class DocEditorState extends State<DocEditor> {
   /// The document exists: an existing one, or a new one whose first write
   /// succeeded (later writes then send only what changed).
   late bool _persisted = !isNew;
+  late AdminDoc? _shown = isNew ? null : AdminDoc(widget.docId ?? '', widget.data!);
+  late DateTime? _loadedUpdatedAt = _shown?.updatedAt;
+  AdminDoc? _latestRemote;
+  bool _remoteStale = false;
+  bool _sawRemoteSnapshot = false;
+  StreamSubscription<AdminDoc?>? _remoteSub;
 
   bool get isNew => widget.data == null;
 
@@ -240,6 +258,103 @@ class DocEditorState extends State<DocEditor> {
     } finally {
       _initializing = false;
     }
+    if (!isNew && widget.watchDoc != null) {
+      _remoteSub = widget.watchDoc!().listen(_onRemoteDoc, onError: (_) {});
+    }
+  }
+
+  void _onRemoteDoc(AdminDoc? latest) {
+    if (!mounted || isNew) return;
+    if (latest == null) {
+      // Test fakes that do not mirror collection items in watchDoc emit null
+      // on the initial snapshot; ignore that unless the doc had a timestamp or
+      // was previously seen on this stream.
+      if (!_sawRemoteSnapshot && _shown?.updatedAt == null) return;
+      setState(() {
+        _latestRemote = null;
+        _remoteStale = true;
+      });
+      return;
+    }
+    _sawRemoteSnapshot = true;
+    final changed = !sameTimestamp(latest.updatedAt, _shown?.updatedAt) ||
+        (latest.updatedAt == null && _shown?.updatedAt == null && !sameValue(latest.data, _shown?.data));
+    if (!changed) return;
+    final echo = _shown != null && isEchoOfEditor(_shown!.data, latest.data, collect());
+    if (!_dirty && !_saving || echo) {
+      _shown = latest;
+      if (!_saving) _loadedUpdatedAt = latest.updatedAt;
+      _latestRemote = latest;
+      if (!echo) {
+        _reloadFromData(latest.data);
+      } else if (_remoteStale) {
+        setState(() => _remoteStale = false);
+      }
+      return;
+    }
+    setState(() {
+      _latestRemote = latest;
+      _remoteStale = true;
+    });
+  }
+
+  void _reloadRemote() {
+    final doc = _latestRemote;
+    if (doc == null || _saving) return;
+    _shown = doc;
+    _loadedUpdatedAt = doc.updatedAt;
+    _reloadFromData(doc.data);
+  }
+
+  void _reloadFromData(Map<String, dynamic> source) {
+    _resetEpoch++;
+    for (final c in _text.values) {
+      c.dispose();
+    }
+    for (final rows in _rows.values) {
+      for (final r in rows) {
+        r.dispose();
+      }
+    }
+    for (final list in _gallery.values) {
+      for (final g in list) {
+        g.alt.dispose();
+      }
+    }
+    _text.clear();
+    _values.clear();
+    _rows.clear();
+    _gallery.clear();
+    _pending.clear();
+    _rawInitialTimeText.clear();
+    _processing = null;
+    _showErrorSummary = false;
+    _saveError = null;
+    _saveBaseline = null;
+    _remoteStale = false;
+    _initializing = true;
+    try {
+      final data = {...source};
+      if (widget.fields.any((f) => f.key == 'placement') &&
+          (data['placement'] == null || '${data['placement']}'.isEmpty) &&
+          data['showInNav'] == true) {
+        data['placement'] = PagePlacements.nav;
+      }
+      for (final f in widget.fields) {
+        _init(f, data[f.key]);
+      }
+      _initialValues = collect();
+      for (final f in widget.fields) {
+        if (f.type == FieldType.time && data[f.key] is String) {
+          final raw = (data[f.key] as String).trim();
+          _initialValues[f.key] = raw;
+          _rawInitialTimeText[f.key] = raw;
+        }
+      }
+    } finally {
+      _initializing = false;
+    }
+    setState(() => _dirty = false);
   }
 
   @override
@@ -399,6 +514,7 @@ class DocEditorState extends State<DocEditor> {
 
   @override
   void dispose() {
+    _remoteSub?.cancel();
     _errorFocusTimer?.cancel();
     _scroll.dispose();
     for (final c in _text.values) {
@@ -1086,12 +1202,17 @@ class DocEditorState extends State<DocEditor> {
         _initialValues = {..._initialValues, ...payload};
       } else {
         for (final chunk in splitSavePayload(payload)) {
-          await widget.onSave(chunk);
+          if (_persisted && widget.onSaveFresh != null) {
+            _loadedUpdatedAt = await widget.onSaveFresh!(chunk, _loadedUpdatedAt);
+          } else {
+            await widget.onSave(chunk);
+          }
           _persisted = true;
           _initialValues = {..._initialValues, ...chunk};
         }
       }
       _initialValues = data;
+      _remoteStale = false;
       for (final f in widget.fields) {
         if (f.type == FieldType.time && data[f.key] is String) {
           _rawInitialTimeText[f.key] = (data[f.key] as String).trim();
@@ -2838,6 +2959,19 @@ class DocEditorState extends State<DocEditor> {
                           title: widget.title,
                           help: widget.help,
                           padding: const EdgeInsets.only(bottom: 12),
+                        ),
+                      if (_remoteStale)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: MaterialBanner(
+                            content: Text(context.tr('updatedElsewhere')),
+                            actions: [
+                              TextButton(
+                                onPressed: _latestRemote == null ? null : _reloadRemote,
+                                child: Text(context.tr('reload')),
+                              ),
+                            ],
+                          ),
                         ),
                       if (_notice != null && _notice!.isNotEmpty) _noticeBanner(context, _notice!),
                       if (_saveError != null) _saveErrorBanner(context, _saveError!),

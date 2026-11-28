@@ -27,6 +27,8 @@ class ContactCategoriesScreen extends StatefulWidget {
 
 class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
   late Stream<AdminDoc?> _stream = widget.repo.watchDoc('settings/contact');
+  AdminDoc? _shown;
+  bool _loaded = false;
   List<ContactCategory>? _cats;
   List<ContactCategory>? _savedCats;
 
@@ -45,7 +47,11 @@ class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
     super.didUpdateWidget(old);
     if (old.repo != widget.repo) {
       _stream = widget.repo.watchDoc('settings/contact');
+      _shown = null;
+      _loaded = false;
       _cats = null;
+      _savedCats = null;
+      _dirty = false;
     }
   }
 
@@ -66,7 +72,17 @@ class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
     final isAr = context.isAr;
     setState(() => _saving = true);
     try {
-      await widget.repo.saveDoc('settings/contact', ContactSettings(_renumbered()).toMap());
+      final payload = ContactSettings(_renumbered()).toMap();
+      await widget.repo.saveDocsFresh(['settings/contact'], (current) {
+        if (isStaleDoc(
+          current['settings/contact'],
+          expectedExists: _shown != null,
+          expectedUpdatedAt: _shown?.updatedAt,
+        )) {
+          throw const StaleDocumentException('settings/contact');
+        }
+        return {'settings/contact': payload};
+      });
       messenger.showSnackBar(SnackBar(content: Text(saved)));
       if (mounted) {
         setState(() {
@@ -158,16 +174,54 @@ class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
             if (snap.connectionState == ConnectionState.waiting && _cats == null) {
               return const Center(child: CircularProgressIndicator());
             }
-            // First load (or a remote change while nothing is edited here).
-            if (_cats == null || !_dirty) {
-              final next = ContactSettings.fromMap(snap.data?.data).categories;
-              if (_cats == null || !_same(_cats!, next)) {
+            final latest = snap.data;
+            final changed = !_loaded ||
+                !sameTimestamp(latest?.updatedAt, _shown?.updatedAt) ||
+                (latest == null) != (_shown == null) ||
+                (latest?.updatedAt == null &&
+                    _shown?.updatedAt == null &&
+                    !sameValue(latest?.data, _shown?.data));
+            final editorMap =
+                _cats == null ? const <String, dynamic>{} : ContactSettings(_renumbered()).toMap();
+            final echo = _loaded &&
+                _cats != null &&
+                isEchoOfEditor(_shown?.data ?? const {}, latest?.data, editorMap);
+            // First load (or a remote change while nothing is edited here, or own-save echo).
+            if (changed && (!_dirty && !_saving || echo)) {
+              final next = ContactSettings.fromMap(latest?.data).categories;
+              if (!echo && (_cats == null || !_same(_cats!, next))) {
                 _cats = [...next];
                 _savedCats = [...next];
                 _gen++;
+              } else if (_cats == null) {
+                _cats = [...next];
+                _savedCats = [...next];
               }
+              _shown = latest;
+              _loaded = true;
             }
-            return _editor(context);
+            final stale = _loaded && changed && (_dirty || _saving) && !echo;
+            return Column(children: [
+              if (stale)
+                MaterialBanner(
+                  content: Text(context.tr('updatedElsewhere')),
+                  actions: [
+                    TextButton(
+                      onPressed: () => setState(() {
+                        _shown = latest;
+                        final next = ContactSettings.fromMap(latest?.data).categories;
+                        _cats = [...next];
+                        _savedCats = [...next];
+                        _retired.clear();
+                        _gen++;
+                        _dirty = false;
+                      }),
+                      child: Text(context.tr('reload')),
+                    ),
+                  ],
+                ),
+              Expanded(child: _editor(context)),
+            ]);
           },
         ),
       ),

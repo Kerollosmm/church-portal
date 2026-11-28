@@ -342,7 +342,9 @@ void main() {
     expect(saved['pushTypes'], ['announcements', 'verse_daily', 'katameros_daily', 'reminders']);
     expect(saved['reminderSources'], 'lit,mtg');
     expect(saved['reminderLeads'], [0, 15, 60, 1440]);
-    expect(saved['notifyTypes'], isEmpty, reason: 'unchanged templates are not stored');
+    expect(saved.containsKey('notifyTypes'), isFalse, reason: 'unchanged push keys are not rewritten');
+    expect(saved.containsKey('push'), isFalse);
+    expect(repo.docs['settings/features']!['notifyTypes'], isEmpty, reason: 'unchanged templates are not stored');
 
     await tapKey(tester, 'customize-verse_daily');
     final title = find.descendant(of: find.byKey(const ValueKey('type_verse_daily')), matching: find.byType(TextField)).first;

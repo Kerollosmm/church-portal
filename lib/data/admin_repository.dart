@@ -4,6 +4,35 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'content_repository.dart';
 import 'media_repository.dart';
 
+/// Thrown when an admin attempts to save a document that another admin
+/// modified or deleted since it was loaded into the editor.
+class StaleDocumentException implements Exception {
+  final String path;
+  const StaleDocumentException(this.path);
+
+  @override
+  String toString() => 'StaleDocumentException($path)';
+}
+
+/// True when both [a] and [b] are null or represent the same instant.
+bool sameTimestamp(DateTime? a, DateTime? b) {
+  if (a == null || b == null) return a == b;
+  return a.isAtSameMomentAs(b);
+}
+
+/// True when [current] (read inside a [AdminBackend.saveDocsFresh] transaction)
+/// no longer matches the loaded state ([expectedExists] and [expectedUpdatedAt]).
+bool isStaleDoc(
+  Map<String, dynamic>? current, {
+  required bool expectedExists,
+  required DateTime? expectedUpdatedAt,
+}) {
+  if (!expectedExists) return current != null;
+  if (current == null) return true;
+  final curUpdatedAt = current['updatedAt'] is DateTime ? current['updatedAt'] as DateTime : null;
+  return !sameTimestamp(curUpdatedAt, expectedUpdatedAt);
+}
+
 class AdminDoc {
   final String id;
   final Map<String, dynamic> data;
@@ -36,6 +65,23 @@ abstract class AdminBackend {
   /// Creates (id == null) or merges a document; stamps updatedAt/updatedBy.
   /// Returns the document id.
   Future<String> save(String collection, String? id, Map<String, dynamic> data);
+
+  /// Saves an existing document at [collection]/[id] inside a transaction
+  /// only if its stored `updatedAt` still matches [expectedUpdatedAt],
+  /// returning the document's new `updatedAt` after the write.
+  /// Throws [StaleDocumentException] when another admin modified or deleted it.
+  ///
+  /// The default delegates to [save] so in-memory test backends keep
+  /// recording collection saves; [AdminRepository] uses [saveDocsFresh].
+  Future<DateTime?> saveFresh(
+    String collection,
+    String id,
+    Map<String, dynamic> data, {
+    required DateTime? expectedUpdatedAt,
+  }) async {
+    await save(collection, id, data);
+    return expectedUpdatedAt;
+  }
 
   /// Merges a single document (settings/church, settings/features).
   Future<void> saveDoc(String path, Map<String, dynamic> data);
@@ -158,6 +204,26 @@ class AdminRepository implements AdminBackend {
     }
     await _merge(col.doc(id), data);
     return id;
+  }
+
+  @override
+  Future<DateTime?> saveFresh(
+    String collection,
+    String id,
+    Map<String, dynamic> data, {
+    required DateTime? expectedUpdatedAt,
+  }) async {
+    final path = '$collection/$id';
+    await saveDocsFresh([path], (current) {
+      if (isStaleDoc(current[path], expectedExists: true, expectedUpdatedAt: expectedUpdatedAt)) {
+        throw StaleDocumentException(path);
+      }
+      return {path: data};
+    });
+    // Read back the server-stamped updatedAt so subsequent splitSavePayload
+    // chunks (gallery, extraFields, blocks) validate against the new stamp.
+    final snap = await db.doc(path).get();
+    return snap.exists ? AdminDoc(snap.id, normalizeDoc(snap.data())).updatedAt : null;
   }
 
   @override

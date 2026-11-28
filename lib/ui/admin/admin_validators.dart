@@ -765,6 +765,10 @@ bool isValidVapidKey(String s) => s.isEmpty || RegExp(r'^[A-Za-z0-9_-]{80,100}$'
 /// Formats an error for administrative error displays, surfacing structured
 /// Firebase error codes (e.g. `[permission-denied]`) instead of raw/opaque strings.
 String formatAdminError(Object error, {bool isAr = true}) {
+  if (error is StaleDocumentException) {
+    final pair = adminStrings['staleDocError']!;
+    return isAr ? pair[0] : pair[1];
+  }
   if (error is TimeoutException) {
     final pair = adminStrings['adminTimeoutError']!;
     return '[timeout] ${isAr ? pair[0] : pair[1]}';
