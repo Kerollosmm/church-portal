@@ -30,6 +30,7 @@ import 'ui/pages/mass_schedule_page.dart';
 import 'ui/pages/notifications_page.dart' deferred as notifications_page;
 import 'ui/pages/public_services_page.dart';
 import 'ui/pages/readings_page.dart' deferred as readings_page;
+import 'ui/pages/search_page.dart' deferred as search_page;
 import 'ui/pages/notification_health_page.dart' deferred as health_page;
 import 'ui/widgets/app_shell.dart';
 import 'ui/widgets/assistant_gate.dart';
@@ -228,6 +229,19 @@ GoRouter buildAppRouter(Ref ref, {bool? isWeb, String initialLocation = '/'}) {
           GoRoute(path: '/clinics/:id', redirect: (_, s) => _redirectWithQuery('/', s)),
           GoRoute(path: '/public-services', pageBuilder: (c, s) => _page(s, const PublicServicesPage())),
           GoRoute(path: '/contact', pageBuilder: (c, s) => _page(s, const ContactPage())),
+          GoRoute(
+            path: '/search',
+            pageBuilder: (c, s) => _page(
+              s,
+              DeferredLoader(
+                source: 'search_page',
+                loadLibrary: search_page.loadLibrary,
+                builder: (_) => search_page.SearchPage(
+                  initialQuery: s.uri.queryParameters['q'] ?? '',
+                ),
+              ),
+            ),
+          ),
           GoRoute(
               path: '/notifications',
               // Own web chunk (ADR-057 size budget): fetched only on a visit.
