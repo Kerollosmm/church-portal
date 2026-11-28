@@ -312,6 +312,19 @@ retired = {
   "milestones": ["founding", "pastoral", "consecration"],
 }
 
+# #143 (ADR-094): the public reads filter on visible == true / active == true
+# and deletedAt == null, and a Firestore equality filter never matches a
+# document that lacks the field, so every seeded content document carries
+# the keys explicitly (an existing explicit value is kept).
+VISIBLE_SEEDED = ["alerts", "liturgies", "meetings", "activities", "facilities", "priests", "milestones", "saints"]
+for _col in VISIBLE_SEEDED:
+    for _doc in globals()[_col].values():
+        _doc.setdefault("visible", True)
+        _doc.setdefault("deletedAt", None)
+for _doc in seasons.values():
+    _doc.setdefault("active", True)
+    _doc.setdefault("deletedAt", None)
+
 seed = {"settings": settings, "alerts": alerts, "seasons": seasons, "liturgies": liturgies, "meetings": meetings,
         "activities": activities, "facilities": facilities, "priests": priests, "milestones": milestones, "saints": saints}
 out = os.path.join(os.path.dirname(__file__), "..", "assets", "seed", "seed.json")
