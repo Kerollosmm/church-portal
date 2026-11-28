@@ -218,6 +218,8 @@ void main() {
       expect(find.byKey(const ValueKey('features-verseTextAr')), findsNothing);
       await tester.tap(find.byKey(const Key('features-save')));
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+      await tester.pumpAndSettle();
       expect(saved, isNotNull, reason: 'the hidden over-long draft does not block the save');
       expect(saved!.dailyVerse, DailyVerseConfig.defaults);
     });
