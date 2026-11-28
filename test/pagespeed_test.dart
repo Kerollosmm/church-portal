@@ -104,6 +104,13 @@ void main() {
       expect(html, contains('setTimeout(splashFailed, 30000)'));
     });
 
+    test('the loading screen stops blocking taps once Flutter has painted its first frame', () {
+      expect(RegExp(r'#splash\.gone, #splash\.passthrough \{ pointer-events: none; \}').hasMatch(html), isTrue);
+      final firstFrame = html.substring(html.indexOf("addEventListener('flutter-first-frame'"));
+      final handler = firstFrame.substring(0, firstFrame.indexOf('});'));
+      expect(handler, contains("classList.add('passthrough')"));
+    });
+
     test('Intl.v8BreakIterator is replaced by an Intl.Segmenter shim before Flutter loads', () {
       final shim = html.indexOf("Object.defineProperty(Intl, 'v8BreakIterator'");
       expect(shim, greaterThan(0));

@@ -207,6 +207,7 @@ class _TimelineItem extends ConsumerWidget {
                         eventKey: EventKey.meeting(m.id),
                         title: {'ar': m.nameAr, 'en': m.nameEn},
                         startsAt: nextStart,
+                        endsAt: calendarEndsAt(nextStart, startMinutes: parseHm(m.start)!, endMinutes: parseHm(m.end)),
                         recurring: true,
                       ),
                     ),

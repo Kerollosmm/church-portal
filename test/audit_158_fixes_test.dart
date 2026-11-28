@@ -288,7 +288,7 @@ void main() {
       final repo = _AuditRepo(
         _seed(),
         overrideMeetings: const [
-          Meeting(id: 'm1', stage: 'youth', nameAr: 'اجتماع الشباب', nameEn: 'Youth meeting', weekday: 5, start: '19:00'),
+          Meeting(id: 'm1', stage: 'youth', nameAr: 'اجتماع الشباب', nameEn: 'Youth meeting', weekday: 5, start: '19:00', end: '21:00'),
           Meeting(id: 'm2', stage: 'youth', nameAr: 'بدون وقت', nameEn: 'No start time', weekday: 5, start: ''),
         ],
       );
@@ -302,6 +302,8 @@ void main() {
       final btn = tester.widget<RemindMeButton>(find.byType(RemindMeButton));
       expect(btn.eventKey, 'meeting-m1');
       expect(btn.recurring, isTrue);
+      // The calendar entry ends at the meeting's real end (19:00–21:00), not +1 h.
+      expect(btn.endsAt!.difference(btn.startsAt), const Duration(hours: 2));
     });
   });
 

@@ -10,6 +10,7 @@ import '../../domain/models.dart' show parseHm;
 import '../../domain/reminders.dart';
 import '../../domain/today.dart';
 import '../../state/providers.dart';
+import 'cards.dart' show calendarEndsAt;
 import 'common.dart';
 import 'golden.dart' show mobileMotionSuppressed;
 import 'program_details.dart';
@@ -343,6 +344,7 @@ class TopEventCard extends ConsumerWidget {
             occurrence: isoDate(day),
             title: {'ar': ev.titleAr.isNotEmpty ? ev.titleAr : e.titleAr, 'en': ev.titleEn.isNotEmpty ? ev.titleEn : e.titleEn},
             startsAt: startsAt,
+            endsAt: parseHm(ev.end) == null ? null : calendarEndsAt(startsAt, startMinutes: m, endMinutes: parseHm(ev.end)),
             recurring: false,
           ),
         ));
@@ -362,6 +364,7 @@ class TopEventCard extends ConsumerWidget {
           occurrence: o.liturgy.date != null ? isoDate(CairoTime.calendarDate(o.liturgy.date!)) : null,
           title: {'ar': o.liturgy.nameAr, 'en': o.liturgy.nameEn},
           startsAt: o.start,
+          endsAt: o.end,
           recurring: o.liturgy.date == null,
         ),
       ));

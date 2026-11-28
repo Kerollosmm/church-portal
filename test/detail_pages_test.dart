@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:church_portal/core/back_navigation.dart' show debugBrowserHistoryBack;
 import 'package:church_portal/core/document_lang.dart';
 import 'package:church_portal/data/content_repository.dart';
 import 'package:church_portal/data/media_repository.dart';
@@ -282,6 +283,35 @@ void main() {
       await tester.tap(find.byKey(const Key('backHome')));
       await tester.pumpAndSettle();
       expect(_path(router), '/');
+    });
+
+    testWidgets('web: Back pops browser history when the visitor came from the parent, else replaces', (tester) async {
+      debugBackIsWeb = true;
+      var popped = 0;
+      debugBrowserHistoryBack = () => popped++;
+      addTearDown(() {
+        debugBackIsWeb = null;
+        debugBrowserHistoryBack = null;
+      });
+      final (router, _) = await _pump(tester, size: const Size(400, 1600));
+      // list -> detail: Back pops the history entry (no new `go`).
+      router.go('/church-education');
+      await tester.pumpAndSettle();
+      router.go('/church-education/d-meeting');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('backParent')));
+      await tester.pumpAndSettle();
+      expect(popped, 1);
+      expect(_path(router), '/church-education/d-meeting');
+      // Arrived from somewhere else (About): the entry is replaced by the parent.
+      router.go('/about');
+      await tester.pumpAndSettle();
+      router.go('/church-education/d-meeting');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('backParent')));
+      await tester.pumpAndSettle();
+      expect(popped, 1);
+      expect(_path(router), '/church-education');
     });
 
     testWidgets('wide screens: no back arrow on detail pages either', (tester) async {
