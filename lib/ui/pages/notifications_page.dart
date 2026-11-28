@@ -10,6 +10,7 @@ import '../../core/l10n.dart';
 import '../../core/push_env.dart';
 import '../../core/theme.dart';
 import '../../data/error_reporting.dart';
+import '../../data/push_messaging.dart';
 import '../../data/web_push_repository.dart' deferred as web_push;
 import '../../domain/features.dart';
 import '../../domain/reminders.dart';
@@ -70,6 +71,21 @@ const Map<String, List<String>> notificationsPageStrings = {
   'notificationsTestButton': ['جرّب إشعارًا', 'Test notification'],
   'notificationsTestSent': ['تم إرسال إشعار تجريبي للمتصفح', 'Test notification sent to browser'],
   'notificationsTestSentApp': ['تم إرسال إشعار تجريبي على هذا الجهاز', 'Test notification sent to this device'],
+  'notificationsTestTopicCancel': ['إلغاء', 'Cancel'],
+  'notificationsTestTopicFailed': ['تعذّر تحديث الاشتراك في موضوع التجربة', 'Could not update test topic subscription'],
+  'notificationsTestTopicHint': [
+    'أدخل اسم الموضوع (يبدأ بـ test_ ويتبعه 3–20 حرفًا إنجليزيًا صغيرًا أو رقمًا أو _، مثل test_kerollos1 أو kerollos1)',
+    'Enter a topic name matching test_[a-z0-9_]{3,20} (e.g. test_kerollos1 or kerollos1)',
+  ],
+  'notificationsTestTopicInvalid': [
+    'اسم الموضوع غير صالح. استخدم حروفًا إنجليزية صغيرة أو أرقامًا أو _ فقط (3–20 حرفًا بعد test_).',
+    'Invalid topic name. Use lowercase letters, digits, or _ only (3–20 chars after test_).',
+  ],
+  'notificationsTestTopicSubscribe': ['اشتراك', 'Subscribe'],
+  'notificationsTestTopicSubscribed': ['تم الاشتراك في موضوع التجربة:', 'Subscribed to test topic:'],
+  'notificationsTestTopicTitle': ['موضوع تجربة الإشعارات', 'Test notification topic'],
+  'notificationsTestTopicUnsubscribe': ['إلغاء الاشتراك', 'Unsubscribe'],
+  'notificationsTestTopicUnsubscribed': ['تم إلغاء الاشتراك من موضوع التجربة:', 'Unsubscribed from test topic:'],
   'notificationsUnsubscribeAll': ['إيقاف كل الإشعارات', 'Turn off all notifications'],
   'notificationsUnsubscribeConfirm': ['تم إيقاف جميع الإشعارات', 'All notifications turned off'],
   'notificationsUnsubscribeFailed': [
@@ -96,6 +112,10 @@ class NotificationsPage extends ConsumerStatefulWidget {
   /// so Dart VM deferred loading does not stall across `testWidgets` cases.
   @visibleForTesting
   static Future<void> preloadWebPushForTest() => web_push.loadLibrary();
+
+  /// Optional test hook for hidden Phase 6H test-topic enrollment dialog.
+  @visibleForTesting
+  static Future<bool> Function(String topic, {required bool subscribe})? debugTestTopicHook;
 
   /// Returns a shareable notifications URL matching the active web deployment
   /// (preview channel or prod) without query parameters or URL fragments.
@@ -274,6 +294,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> with Widg
     PushSettings pushSettings, {
     PushPrefs? overridePrefs,
     required bool isWeb,
+    bool immediate = false,
   }) {
     if (!isWeb) return Future.value(true);
     // Capture fallback snapshots synchronously before any await so unmounting
@@ -296,6 +317,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> with Widg
         fallbackPrefs: fallbackPrefs,
         fallbackReminders: fallbackReminders,
         overridePrefs: overridePrefs,
+        immediate: immediate,
       );
     }();
     _syncInFlight = next;
@@ -312,6 +334,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> with Widg
     required PushPrefs fallbackPrefs,
     required List<Reminder> fallbackReminders,
     PushPrefs? overridePrefs,
+    bool immediate = false,
   }) async {
     try {
       await web_push.loadLibrary();
@@ -327,8 +350,11 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> with Widg
         prefs = prefs.copyWith(lang: liveLang);
       }
 
+      final rawTestTopic = pushEnv.readStorage(testPushTopicStorageKey)?.trim() ?? '';
+      final hasValidTestTopic = isValidTestPushTopic(rawTestTopic);
+
       if (repo.syncedToken == null) {
-        if (prefs.types.isEmpty) {
+        if (prefs.types.isEmpty && !hasValidTestTopic) {
           return true;
         }
         if (pushSettings.vapidKey.trim().isEmpty) {
@@ -369,11 +395,11 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> with Widg
           ));
         }
         final reminders = mounted ? ref.read(userRemindersProvider) : fallbackReminders;
-        final immediate = !hadTokenBefore || prefs.types.isEmpty;
+        final shouldImmediate = immediate || !hadTokenBefore || prefs.types.isEmpty;
         return (await repo.syncPreferences(
               prefs: prefs,
               reminders: reminders,
-              immediate: immediate,
+              immediate: shouldImmediate,
             )) ==
             true;
       }
@@ -382,6 +408,114 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> with Widg
       ErrorReporting.capture(e, st, section: 'notifications', source: 'web_push_sync');
       return false;
     }
+  }
+
+  Future<bool> _applyTestTopic(
+    BuildContext context,
+    WidgetRef ref,
+    PushEnv pushEnv,
+    PushSettings pushSettings,
+    String topic, {
+    required bool subscribe,
+    required bool isWeb,
+  }) async {
+    final hook = NotificationsPage.debugTestTopicHook;
+    if (hook != null) {
+      return await hook(topic, subscribe: subscribe);
+    }
+
+    if (isWeb) {
+      if (subscribe) {
+        if (pushSettings.vapidKey.trim().isEmpty) return false;
+        if (pushEnv.permission != 'granted') {
+          final perm = await pushEnv.requestPermission();
+          if (mounted) ref.invalidate(pushPermissionProvider);
+          if (perm != 'granted') return false;
+        }
+        pushEnv.writeStorage(testPushTopicStorageKey, topic);
+        if (!context.mounted) return false;
+        return await _syncWebPush(
+          context,
+          ref,
+          pushEnv,
+          pushSettings,
+          isWeb: true,
+          immediate: true,
+        );
+      } else {
+        pushEnv.writeStorage(testPushTopicStorageKey, '');
+        final hasToken =
+            _webPushRepo?.syncedToken != null || readWebPushStorageState(pushEnv)?.syncedToken != null;
+        if (!hasToken || !context.mounted) return true;
+        return await _syncWebPush(
+          context,
+          ref,
+          pushEnv,
+          pushSettings,
+          isWeb: true,
+          immediate: true,
+        );
+      }
+    }
+
+    if (subscribe) {
+      if (pushEnv.permission != 'granted') {
+        final perm = await pushEnv.requestPermission();
+        if (mounted) ref.invalidate(pushPermissionProvider);
+        if (perm != 'granted') return false;
+      }
+      return await PushMessaging.subscribeTestTopic(topic);
+    }
+    return await PushMessaging.unsubscribeTestTopic(topic);
+  }
+
+  Future<void> _openTestTopicDialog(
+    BuildContext context,
+    WidgetRef ref,
+    PushEnv pushEnv,
+    PushSettings pushSettings, {
+    required bool isWeb,
+  }) async {
+    String? existing;
+    if (NotificationsPage.debugTestTopicHook == null) {
+      if (isWeb) {
+        final raw = pushEnv.readStorage(testPushTopicStorageKey)?.trim();
+        if (raw != null && isValidTestPushTopic(raw)) existing = raw;
+      } else {
+        existing = await PushMessaging.getStoredTestTopic();
+      }
+    }
+    if (!context.mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => _TestTopicDialog(
+        initialTopic: existing,
+        onSubmit: (topic, {required subscribe}) => _applyTestTopic(
+          context,
+          ref,
+          pushEnv,
+          pushSettings,
+          topic,
+          subscribe: subscribe,
+          isWeb: isWeb,
+        ),
+        onResult: (topic, {required subscribe, required ok}) {
+          if (!context.mounted) return;
+          final msg = ok
+              ? '${context.tr(subscribe ? 'notificationsTestTopicSubscribed' : 'notificationsTestTopicUnsubscribed')} $topic'
+              : context.tr('notificationsTestTopicFailed');
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(
+              SnackBar(
+                content: Text(msg),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+        },
+      ),
+    );
   }
 
   @override
@@ -394,12 +528,18 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> with Widg
 
     final web = widget.isWeb ?? kIsWeb;
     final pushSettings = ref.watch(pushSettingsProvider);
+    final pushEnv = ref.watch(pushEnvProvider);
     if (!pushSettings.enabled) {
       return PageBody(
         children: [
-          EmptyState(
-            icon: Icons.notifications_off_outlined,
-            message: context.tr(web ? 'notificationsUnsupported' : 'notificationsUnsupportedApp'),
+          GestureDetector(
+            key: const ValueKey('notifications-test-topic-enroll'),
+            behavior: HitTestBehavior.opaque,
+            onLongPress: () => _openTestTopicDialog(context, ref, pushEnv, pushSettings, isWeb: web),
+            child: EmptyState(
+              icon: Icons.notifications_off_outlined,
+              message: context.tr(web ? 'notificationsUnsupported' : 'notificationsUnsupportedApp'),
+            ),
           ),
         ],
       );
@@ -407,7 +547,6 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> with Widg
 
     final pal = context.pal;
     final installEnv = ref.watch(installEnvProvider);
-    final pushEnv = ref.watch(pushEnvProvider);
     final prefs = ref.watch(pushPrefsProvider);
     final prefsNotifier = ref.read(pushPrefsProvider.notifier);
 
@@ -458,9 +597,14 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> with Widg
                     Icon(Icons.info_outline, color: pal.goldText, size: 22),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: Text(
-                        context.tr('notificationsExplainerTitle'),
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: pal.primaryDeep),
+                      child: GestureDetector(
+                        key: const ValueKey('notifications-test-topic-enroll'),
+                        behavior: HitTestBehavior.opaque,
+                        onLongPress: () => _openTestTopicDialog(context, ref, pushEnv, pushSettings, isWeb: web),
+                        child: Text(
+                          context.tr('notificationsExplainerTitle'),
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: pal.primaryDeep),
+                        ),
                       ),
                     ),
                   ],
@@ -568,6 +712,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> with Widg
                   prefsNotifier.clearAll();
                   var ok = true;
                   if (web) {
+                    pushEnv.writeStorage(testPushTopicStorageKey, '');
                     ok = await _syncWebPush(
                       context,
                       ref,
@@ -580,6 +725,11 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> with Widg
                       ),
                       isWeb: web,
                     );
+                  } else {
+                    final stored = await PushMessaging.getStoredTestTopic();
+                    if (stored != null) {
+                      ok = await PushMessaging.unsubscribeTestTopic(stored);
+                    }
                   }
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -1291,6 +1441,104 @@ class _WebPushInboxSectionState extends State<_WebPushInboxSection> {
               ],
             ),
           ),
+      ],
+    );
+  }
+}
+
+class _TestTopicDialog extends StatefulWidget {
+  final String? initialTopic;
+  final Future<bool> Function(String topic, {required bool subscribe}) onSubmit;
+  final void Function(String topic, {required bool subscribe, required bool ok}) onResult;
+
+  const _TestTopicDialog({
+    required this.initialTopic,
+    required this.onSubmit,
+    required this.onResult,
+  });
+
+  @override
+  State<_TestTopicDialog> createState() => _TestTopicDialogState();
+}
+
+class _TestTopicDialogState extends State<_TestTopicDialog> {
+  late final TextEditingController _controller;
+  String? _errorText;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialTopic ?? '');
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit({required bool subscribe}) async {
+    final raw = _controller.text.trim();
+    final normalized = raw.isEmpty && !subscribe ? widget.initialTopic : normalizeTestPushTopic(raw);
+    if (normalized == null) {
+      setState(() {
+        _errorText = context.tr('notificationsTestTopicInvalid');
+      });
+      return;
+    }
+    setState(() {
+      _errorText = null;
+      _busy = true;
+    });
+    final ok = await widget.onSubmit(normalized, subscribe: subscribe);
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
+    widget.onResult(normalized, subscribe: subscribe, ok: ok);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(context.tr('notificationsTestTopicTitle')),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            context.tr('notificationsTestTopicHint'),
+            style: const TextStyle(fontSize: 13),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _controller,
+            enabled: !_busy,
+            autocorrect: false,
+            enableSuggestions: false,
+            textDirection: TextDirection.ltr,
+            decoration: InputDecoration(
+              hintText: 'test_kerollos1',
+              errorText: _errorText,
+              errorMaxLines: 3,
+              border: const OutlineInputBorder(),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: _busy ? null : () => Navigator.of(context).pop(),
+          child: Text(context.tr('notificationsTestTopicCancel')),
+        ),
+        TextButton(
+          onPressed: _busy ? null : () => _submit(subscribe: false),
+          child: Text(context.tr('notificationsTestTopicUnsubscribe')),
+        ),
+        FilledButton(
+          onPressed: _busy ? null : () => _submit(subscribe: true),
+          child: Text(context.tr('notificationsTestTopicSubscribe')),
+        ),
       ],
     );
   }

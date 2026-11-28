@@ -945,14 +945,21 @@ class _AppDrawer extends ConsumerWidget {
                 borderRadius: const BorderRadius.vertical(bottom: Radius.circular(28)),
               ),
               child: Row(children: [
-                Container(
-                  padding: const EdgeInsets.all(1.5),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: context.pal.onBarAccent,
-                    boxShadow: [BoxShadow(color: context.pal.shadow(0.45), blurRadius: 8, offset: const Offset(0, 2))],
+                GestureDetector(
+                  key: const ValueKey('drawer-seal-open-notifications'),
+                  onLongPress: () {
+                    Navigator.of(context).pop();
+                    context.go('/notifications');
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(1.5),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: context.pal.onBarAccent,
+                      boxShadow: [BoxShadow(color: context.pal.shadow(0.45), blurRadius: 8, offset: const Offset(0, 2))],
+                    ),
+                    child: const ChurchSeal(size: 52),
                   ),
-                  child: const ChurchSeal(size: 52),
                 ),
                 const SizedBox(width: 12),
                 Expanded(

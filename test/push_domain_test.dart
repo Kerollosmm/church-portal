@@ -376,6 +376,75 @@ void main() {
       expect(plan.prevToken, 'old_token_000');
     });
 
+    test('isValidTestPushTopic and normalizeTestPushTopic match JS regex', () {
+      expect(isValidTestPushTopic('test_kerollos1'), isTrue);
+      expect(isValidTestPushTopic('test_abc'), isTrue);
+      expect(isValidTestPushTopic('test_${'a' * 20}'), isTrue);
+
+      expect(isValidTestPushTopic('test_ab'), isFalse);
+      expect(isValidTestPushTopic('test_ABC'), isFalse);
+      expect(isValidTestPushTopic('test_xx-yy'), isFalse);
+      expect(isValidTestPushTopic('test_'), isFalse);
+      expect(isValidTestPushTopic('prod_override'), isFalse);
+      expect(isValidTestPushTopic('test_${'a' * 21}'), isFalse);
+
+      expect(normalizeTestPushTopic('test_kerollos1'), 'test_kerollos1');
+      expect(normalizeTestPushTopic('  kerollos1  '), 'test_kerollos1');
+      expect(normalizeTestPushTopic('  test_abc '), 'test_abc');
+      expect(normalizeTestPushTopic(''), isNull);
+      expect(normalizeTestPushTopic('   '), isNull);
+      expect(normalizeTestPushTopic('ab'), isNull);
+      expect(normalizeTestPushTopic('Kerollos1'), isNull);
+      expect(normalizeTestPushTopic('test_ABC'), isNull);
+      expect(normalizeTestPushTopic('xx-yy'), isNull);
+      expect(normalizeTestPushTopic('a' * 21), isNull);
+    });
+
+    test('computeWebTopicSync appends valid testTopic to want and omits empty/invalid', () {
+      final now = CairoTime.at(2026, 11, 9, 10 * 60);
+      final prefsBoth = PushPrefs(
+        types: {NotifyType.announcements, NotifyType.seasons},
+        lang: 'ar',
+        updatedAt: now,
+      );
+
+      final withValid = computeWebTopicSync(
+        prefs: prefsBoth,
+        currentReminders: const [],
+        previousRemTopics: const {},
+        now: now,
+        testTopic: 'test_kerollos1',
+      );
+      expect(withValid.want, ['web_announcements_ar', 'web_seasons_ar', 'test_kerollos1']);
+
+      final withEmptyPrefs = computeWebTopicSync(
+        prefs: PushPrefs(types: const {}, lang: 'ar', updatedAt: now),
+        currentReminders: const [],
+        previousRemTopics: const {},
+        now: now,
+        testTopic: 'test_kerollos1',
+      );
+      expect(withEmptyPrefs.want, ['test_kerollos1']);
+
+      final withInvalid = computeWebTopicSync(
+        prefs: prefsBoth,
+        currentReminders: const [],
+        previousRemTopics: const {},
+        now: now,
+        testTopic: 'test_INVALID',
+      );
+      expect(withInvalid.want, ['web_announcements_ar', 'web_seasons_ar']);
+
+      final withEmpty = computeWebTopicSync(
+        prefs: prefsBoth,
+        currentReminders: const [],
+        previousRemTopics: const {},
+        now: now,
+        testTopic: '',
+      );
+      expect(withEmpty.want, ['web_announcements_ar', 'web_seasons_ar']);
+    });
+
     test('WebInboxItem json roundtrip and link normalization', () {
       final item = WebInboxItem.fromJson({
         'nid': 'ann-1',

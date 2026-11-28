@@ -3750,6 +3750,46 @@ describe('ADR-060: Web push rules (push_queue, meta/push_rate, meta/push_topics,
       },
     });
     await assertFails(b31.commit());
+
+    // Valid test_* topic in want (alone and alongside 2 fixed web topics)
+    await resetRate();
+    const { batch: bTestOnly } = pushBatch(pub, {
+      queueData: {
+        token: 'A'.repeat(120),
+        want: ['test_kerollos1'],
+        createdAt: serverTimestamp(),
+      },
+    });
+    await assertSucceeds(bTestOnly.commit());
+
+    await resetRate();
+    const { batch: bTestPlusTwo } = pushBatch(pub, {
+      queueData: {
+        token: 'A'.repeat(120),
+        want: ['web_announcements_ar', 'web_seasons_ar', 'test_kerollos1'],
+        createdAt: serverTimestamp(),
+      },
+    });
+    await assertSucceeds(bTestPlusTwo.commit());
+
+    // Invalid test_* topics and > 3 items in want are denied
+    for (const badWant of [
+      ['test_ab'],
+      ['test_ABC'],
+      ['test_xx-yy'],
+      ['test_'],
+      ['web_announcements_ar', 'web_seasons_ar', 'test_kerollos1', 'test_extra'],
+    ]) {
+      await resetRate();
+      const { batch: bBadWant } = pushBatch(pub, {
+        queueData: {
+          token: 'A'.repeat(120),
+          want: badWant,
+          createdAt: serverTimestamp(),
+        },
+      });
+      await assertFails(bBadWant.commit());
+    }
   });
 
   test('visitor cannot read, update, or delete push_queue or meta/push_rate', async () => {

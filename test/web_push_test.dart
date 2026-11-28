@@ -465,5 +465,40 @@ void main() {
       );
       expect(writeCalls, 0);
     });
+
+    test('threads stored testPushTopicStorageKey into want and clears it on unsubscribeAll', () async {
+      final fakeEnv = FakePushEnv();
+      fakeEnv.storage[testPushTopicStorageKey] = 'test_kerollos1';
+      final writes = <Map<String, dynamic>>[];
+
+      final repo = WebPushRepository(
+        pushEnv: fakeEnv,
+        batchWriter: (qid, queueData, rateData, {bool isSetCount1 = false}) async {
+          writes.add(Map<String, dynamic>.from(queueData));
+        },
+      );
+      addTearDown(repo.dispose);
+
+      await repo.enable(vapidKey: 'vapid');
+      final now = DateTime.now().toUtc();
+      final prefs = PushPrefs(types: const {NotifyType.announcements}, lang: 'ar', updatedAt: now);
+
+      final ok = await repo.syncPreferences(prefs: prefs, reminders: const [], immediate: true);
+      expect(ok, isTrue);
+      expect(writes, hasLength(1));
+      expect(writes.single['want'], ['web_announcements_ar', 'test_kerollos1']);
+
+      // Clearing storage and re-syncing removes test topic from want
+      fakeEnv.storage[testPushTopicStorageKey] = '';
+      final ok2 = await repo.syncPreferences(prefs: prefs, reminders: const [], immediate: true);
+      expect(ok2, isTrue);
+      expect(writes, hasLength(2));
+      expect(writes.last['want'], ['web_announcements_ar']);
+
+      // Re-enroll then unsubscribeAll clears stored test topic
+      fakeEnv.storage[testPushTopicStorageKey] = 'test_kerollos1';
+      await repo.unsubscribeAll();
+      expect(fakeEnv.storage[testPushTopicStorageKey], '');
+    });
   });
 }
