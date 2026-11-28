@@ -58,6 +58,10 @@ class RemindMeButton extends ConsumerWidget {
   final String? occurrence;
   final Map<String, String> title;
   final DateTime startsAt;
+
+  /// Real end of the event; the sheet's `.ics` / Google Calendar entry uses
+  /// it (null = the calendar helpers' default length).
+  final DateTime? endsAt;
   final bool recurring;
 
   const RemindMeButton({
@@ -66,6 +70,7 @@ class RemindMeButton extends ConsumerWidget {
     this.occurrence,
     required this.title,
     required this.startsAt,
+    this.endsAt,
     this.recurring = false,
   });
 
@@ -109,6 +114,7 @@ class RemindMeButton extends ConsumerWidget {
                 occurrence: occurrence,
                 title: title,
                 startsAt: startsAt,
+                endsAt: endsAt,
                 recurring: recurring,
                 existing: activeReminder,
               ),
@@ -129,6 +135,7 @@ class RemindMeButton extends ConsumerWidget {
                 occurrence: occurrence,
                 title: title,
                 startsAt: startsAt,
+                endsAt: endsAt,
                 recurring: recurring,
                 existing: activeReminder,
               ),
@@ -143,6 +150,7 @@ class RemindMeButton extends ConsumerWidget {
     String? occurrence,
     required Map<String, String> title,
     required DateTime startsAt,
+    DateTime? endsAt,
     bool recurring = false,
     Reminder? existing,
   }) async {
@@ -159,6 +167,7 @@ class RemindMeButton extends ConsumerWidget {
       occurrence: occurrence,
       title: title,
       startsAt: startsAt,
+      endsAt: endsAt,
       recurring: recurring,
       existing: existing,
     );
