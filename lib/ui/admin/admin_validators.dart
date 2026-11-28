@@ -64,14 +64,99 @@ String slugFromTitle(String title, {required Set<String> taken}) {
   }
 }
 
-/// Result of preparing unsaved defaults for duplicating a custom page.
+/// Collections that support duplicating an item into an unsaved draft.
+const duplicatableCollections = {'pages', 'liturgies', 'meetings', 'alerts', 'seasons', 'entries'};
+
+/// Result of preparing unsaved defaults for duplicating a document.
 typedef DuplicatePageResult = ({Map<String, Object?> defaults, bool droppedOwnedImage});
+typedef DuplicateDocResult = DuplicatePageResult;
 
 String _prefixedTitle(String raw, String prefix, int maxLen) {
   final trimmed = raw.trim();
   if (trimmed.isEmpty) return '';
   final combined = trimmed.startsWith(prefix) ? trimmed : '$prefix$trimmed';
   return combined.length > maxLen ? combined.substring(0, maxLen) : combined;
+}
+
+String _suffixedTitle(String raw, String suffix, int maxLen) {
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty) return '';
+  if (trimmed.endsWith(suffix)) {
+    return trimmed.length > maxLen ? trimmed.substring(0, maxLen) : trimmed;
+  }
+  final maxBase = maxLen - suffix.length;
+  final base = maxBase <= 0 ? '' : (trimmed.length > maxBase ? trimmed.substring(0, maxBase).trimRight() : trimmed);
+  final combined = '$base$suffix';
+  return combined.length > maxLen ? combined.substring(0, maxLen) : combined;
+}
+
+({Map<String, dynamic>? image, bool droppedOwned}) _copyDuplicateImage(Object? rawImg) {
+  final img = MediaImage.fromMap(rawImg);
+  if (img != null && img.source == MediaSource.url) {
+    return (image: img.toMap(), droppedOwned: false);
+  }
+  final droppedOwned =
+      rawImg is Map && (rawImg['source'] == MediaSource.inline || rawImg['source'] == MediaSource.storage);
+  return (image: null, droppedOwned: droppedOwned);
+}
+
+Object? _deepCopyValue(Object? v) {
+  if (v is Map) {
+    return <String, dynamic>{
+      for (final e in v.entries) '${e.key}': _deepCopyValue(e.value),
+    };
+  }
+  if (v is List) {
+    return <dynamic>[for (final e in v) _deepCopyValue(e)];
+  }
+  return v;
+}
+
+/// Returns a deep copy of [source] with document identity and audit metadata
+/// (`id`, `updatedAt`, `updatedBy`, `createdAt`, `deletedAt`) removed.
+Map<String, dynamic> stripDocMeta(Map<String, dynamic> source) {
+  const stripped = {'id', 'updatedAt', 'updatedBy', 'createdAt', 'deletedAt'};
+  return <String, dynamic>{
+    for (final e in source.entries)
+      if (!stripped.contains(e.key)) e.key: _deepCopyValue(e.value),
+  };
+}
+
+/// Shifts [value] (`DateTime` or ISO-8601 string) by +1 year on the
+/// Africa/Cairo calendar, preserving Cairo wall-clock time across DST changes
+/// and clamping Feb 29 to Feb 28 in non-leap years.
+DateTime? shiftCairoYear(Object? value) {
+  final DateTime? dt;
+  if (value is DateTime) {
+    dt = value;
+  } else if (value is String && value.trim().isNotEmpty) {
+    dt = DateTime.tryParse(value.trim());
+  } else {
+    dt = null;
+  }
+  if (dt == null) return null;
+  final c = CairoTime.fromInstant(dt);
+  final targetYear = c.year + 1;
+  final targetDay = c.day.clamp(1, daysInMonth(targetYear, c.month));
+  return CairoTime.at(targetYear, c.month, targetDay, c.hour * 60 + c.minute).toUtc();
+}
+
+/// Shifts a season's `replaceDates` (`YYYY-MM-DD` strings) by +1 year,
+/// clamping Feb 29 to Feb 28 in non-leap years and deduplicating/sorting.
+List<String> shiftReplaceDatesYear(Object? raw) {
+  if (raw is! List) return const [];
+  final shifted = <String>{};
+  for (final item in raw) {
+    if (item is! String) continue;
+    final norm = normalizeDigits(item.trim());
+    final m = dateRe.firstMatch(norm);
+    if (m == null || !isValidDate(norm)) continue;
+    final y = int.parse(m[1]!) + 1;
+    final mo = int.parse(m[2]!);
+    final d = int.parse(m[3]!).clamp(1, daysInMonth(y, mo));
+    shifted.add(formatPickedDate(y, mo, d));
+  }
+  return shifted.toList()..sort();
 }
 
 String _duplicateSlug(String rawSlug, String fallbackTitle, Set<String> taken) {
@@ -115,18 +200,7 @@ DuplicatePageResult buildDuplicatePageDefaults(
 
   // MediaImage.ownedMediaId only covers inline; check source explicitly so both
   // inline and storage covers are dropped while external https URLs stay intact.
-  final rawImg = source['image'];
-  final img = MediaImage.fromMap(rawImg);
-  final Map<String, dynamic>? copiedImg;
-  final bool droppedOwnedImage;
-  if (img != null && img.source == MediaSource.url) {
-    copiedImg = img.toMap();
-    droppedOwnedImage = false;
-  } else {
-    copiedImg = null;
-    droppedOwnedImage =
-        rawImg is Map && (rawImg['source'] == MediaSource.inline || rawImg['source'] == MediaSource.storage);
-  }
+  final imgCopy = _copyDuplicateImage(source['image']);
 
   final slug = _duplicateSlug(
     source['slug'] is String ? source['slug'] as String : '',
@@ -140,7 +214,7 @@ DuplicatePageResult buildDuplicatePageDefaults(
       'titleEn': titleEn,
       'subtitleAr': subtitleAr,
       'subtitleEn': subtitleEn,
-      'image': copiedImg,
+      'image': imgCopy.image,
       'blocks': blocks,
       'placement': placement,
       'categoryId': categoryId,
@@ -150,6 +224,95 @@ DuplicatePageResult buildDuplicatePageDefaults(
       'slug': slug,
       'order': order,
     },
+    droppedOwnedImage: imgCopy.droppedOwned,
+  );
+}
+
+/// Builds safe initial field values for duplicating a document in [collection]:
+/// delegates `pages` to [buildDuplicatePageDefaults]; for `liturgies`,
+/// `meetings`, `alerts`, `seasons`, and `entries`, strips identity/audit keys,
+/// appends « (نسخة)» / " (copy)" to the Arabic/English title or name, forces
+/// `visible: false` (where present) and `active: false` (`alerts`, `seasons`),
+/// keeps external URL images while dropping owned inline/storage references,
+/// and shifts `seasons` dates (`startsAt`, `endsAt`, `replaceDates`) by +1 year.
+DuplicateDocResult buildDuplicateDocDefaults(
+  String collection,
+  Map<String, dynamic> source, {
+  Set<String> takenSlugs = const {},
+}) {
+  if (collection == 'pages') {
+    return buildDuplicatePageDefaults(source, takenSlugs: takenSlugs);
+  }
+  final data = stripDocMeta(source);
+  var droppedOwnedImage = false;
+
+  if (data.containsKey('image')) {
+    if (imageCollections.contains(collection)) {
+      final imgCopy = _copyDuplicateImage(source['image']);
+      data['image'] = imgCopy.image;
+      if (imgCopy.droppedOwned) droppedOwnedImage = true;
+    } else {
+      data.remove('image');
+    }
+  }
+  if (data['gallery'] is List) {
+    final copiedGallery = <Map<String, dynamic>>[];
+    for (final raw in data['gallery'] as List) {
+      final imgCopy = _copyDuplicateImage(raw);
+      if (imgCopy.image != null) {
+        copiedGallery.add(imgCopy.image!);
+      } else if (imgCopy.droppedOwned) {
+        droppedOwnedImage = true;
+      }
+    }
+    data['gallery'] = copiedGallery;
+  }
+
+  final (arKey, enKey) = switch (collection) {
+    'alerts' || 'entries' => ('titleAr', 'titleEn'),
+    'liturgies' || 'meetings' || 'seasons' => ('nameAr', 'nameEn'),
+    _ => ('titleAr', 'titleEn'),
+  };
+  if (data.containsKey(arKey) || source[arKey] is String) {
+    data[arKey] = _suffixedTitle(data[arKey] is String ? data[arKey] as String : '', ' (نسخة)', 300);
+  }
+  if (data.containsKey(enKey) || source[enKey] is String) {
+    data[enKey] = _suffixedTitle(data[enKey] is String ? data[enKey] as String : '', ' (copy)', 300);
+  }
+
+  final colDef = collectionById(collection);
+  final hasSlug = colDef?.fields.any((f) => f.slug) ?? false;
+  if (hasSlug) {
+    final fallbackTitle = '${data[arKey] ?? ''}'.trim().isNotEmpty ? '${data[arKey]}' : '${data[enKey] ?? ''}';
+    data['slug'] = _duplicateSlug(
+      data['slug'] is String ? data['slug'] as String : '',
+      fallbackTitle,
+      takenSlugs,
+    );
+  } else {
+    data.remove('slug');
+  }
+
+  if (colDef?.hasVisible ?? const {'liturgies', 'meetings', 'alerts', 'entries'}.contains(collection)) {
+    data['visible'] = false;
+  }
+  if (collection == 'alerts' || collection == 'seasons') {
+    data['active'] = false;
+  }
+  if (collection == 'seasons') {
+    if (data['startsAt'] != null) {
+      data['startsAt'] = shiftCairoYear(data['startsAt']);
+    }
+    if (data['endsAt'] != null) {
+      data['endsAt'] = shiftCairoYear(data['endsAt']);
+    }
+    if (data.containsKey('replaceDates')) {
+      data['replaceDates'] = shiftReplaceDatesYear(data['replaceDates']);
+    }
+  }
+
+  return (
+    defaults: Map<String, Object?>.from(data),
     droppedOwnedImage: droppedOwnedImage,
   );
 }
