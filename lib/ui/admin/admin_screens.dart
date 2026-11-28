@@ -965,6 +965,10 @@ class _MessagesScreenState extends State<MessagesScreen> {
   final _search = TextEditingController();
   String _filter = 'new';
   String _box = 'all';
+  bool _selectionMode = false;
+  final Set<String> _selectedIds = {};
+  bool _bulkBusy = false;
+  final FocusNode _selectAllFocusNode = FocusNode();
   late final _undo = SoftDeleteUndo(
     isMounted: () => mounted,
     onChanged: () {
@@ -997,6 +1001,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
   @override
   void dispose() {
     _search.dispose();
+    _selectAllFocusNode.dispose();
     _ownedFeed?.dispose();
     _ownedFeed = null;
     _undo.dispose();
@@ -1008,6 +1013,9 @@ class _MessagesScreenState extends State<MessagesScreen> {
     super.didUpdateWidget(oldWidget);
     // A different backend: re-bind the streams.
     if (widget.repo != oldWidget.repo) {
+      _selectionMode = false;
+      _selectedIds.clear();
+      _bulkBusy = false;
       _undo.clearTransitionState();
       _config = widget.repo.watchDoc('settings/contact');
       if (_sharedFeed == null) {
@@ -1120,86 +1128,272 @@ class _MessagesScreenState extends State<MessagesScreen> {
             ],
           ),
         );
-    return CustomScrollView(
-      slivers: [
-        SliverToBoxAdapter(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              AdminScreenHeader(
-                title: context.tr('messagesTitle'),
-                help: context.tr('help_messages'),
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                child: TextField(
-                  key: const Key('messages-search'),
-                  controller: _search,
-                  onChanged: (_) => setState(() {}),
-                  decoration: InputDecoration(
-                    isDense: true,
-                    prefixIcon: const Icon(Icons.search),
-                    hintText: context.tr('searchHint'),
-                    suffixIcon: _search.text.isEmpty
-                        ? null
-                        : IconButton(
-                            key: const Key('messages-search-clear'),
-                            tooltip: context.tr('clearSearch'),
-                            icon: const Icon(Icons.clear),
-                            onPressed: () => setState(_search.clear),
-                          ),
+    final activeSelectedIds = _selectedIds.intersection({for (final d in list) d.id});
+    final selectedDocs = [
+      for (final d in list)
+        if (activeSelectedIds.contains(d.id)) d,
+    ];
+    final disabledBulk = selectedDocs.isEmpty || _bulkBusy;
+    return CallbackShortcuts(
+      bindings: {
+        if (_selectionMode)
+          const SingleActivator(LogicalKeyboardKey.escape): _exitSelectionMode,
+      },
+      child: Focus(
+        child: Column(
+          children: [
+            if (_selectionMode)
+              BulkSelectionBar(
+                selectedCount: selectedDocs.length,
+                totalCount: list.length,
+                busy: _bulkBusy,
+                selectAllFocusNode: _selectAllFocusNode,
+                onToggleSelectAll: () => _toggleSelectAll(list),
+                onCancel: _exitSelectionMode,
+                actions: [
+                  OutlinedButton.icon(
+                    key: const Key('bulk-mark-handled'),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(48, 48),
+                      tapTargetSize: MaterialTapTargetSize.padded,
+                    ),
+                    onPressed: disabledBulk ? null : () => _bulkMarkHandled(context, selectedDocs),
+                    icon: const Icon(Icons.check_circle_outline, size: 18),
+                    label: Text(context.tr('markHandled')),
                   ),
-                ),
+                  OutlinedButton.icon(
+                    key: const Key('bulk-delete'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: context.pal.alert,
+                      minimumSize: const Size(48, 48),
+                      tapTargetSize: MaterialTapTargetSize.padded,
+                    ),
+                    onPressed: disabledBulk ? null : () => _bulkDelete(context, selectedDocs),
+                    icon: const Icon(Icons.delete_outline, size: 18),
+                    label: Text(context.tr('delete')),
+                  ),
+                ],
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                child: Wrap(spacing: 6, runSpacing: 6, children: [
-                  for (final b in boxes)
-                    chip(b.$1, open(b.$1) > 0 ? '${b.$2} (${open(b.$1)})' : b.$2, box == b.$1, () => setState(() => _box = b.$1),
-                        key: ValueKey('box-${b.$1}')),
-                ]),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Wrap(spacing: 6, children: [
-                  for (final f in ['new', 'handled', 'all'])
-                    chip(f, context.tr('msg_$f'), _filter == f, () => setState(() => _filter = f), key: ValueKey('filter-$f')),
-                ]),
-              ),
-            ],
-          ),
-        ),
-        if (list.isEmpty)
-          SliverFillRemaining(
-            hasScrollBody: false,
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(context.tr('noMessages')),
-                    if (feed.canLoadMore) ...[
-                      const SizedBox(height: 12),
-                      loadMoreSection(),
-                    ],
+            Expanded(
+              child: CustomScrollView(
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        AdminScreenHeader(
+                          title: context.tr('messagesTitle'),
+                          help: context.tr('help_messages'),
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  key: const Key('messages-search'),
+                                  controller: _search,
+                                  onChanged: (_) => setState(() {}),
+                                  decoration: InputDecoration(
+                                    isDense: true,
+                                    prefixIcon: const Icon(Icons.search),
+                                    hintText: context.tr('searchHint'),
+                                    suffixIcon: _search.text.isEmpty
+                                        ? null
+                                        : IconButton(
+                                            key: const Key('messages-search-clear'),
+                                            tooltip: context.tr('clearSearch'),
+                                            icon: const Icon(Icons.clear),
+                                            onPressed: () => setState(_search.clear),
+                                          ),
+                                  ),
+                                ),
+                              ),
+                              if (!_selectionMode) ...[
+                                const SizedBox(width: 4),
+                                BulkSelectButton(
+                                  key: const Key('messages-selectMode'),
+                                  onPressed: list.isEmpty ? null : _enterSelectionMode,
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                          child: Wrap(spacing: 6, runSpacing: 6, children: [
+                            for (final b in boxes)
+                              chip(b.$1, open(b.$1) > 0 ? '${b.$2} (${open(b.$1)})' : b.$2, box == b.$1,
+                                  () => setState(() => _box = b.$1),
+                                  key: ValueKey('box-${b.$1}')),
+                          ]),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Wrap(spacing: 6, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                            for (final f in ['new', 'handled', 'all'])
+                              chip(f, context.tr('msg_$f'), _filter == f, () => setState(() => _filter = f),
+                                  key: ValueKey('filter-$f')),
+                          ]),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (list.isEmpty)
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(context.tr('noMessages')),
+                              if (feed.canLoadMore) ...[
+                                const SizedBox(height: 12),
+                                loadMoreSection(),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    )
+                  else ...[
+                    SliverPadding(
+                      padding: EdgeInsets.fromLTRB(12, 0, 12, feed.canLoadMore ? 8 : 40),
+                      sliver: SliverList.builder(
+                        itemCount: list.length,
+                        itemBuilder: (context, i) => _message(context, cfg, list[i]),
+                      ),
+                    ),
+                    if (feed.canLoadMore) SliverToBoxAdapter(child: loadMoreSection()),
                   ],
-                ),
+                ],
               ),
             ),
-          )
-        else ...[
-          SliverPadding(
-            padding: EdgeInsets.fromLTRB(12, 0, 12, feed.canLoadMore ? 8 : 40),
-            sliver: SliverList.builder(
-              itemCount: list.length,
-              itemBuilder: (context, i) => _message(context, cfg, list[i]),
-            ),
-          ),
-          if (feed.canLoadMore) SliverToBoxAdapter(child: loadMoreSection()),
-        ],
-      ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _enterSelectionMode({String? initialId}) {
+    setState(() {
+      _selectionMode = true;
+      _selectedIds.clear();
+      if (initialId != null) _selectedIds.add(initialId);
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _selectionMode) _selectAllFocusNode.requestFocus();
+    });
+  }
+
+  void _exitSelectionMode() {
+    if (!_selectionMode) return;
+    setState(() {
+      _selectionMode = false;
+      _selectedIds.clear();
+      _bulkBusy = false;
+    });
+  }
+
+  void _toggleSelected(String id) {
+    if (_bulkBusy) return;
+    setState(() {
+      if (!_selectedIds.add(id)) {
+        _selectedIds.remove(id);
+      }
+    });
+  }
+
+  void _toggleSelectAll(List<AdminDoc> list) {
+    final visibleIds = {for (final d in list) d.id};
+    final allSelected = visibleIds.isNotEmpty && visibleIds.every(_selectedIds.contains);
+    setState(() {
+      if (allSelected) {
+        _selectedIds.removeAll(visibleIds);
+      } else {
+        _selectedIds
+          ..clear()
+          ..addAll(visibleIds);
+      }
+    });
+  }
+
+  String _senderName(BuildContext context, AdminDoc d) {
+    final m = d.data;
+    final anonymous = m['anonymous'] == true || (m['name'] as String?)?.trim().isEmpty != false;
+    return anonymous ? context.tr('anonymousSender') : '${m['name'] ?? ''}'.trim();
+  }
+
+  Future<void> _bulkMarkHandled(BuildContext context, List<AdminDoc> targets) async {
+    if (targets.isEmpty || _bulkBusy) return;
+    final repo = widget.repo;
+    final messenger = ScaffoldMessenger.of(context);
+    final msg = context.tr('bulkHandled', {'n': '${targets.length}'});
+    final failed = context.tr('saveFailed', {'e': '{e}'});
+    final isAr = context.isAr;
+    setState(() => _bulkBusy = true);
+    try {
+      await batchWriteChunked(
+        repo,
+        updates: {
+          for (final d in targets) ('contact_messages', d.id): {'status': MessageStatus.handled},
+        },
+      );
+      if (!mounted || !identical(widget.repo, repo)) return;
+      setState(() {
+        _bulkBusy = false;
+        _selectionMode = false;
+        _selectedIds.clear();
+      });
+      _undo.showSnack(
+        messenger,
+        SnackBar(content: Text(msg), duration: const Duration(seconds: 2)),
+        deferWhileUndo: true,
+      );
+    } catch (e) {
+      if (!mounted || !identical(widget.repo, repo)) return;
+      setState(() => _bulkBusy = false);
+      _undo.showSnack(
+        messenger,
+        SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e, isAr: isAr)))),
+        deferWhileUndo: true,
+      );
+    }
+  }
+
+  Future<void> _bulkDelete(BuildContext context, List<AdminDoc> targets) async {
+    if (targets.isEmpty || _bulkBusy) return;
+    final repo = widget.repo;
+    final items = [for (final d in targets) (doc: d, title: _senderName(context, d))];
+    final messenger = ScaffoldMessenger.of(context);
+    final summary = context.tr('deleteSelectedMessagesConfirm', {'n': '${targets.length}'});
+    final actionLabel = context.tr('delete');
+    final failedMsg = context.tr('deleteFailed', {'e': '{e}'});
+    final undoLabel = context.tr('undo');
+    final undoAllLabel = context.tr('undoAll');
+    final ok = await confirmNamedAction(
+      context,
+      summary: summary,
+      actionLabel: actionLabel,
+      destructive: true,
+    );
+    if (!ok || !mounted || !identical(widget.repo, repo)) return;
+    setState(() {
+      _selectionMode = false;
+      _selectedIds.clear();
+      _bulkBusy = false;
+    });
+    await _undo.deleteBatch(
+      repo: repo,
+      collection: 'contact_messages',
+      items: items,
+      messenger: messenger,
+      failedMsg: failedMsg,
+      undoLabel: undoLabel,
+      undoAllLabel: undoAllLabel,
     );
   }
 
@@ -1221,154 +1415,174 @@ class _MessagesScreenState extends State<MessagesScreen> {
     final catLabel = m['category'] == null
         ? null
         : (cat == null ? context.tr('otherCategory') : context.pick(cat.labelAr, cat.labelEn));
+    final selected = _selectionMode && _selectedIds.contains(d.id);
+    final senderLabel = _senderName(context, d);
     return Card(
       key: ValueKey(d.id),
       margin: const EdgeInsets.only(bottom: 8),
+      clipBehavior: Clip.antiAlias,
       color: open ? context.pal.surface : context.pal.surfaceAlt.withValues(alpha: 0.6),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Icon(
-                anonymous
-                    ? Icons.privacy_tip_outlined
-                    : (open ? Icons.mark_email_unread_outlined : Icons.mark_email_read_outlined),
-                color: open ? context.pal.primary : context.pal.muted),
-            const SizedBox(width: 8),
-            // Name and date wrap onto two lines on phones / large text.
-            Expanded(
-              child: Wrap(
-                spacing: 12,
-                runSpacing: 2,
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  Text(anonymous ? context.tr('anonymousSender') : '${m['name'] ?? ''}',
-                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
-                  if (created is DateTime)
-                    Text(fmtDateTime(created), style: TextStyle(color: context.pal.muted, fontSize: 12)),
-                ],
-              ),
-            ),
-          ]),
-          if (catLabel != null || booking) ...[
-            const SizedBox(height: 6),
-            Wrap(spacing: 6, runSpacing: 4, children: [
-              if (catLabel != null) _InfoChip(catLabel),
-              if (booking && subLabel.isNotEmpty) _InfoChip(subLabel),
-              if (booking && date.isNotEmpty) _InfoChip('📅 $date'),
-            ]),
-          ],
-          const SizedBox(height: 6),
-          SelectableText('${m['message'] ?? ''}', style: const TextStyle(height: 1.6)),
-          const SizedBox(height: 8),
-          Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
-            if (phone.isNotEmpty)
-              ActionChip(
-                key: ValueKey('msgCall-${d.id}'),
-                avatar: const Icon(Icons.call, size: 16),
-                label: Text(phone, textDirection: TextDirection.ltr),
-                onPressed: () => callPhone(phone),
-              ),
-            if (waUrl != null)
-              ActionChip(
-                key: ValueKey('msgWhatsApp-${d.id}'),
-                avatar: const Icon(Icons.chat_rounded, size: 16, color: whatsappGreen),
-                label: Text(context.tr('whatsapp')),
-                onPressed: () => openUrl(waUrl),
-              ),
-            if (email.isNotEmpty)
-              ActionChip(
-                avatar: const Icon(Icons.email_outlined, size: 16),
-                label: Text(email, textDirection: TextDirection.ltr),
-                onPressed: () => openUrl('mailto:$email'),
-              ),
-            if (m['lang'] != null) Text('(${m['lang']})', style: TextStyle(color: context.pal.muted)),
-          ]),
-          if (notes.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: context.pal.surfaceAlt, borderRadius: BorderRadius.circular(8)),
-              child: Text('${context.tr('adminNotes')}: $notes', style: const TextStyle(height: 1.5)),
-            ),
-          ],
-          const Divider(height: 18),
-          Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, children: [
-            if (booking)
-              Row(mainAxisSize: MainAxisSize.min, children: [
-                Text('${context.tr('bookingStatus')}: '),
-                DropdownButton<String>(
-                  key: ValueKey('bookingStatus-${d.id}'),
-                  value: MessageStatus.booking.contains(status) ? status : MessageStatus.newMsg,
-                  items: [
-                    for (final s in MessageStatus.booking)
-                      DropdownMenuItem(value: s, child: Text(context.tr('status_$s'))),
+      child: InkWell(
+        onTap: _selectionMode ? () => _toggleSelected(d.id) : null,
+        onLongPress: _selectionMode ? null : () => _enterSelectionMode(initialId: d.id),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              if (_selectionMode)
+                BulkRowCheckbox(
+                  key: ValueKey('select-msg-${d.id}'),
+                  value: selected,
+                  semanticLabel: context.tr('selectItemLabel', {'n': senderLabel}),
+                  onChanged: _bulkBusy ? null : (_) => _toggleSelected(d.id),
+                )
+              else
+                Icon(
+                    anonymous
+                        ? Icons.privacy_tip_outlined
+                        : (open ? Icons.mark_email_unread_outlined : Icons.mark_email_read_outlined),
+                    color: open ? context.pal.primary : context.pal.muted),
+              const SizedBox(width: 8),
+              // Name and date wrap onto two lines on phones / large text.
+              Expanded(
+                child: Wrap(
+                  spacing: 12,
+                  runSpacing: 2,
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(anonymous ? context.tr('anonymousSender') : '${m['name'] ?? ''}',
+                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                    if (created is DateTime)
+                      Text(fmtDateTime(created), style: TextStyle(color: context.pal.muted, fontSize: 12)),
                   ],
-                  onChanged: (v) => v == null ? null : _update(context, d, {'status': v}),
                 ),
-              ])
-            else if (open)
-              TextButton.icon(
-                key: ValueKey('msgToggleStatus-${d.id}'),
-                onPressed: () => _update(context, d, {'status': MessageStatus.handled}),
-                icon: const Icon(Icons.check_circle_outline),
-                label: Text(context.tr('markHandled')),
-              )
-            else
-              const SizedBox.shrink(),
-            Row(mainAxisSize: MainAxisSize.min, children: [
-              IconButton(
-                key: ValueKey('notes-${d.id}'),
-                tooltip: context.tr('editNotes'),
-                icon: const Icon(Icons.sticky_note_2_outlined),
-                onPressed: () => _editNotes(context, d, notes),
               ),
-              IconButton(
-                tooltip: context.tr('copy'),
-                icon: const Icon(Icons.copy_outlined),
-                onPressed: () => Clipboard.setData(ClipboardData(
-                    text: anonymous ? '${m['message']}' : '${m['name']}\n$phone $email\n${m['message']}')),
-              ),
-              IconButton(
-                tooltip: context.tr('delete'),
-                icon: Icon(Icons.delete_outline, color: context.pal.alert),
-                onPressed: () => _delete(context, d),
-              ),
-              if (!booking && !open)
-                IconButton(
-                  key: ValueKey('msgMore-${d.id}'),
-                  tooltip: context.tr('moreActions'),
-                  icon: const Icon(Icons.more_vert),
-                  onPressed: () async {
-                    final action = await showDialog<String>(
-                      context: context,
-                      builder: (ctx) => SimpleDialog(
-                        title: Text(ctx.tr('moreActions')),
-                        children: [
-                          SimpleDialogOption(
-                            key: ValueKey('msgMarkNew-${d.id}'),
-                            onPressed: () => Navigator.pop(ctx, 'markNew'),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.refresh, size: 18),
-                                const SizedBox(width: 8),
-                                Flexible(child: Text(ctx.tr('markNew'))),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                    if (action == 'markNew' && context.mounted) {
-                      await _update(context, d, {'status': MessageStatus.newMsg});
-                    }
-                  },
-                ),
             ]),
+            if (catLabel != null || booking) ...[
+              const SizedBox(height: 6),
+              Wrap(spacing: 6, runSpacing: 4, children: [
+                if (catLabel != null) _InfoChip(catLabel),
+                if (booking && subLabel.isNotEmpty) _InfoChip(subLabel),
+                if (booking && date.isNotEmpty) _InfoChip('📅 $date'),
+              ]),
+            ],
+            const SizedBox(height: 6),
+            if (_selectionMode)
+              Text('${m['message'] ?? ''}', style: const TextStyle(height: 1.6))
+            else
+              SelectableText('${m['message'] ?? ''}', style: const TextStyle(height: 1.6)),
+            const SizedBox(height: 8),
+            Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
+              if (phone.isNotEmpty)
+                ActionChip(
+                  key: ValueKey('msgCall-${d.id}'),
+                  avatar: const Icon(Icons.call, size: 16),
+                  label: Text(phone, textDirection: TextDirection.ltr),
+                  onPressed: _selectionMode ? null : () => callPhone(phone),
+                ),
+              if (waUrl != null)
+                ActionChip(
+                  key: ValueKey('msgWhatsApp-${d.id}'),
+                  avatar: const Icon(Icons.chat_rounded, size: 16, color: whatsappGreen),
+                  label: Text(context.tr('whatsapp')),
+                  onPressed: _selectionMode ? null : () => openUrl(waUrl),
+                ),
+              if (email.isNotEmpty)
+                ActionChip(
+                  avatar: const Icon(Icons.email_outlined, size: 16),
+                  label: Text(email, textDirection: TextDirection.ltr),
+                  onPressed: _selectionMode ? null : () => openUrl('mailto:$email'),
+                ),
+              if (m['lang'] != null) Text('(${m['lang']})', style: TextStyle(color: context.pal.muted)),
+            ]),
+            if (notes.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: context.pal.surfaceAlt, borderRadius: BorderRadius.circular(8)),
+                child: Text('${context.tr('adminNotes')}: $notes', style: const TextStyle(height: 1.5)),
+              ),
+            ],
+            if (!_selectionMode) ...[
+              const Divider(height: 18),
+              Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                if (booking)
+                  Row(mainAxisSize: MainAxisSize.min, children: [
+                    Text('${context.tr('bookingStatus')}: '),
+                    DropdownButton<String>(
+                      key: ValueKey('bookingStatus-${d.id}'),
+                      value: MessageStatus.booking.contains(status) ? status : MessageStatus.newMsg,
+                      items: [
+                        for (final s in MessageStatus.booking)
+                          DropdownMenuItem(value: s, child: Text(context.tr('status_$s'))),
+                      ],
+                      onChanged: (v) => v == null ? null : _update(context, d, {'status': v}),
+                    ),
+                  ])
+                else if (open)
+                  TextButton.icon(
+                    key: ValueKey('msgToggleStatus-${d.id}'),
+                    onPressed: () => _update(context, d, {'status': MessageStatus.handled}),
+                    icon: const Icon(Icons.check_circle_outline),
+                    label: Text(context.tr('markHandled')),
+                  )
+                else
+                  const SizedBox.shrink(),
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  IconButton(
+                    key: ValueKey('notes-${d.id}'),
+                    tooltip: context.tr('editNotes'),
+                    icon: const Icon(Icons.sticky_note_2_outlined),
+                    onPressed: () => _editNotes(context, d, notes),
+                  ),
+                  IconButton(
+                    tooltip: context.tr('copy'),
+                    icon: const Icon(Icons.copy_outlined),
+                    onPressed: () => Clipboard.setData(ClipboardData(
+                        text: anonymous ? '${m['message']}' : '${m['name']}\n$phone $email\n${m['message']}')),
+                  ),
+                  IconButton(
+                    tooltip: context.tr('delete'),
+                    icon: Icon(Icons.delete_outline, color: context.pal.alert),
+                    onPressed: () => _delete(context, d),
+                  ),
+                  if (!booking && !open)
+                    IconButton(
+                      key: ValueKey('msgMore-${d.id}'),
+                      tooltip: context.tr('moreActions'),
+                      icon: const Icon(Icons.more_vert),
+                      onPressed: () async {
+                        final action = await showDialog<String>(
+                          context: context,
+                          builder: (ctx) => SimpleDialog(
+                            title: Text(ctx.tr('moreActions')),
+                            children: [
+                              SimpleDialogOption(
+                                key: ValueKey('msgMarkNew-${d.id}'),
+                                onPressed: () => Navigator.pop(ctx, 'markNew'),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.refresh, size: 18),
+                                    const SizedBox(width: 8),
+                                    Flexible(child: Text(ctx.tr('markNew'))),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (action == 'markNew' && context.mounted) {
+                          await _update(context, d, {'status': MessageStatus.newMsg});
+                        }
+                      },
+                    ),
+                ]),
+              ]),
+            ],
           ]),
-        ]),
+        ),
       ),
     );
   }

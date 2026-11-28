@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -127,6 +128,10 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   StreamSubscription<AdminDoc?>? _featuresSub;
   bool _englishEnabled = true;
   bool _openingEditor = false;
+  bool _selectionMode = false;
+  final Set<String> _selectedIds = {};
+  bool _bulkBusy = false;
+  final FocusNode _selectAllFocusNode = FocusNode();
   Timer? _fabCooldownTimer;
   final _FabSnackHeightTracker _fabHeightTracker = _FabSnackHeightTracker();
 
@@ -163,6 +168,9 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       _screenEpoch++;
       _lastDocs = const [];
       _lastPages = null;
+      _selectionMode = false;
+      _selectedIds.clear();
+      _bulkBusy = false;
       _undo.clearTransitionState();
       _togglingVisibility.clear();
       _optimisticVisible.clear();
@@ -178,6 +186,9 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     if (old.repo != widget.repo) _bindFeatures();
     if (old.def.id != widget.def.id || old.def.name != widget.def.name) {
       _priestFilter = PriestStatusFilter.all;
+      _selectionMode = false;
+      _selectedIds.clear();
+      _bulkBusy = false;
     }
   }
 
@@ -185,6 +196,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   void dispose() {
     _fabCooldownTimer?.cancel();
     _featuresSub?.cancel();
+    _selectAllFocusNode.dispose();
     _undo.dispose();
     _search.dispose();
     super.dispose();
@@ -254,21 +266,23 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           holdElevated: _isFabHeldElevated,
           tracker: _fabHeightTracker,
         ),
-        floatingActionButton: FloatingActionButton.extended(
-          heroTag: 'add-${def.id}',
-          onPressed: () {
-            if (def.name == 'pages') {
-              _openNewPageChooser(context);
-            } else {
-              final extra = def.name == 'priests' && _priestFilter != PriestStatusFilter.all
-                  ? <String, Object?>{'status': _priestFilter.name}
-                  : const <String, Object?>{};
-              _openEditor(context, null, extraDefaults: extra);
-            }
-          },
-          icon: const Icon(Icons.add),
-          label: Text(context.tr('add')),
-        ),
+        floatingActionButton: _selectionMode
+            ? null
+            : FloatingActionButton.extended(
+                heroTag: 'add-${def.id}',
+                onPressed: () {
+                  if (def.name == 'pages') {
+                    _openNewPageChooser(context);
+                  } else {
+                    final extra = def.name == 'priests' && _priestFilter != PriestStatusFilter.all
+                        ? <String, Object?>{'status': _priestFilter.name}
+                        : const <String, Object?>{};
+                    _openEditor(context, null, extraDefaults: extra);
+                  }
+                },
+                icon: const Icon(Icons.add),
+                label: Text(context.tr('add')),
+              ),
         body: Stack(
           children: [
             StreamBuilder<({int seq, List<AdminDoc> docs})>(
@@ -423,8 +437,84 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                         .length;
                     final hasAnyBuiltInPages = builtInWithPages > 0;
                     final canReorder =
-                        def.orderable && !hasFilter && shownCats.length > 1;
-                    return CustomScrollView(slivers: [
+                        !_selectionMode && def.orderable && !hasFilter && shownCats.length > 1;
+                    return CallbackShortcuts(
+                      bindings: {
+                        if (_selectionMode)
+                          const SingleActivator(LogicalKeyboardKey.escape): _exitSelectionMode,
+                      },
+                      child: Focus(
+                        child: Column(
+                          children: [
+                            if (_selectionMode) _selectionBar(context, shownCats),
+                            Expanded(
+                              child: CustomScrollView(slivers: [
+                                if (widget.showHeader)
+                                  SliverToBoxAdapter(
+                                    child: AdminScreenHeader(
+                                      title: context.pick(def.labelAr, def.labelEn),
+                                      help: context.pick(def.helpAr, def.helpEn),
+                                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                                    ),
+                                  ),
+                                SliverToBoxAdapter(
+                                  child: _toolbar(
+                                    context,
+                                    visible.length + builtInWithPages,
+                                    shownCats.length + shownBuiltIns.length,
+                                    canReorder,
+                                    showUnconfirmed: entriesDef.hasSample,
+                                    hasItems: shownCats.isNotEmpty,
+                                  ),
+                                ),
+                                SliverToBoxAdapter(
+                                  child: _categoriesBody(
+                                    context,
+                                    entriesDef: entriesDef,
+                                    pagesDef: pagesDef,
+                                    allVisibleCats: visible,
+                                    shownCats: shownCats,
+                                    entriesByCat: entriesByCat,
+                                    allEntriesByCat: allEntriesByCat,
+                                    sectionPagesByCat: sectionPagesByCat,
+                                    allSectionPagesByCat: allSectionPagesByCat,
+                                    shownBuiltIns: shownBuiltIns,
+                                    hasAnyBuiltInPages: hasAnyBuiltInPages,
+                                    hasFilter: hasFilter,
+                                    unassigned: unassigned,
+                                    canReorder: canReorder,
+                                    emptyCatIds: emptyCatIds,
+                                  ),
+                                ),
+                              ]),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            );
+          }
+
+          final canReorder = !_selectionMode &&
+              def.orderable &&
+              _search.text.trim().isEmpty &&
+              _filter == ListFilter.all &&
+              docs.length > 1;
+          final bottomPad = _listBottomPadding(context);
+          return CallbackShortcuts(
+            bindings: {
+              if (_selectionMode)
+                const SingleActivator(LogicalKeyboardKey.escape): _exitSelectionMode,
+            },
+            child: Focus(
+              child: Column(
+                children: [
+                  if (_selectionMode) _selectionBar(context, docs),
+                  Expanded(
+                    child: CustomScrollView(slivers: [
                       if (widget.showHeader)
                         SliverToBoxAdapter(
                           child: AdminScreenHeader(
@@ -436,81 +526,48 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                       SliverToBoxAdapter(
                         child: _toolbar(
                           context,
-                          visible.length + builtInWithPages,
-                          shownCats.length + shownBuiltIns.length,
+                          visible.length,
+                          docs.length,
                           canReorder,
-                          showUnconfirmed: entriesDef.hasSample,
+                          hasItems: docs.isNotEmpty,
                         ),
                       ),
-                      SliverToBoxAdapter(
-                        child: _categoriesBody(
-                          context,
-                          entriesDef: entriesDef,
-                          pagesDef: pagesDef,
-                          allVisibleCats: visible,
-                          shownCats: shownCats,
-                          entriesByCat: entriesByCat,
-                          allEntriesByCat: allEntriesByCat,
-                          sectionPagesByCat: sectionPagesByCat,
-                          allSectionPagesByCat: allSectionPagesByCat,
-                          shownBuiltIns: shownBuiltIns,
-                          hasAnyBuiltInPages: hasAnyBuiltInPages,
-                          hasFilter: hasFilter,
-                          unassigned: unassigned,
-                          canReorder: canReorder,
-                          emptyCatIds: emptyCatIds,
+                      if (docs.isEmpty)
+                        SliverFillRemaining(
+                          hasScrollBody: false,
+                          child: Center(
+                            child: Padding(
+                              padding: EdgeInsets.fromLTRB(12, 24, 12, bottomPad),
+                              child: Text(context.tr(visible.isEmpty ? 'noItems' : 'noMatches')),
+                            ),
+                          ),
+                        )
+                      else if (canReorder)
+                        SliverToBoxAdapter(
+                          child: ReorderableListView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            buildDefaultDragHandles: false,
+                            padding: EdgeInsets.fromLTRB(12, 4, 12, bottomPad),
+                            itemCount: docs.length,
+                            onReorderItem: (from, to) => _reorder(context, docs, from, to),
+                            itemBuilder: (context, i) => _tile(context, docs[i], dragIndex: i, docs: docs),
+                          ),
+                        )
+                      else
+                        SliverPadding(
+                          padding: EdgeInsets.fromLTRB(12, 4, 12, bottomPad),
+                          sliver: SliverList.builder(
+                            itemCount: docs.length,
+                            itemBuilder: (context, i) => _tile(context, docs[i]),
+                          ),
                         ),
-                      ),
-                    ]);
-                  },
-                );
-              },
-            );
-          }
-
-          final canReorder = def.orderable && _search.text.trim().isEmpty && _filter == ListFilter.all && docs.length > 1;
-          final bottomPad = _listBottomPadding(context);
-          return CustomScrollView(slivers: [
-            if (widget.showHeader)
-              SliverToBoxAdapter(
-                child: AdminScreenHeader(
-                  title: context.pick(def.labelAr, def.labelEn),
-                  help: context.pick(def.helpAr, def.helpEn),
-                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-                ),
-              ),
-            SliverToBoxAdapter(child: _toolbar(context, visible.length, docs.length, canReorder)),
-            if (docs.isEmpty)
-              SliverFillRemaining(
-                hasScrollBody: false,
-                child: Center(
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(12, 24, 12, bottomPad),
-                    child: Text(context.tr(visible.isEmpty ? 'noItems' : 'noMatches')),
+                    ]),
                   ),
-                ),
-              )
-            else if (canReorder)
-              SliverToBoxAdapter(
-                child: ReorderableListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  buildDefaultDragHandles: false,
-                  padding: EdgeInsets.fromLTRB(12, 4, 12, bottomPad),
-                  itemCount: docs.length,
-                  onReorderItem: (from, to) => _reorder(context, docs, from, to),
-                  itemBuilder: (context, i) => _tile(context, docs[i], dragIndex: i, docs: docs),
-                ),
-              )
-            else
-              SliverPadding(
-                padding: EdgeInsets.fromLTRB(12, 4, 12, bottomPad),
-                sliver: SliverList.builder(
-                  itemCount: docs.length,
-                  itemBuilder: (context, i) => _tile(context, docs[i]),
-                ),
+                ],
               ),
-          ]);
+            ),
+          );
         },
       ),
             if (_fabCooldownTimer != null && !_undo.hasActiveBar)
@@ -532,7 +589,14 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     );
   }
 
-  Widget _toolbar(BuildContext context, int total, int shown, bool canReorder, {bool showUnconfirmed = false}) {
+  Widget _toolbar(
+    BuildContext context,
+    int total,
+    int shown,
+    bool canReorder, {
+    bool showUnconfirmed = false,
+    bool hasItems = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -564,6 +628,11 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
             ),
           ),
           const SizedBox(width: 4),
+          if (!_selectionMode)
+            BulkSelectButton(
+              key: const Key('admin-selectMode'),
+              onPressed: hasItems ? _enterSelectionMode : null,
+            ),
           // The public page that shows this collection (CollectionDef.publicPath).
           IconButton(
             key: const Key('admin-openOnSite'),
@@ -840,6 +909,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     required Widget title,
     Widget? subtitle,
     required VoidCallback onTap,
+    VoidCallback? onLongPress,
     Widget? trailing,
     double trailingEndPadding = 8,
   }) {
@@ -856,6 +926,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       title: title,
       subtitle: subtitle,
       onTap: onTap,
+      onLongPress: onLongPress,
     );
     if (trailing == null) return tile;
     return Row(
@@ -961,15 +1032,23 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       ],
     ];
     final openItem = itemPath == null ? null : _openOnSiteButton(context, d, itemPath);
+    final selected = _selectionMode && _selectedIds.contains(d.id);
     return Card(
       key: ValueKey(d.id),
       margin: const EdgeInsets.only(bottom: 10),
       color: hidden ? context.pal.surfaceAlt.withValues(alpha: 0.7) : context.pal.surface,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         _splitActionRow(
-          leading: dragIndex != null
-              ? ReorderableDragStartListener(index: dragIndex, child: const Icon(Icons.drag_indicator))
-              : null,
+          leading: _selectionMode
+              ? BulkRowCheckbox(
+                  key: ValueKey('select-${d.id}'),
+                  value: selected,
+                  semanticLabel: context.tr('selectItemLabel', {'n': _title(d)}),
+                  onChanged: _bulkBusy ? null : (_) => _toggleSelected(d.id),
+                )
+              : (dragIndex != null
+                  ? ReorderableDragStartListener(index: dragIndex, child: const Icon(Icons.drag_indicator))
+                  : null),
           title: Wrap(
             crossAxisAlignment: WrapCrossAlignment.center,
             spacing: 6,
@@ -990,13 +1069,16 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                 context.tr('updatedBy', {'t': fmtDateTime(updated), 'u': d.updatedBy.isEmpty ? '—' : d.updatedBy}),
                 style: TextStyle(fontSize: 11, color: context.pal.muted),
               ),
-            if (narrow && moves.isNotEmpty) Wrap(children: moves),
+            if (!_selectionMode && narrow && moves.isNotEmpty) Wrap(children: moves),
           ]),
-          onTap: () => _openEditor(context, d),
-          trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-            if (!narrow) ...moves,
-            _visibilityButton(context, d, key: ValueKey('visibility-${d.id}')),
-          ]),
+          onTap: _selectionMode ? () => _toggleSelected(d.id) : () => _openEditor(context, d),
+          onLongPress: _selectionMode ? null : () => _enterSelectionMode(initialId: d.id),
+          trailing: _selectionMode
+              ? null
+              : Row(mainAxisSize: MainAxisSize.min, children: [
+                  if (!narrow) ...moves,
+                  _visibilityButton(context, d, key: ValueKey('visibility-${d.id}')),
+                ]),
         ),
         const Divider(height: 1),
         if (entries.isEmpty && sectionPages.isEmpty)
@@ -1011,36 +1093,37 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           for (final e in entries) _entryRow(context, entriesDef, e),
           for (final p in sectionPages) _sectionPageRow(context, pagesDef, p),
         ],
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
-          child: Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 8,
-            runSpacing: 4,
-            children: [
-              OutlinedButton.icon(
-                key: ValueKey('addEntryIn-${d.id}'),
-                onPressed: () => _openEditor(context, null, targetDef: entriesDef, extraDefaults: {'categoryId': d.id}),
-                icon: const Icon(Icons.add),
-                label: Text(context.tr('addSectionItem')),
-              ),
-              Wrap(
-                spacing: 4,
-                runSpacing: 4,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  ?openItem,
-                  _namedDeleteButton(
-                    context,
-                    key: ValueKey('delete-${d.id}'),
-                    onPressed: () => _deleteCategory(d),
-                  ),
-                ],
-              ),
-            ],
+        if (!_selectionMode)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                OutlinedButton.icon(
+                  key: ValueKey('addEntryIn-${d.id}'),
+                  onPressed: () => _openEditor(context, null, targetDef: entriesDef, extraDefaults: {'categoryId': d.id}),
+                  icon: const Icon(Icons.add),
+                  label: Text(context.tr('addSectionItem')),
+                ),
+                Wrap(
+                  spacing: 4,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    ?openItem,
+                    _namedDeleteButton(
+                      context,
+                      key: ValueKey('delete-${d.id}'),
+                      onPressed: () => _deleteCategory(d),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-        ),
       ]),
     );
   }
@@ -1244,15 +1327,23 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     // The item's own detail page when it has one (else the toolbar's
     // "open on site" shows the collection page).
     final openItem = itemPath == null ? null : _openOnSiteButton(context, d, itemPath);
+    final selected = _selectionMode && _selectedIds.contains(d.id);
     return Card(
       key: ValueKey(d.id),
       margin: const EdgeInsets.only(bottom: 8),
       color: hidden ? context.pal.surfaceAlt.withValues(alpha: 0.7) : context.pal.surface,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         _splitActionRow(
-          leading: dragIndex != null
-              ? ReorderableDragStartListener(index: dragIndex, child: const Icon(Icons.drag_indicator))
-              : null,
+          leading: _selectionMode
+              ? BulkRowCheckbox(
+                  key: ValueKey('select-${d.id}'),
+                  value: selected,
+                  semanticLabel: context.tr('selectItemLabel', {'n': _title(d)}),
+                  onChanged: _bulkBusy ? null : (_) => _toggleSelected(d.id),
+                )
+              : (dragIndex != null
+                  ? ReorderableDragStartListener(index: dragIndex, child: const Icon(Icons.drag_indicator))
+                  : null),
           title: Wrap(
             crossAxisAlignment: WrapCrossAlignment.center,
             spacing: 6,
@@ -1288,46 +1379,364 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                 style: TextStyle(fontSize: 11, color: context.pal.muted),
               ),
             // Phones: the move buttons get their own row so the title keeps its width.
-            if (narrow && moves.isNotEmpty) Wrap(children: moves),
+            if (!_selectionMode && narrow && moves.isNotEmpty) Wrap(children: moves),
           ]),
-          onTap: () => _openEditor(context, d),
-          trailing: (!narrow && moves.isNotEmpty) || def.hasVisible
-              ? Row(mainAxisSize: MainAxisSize.min, children: [
-                  if (!narrow) ...moves,
-                  if (def.hasVisible) _visibilityButton(context, d, key: ValueKey('visibility-${d.id}')),
-                ])
-              : null,
+          onTap: _selectionMode ? () => _toggleSelected(d.id) : () => _openEditor(context, d),
+          onLongPress: _selectionMode ? null : () => _enterSelectionMode(initialId: d.id),
+          trailing: _selectionMode
+              ? null
+              : ((!narrow && moves.isNotEmpty) || def.hasVisible
+                  ? Row(mainAxisSize: MainAxisSize.min, children: [
+                      if (!narrow) ...moves,
+                      if (def.hasVisible) _visibilityButton(context, d, key: ValueKey('visibility-${d.id}')),
+                    ])
+                  : null),
         ),
-        const Divider(height: 1),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(8, 2, 8, 4),
-          child: SizedBox(
-            width: double.infinity,
-            child: Wrap(
-              alignment: openItem != null ? WrapAlignment.spaceBetween : WrapAlignment.end,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 8,
-              runSpacing: 4,
-              children: [
-                ?openItem,
-                if (duplicatableCollections.contains(def.name))
-                  TextButton.icon(
-                    key: ValueKey('duplicate-${d.id}'),
-                    onPressed: () => _duplicateDoc(context, d, targetDef: def),
-                    icon: const Icon(Icons.copy_outlined, size: 18),
-                    label: Text(context.tr('duplicate')),
+        if (!_selectionMode) ...[
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 2, 8, 4),
+            child: SizedBox(
+              width: double.infinity,
+              child: Wrap(
+                alignment: openItem != null ? WrapAlignment.spaceBetween : WrapAlignment.end,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  ?openItem,
+                  if (duplicatableCollections.contains(def.name))
+                    TextButton.icon(
+                      key: ValueKey('duplicate-${d.id}'),
+                      onPressed: () => _duplicateDoc(context, d, targetDef: def),
+                      icon: const Icon(Icons.copy_outlined, size: 18),
+                      label: Text(context.tr('duplicate')),
+                    ),
+                  _namedDeleteButton(
+                    context,
+                    key: ValueKey('delete-${d.id}'),
+                    onPressed: () => _confirmDelete(d),
                   ),
-                _namedDeleteButton(
-                  context,
-                  key: ValueKey('delete-${d.id}'),
-                  onPressed: () => _confirmDelete(d),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
+        ],
       ]),
     );
+  }
+
+  void _enterSelectionMode({String? initialId}) {
+    setState(() {
+      _selectionMode = true;
+      _selectedIds.clear();
+      if (initialId != null) _selectedIds.add(initialId);
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _selectionMode) _selectAllFocusNode.requestFocus();
+    });
+  }
+
+  void _exitSelectionMode() {
+    if (!_selectionMode) return;
+    setState(() {
+      _selectionMode = false;
+      _selectedIds.clear();
+      _bulkBusy = false;
+    });
+  }
+
+  void _toggleSelected(String id) {
+    if (_bulkBusy) return;
+    setState(() {
+      if (!_selectedIds.add(id)) {
+        _selectedIds.remove(id);
+      }
+    });
+  }
+
+  void _toggleSelectAll(List<AdminDoc> visibleList) {
+    final visibleIds = {for (final d in visibleList) d.id};
+    final allSelected = visibleIds.isNotEmpty && visibleIds.every(_selectedIds.contains);
+    setState(() {
+      if (allSelected) {
+        _selectedIds.removeAll(visibleIds);
+      } else {
+        _selectedIds
+          ..clear()
+          ..addAll(visibleIds);
+      }
+    });
+  }
+
+  Widget _selectionBar(BuildContext context, List<AdminDoc> selectableDocs) {
+    final activeIds = _selectedIds.intersection({for (final d in selectableDocs) d.id});
+    final selectedDocs = [
+      for (final d in selectableDocs)
+        if (activeIds.contains(d.id)) d,
+    ];
+    final disabled = selectedDocs.isEmpty || _bulkBusy;
+    final btnStyle = OutlinedButton.styleFrom(
+      minimumSize: const Size(48, 48),
+      tapTargetSize: MaterialTapTargetSize.padded,
+    );
+    return BulkSelectionBar(
+      selectedCount: selectedDocs.length,
+      totalCount: selectableDocs.length,
+      busy: _bulkBusy,
+      selectAllFocusNode: _selectAllFocusNode,
+      onToggleSelectAll: () => _toggleSelectAll(selectableDocs),
+      onCancel: _exitSelectionMode,
+      actions: [
+        if (def.hasVisible) ...[
+          OutlinedButton.icon(
+            key: const Key('bulk-show'),
+            style: btnStyle,
+            onPressed: disabled ? null : () => _bulkSetVisible(context, selectedDocs, true),
+            icon: const Icon(Icons.visibility_outlined, size: 18),
+            label: Text(context.tr('bulkShow')),
+          ),
+          OutlinedButton.icon(
+            key: const Key('bulk-hide'),
+            style: btnStyle,
+            onPressed: disabled ? null : () => _bulkSetVisible(context, selectedDocs, false),
+            icon: const Icon(Icons.visibility_off_outlined, size: 18),
+            label: Text(context.tr('bulkHide')),
+          ),
+        ],
+        if (def.hasSample)
+          OutlinedButton.icon(
+            key: const Key('bulk-confirm'),
+            style: btnStyle,
+            onPressed: disabled ? null : () => _bulkConfirmSample(context, selectedDocs),
+            icon: const Icon(Icons.verified_outlined, size: 18),
+            label: Text(context.tr('bulkConfirm')),
+          ),
+        OutlinedButton.icon(
+          key: const Key('bulk-delete'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: context.pal.alert,
+            minimumSize: const Size(48, 48),
+            tapTargetSize: MaterialTapTargetSize.padded,
+          ),
+          onPressed: disabled ? null : () => _bulkDelete(selectedDocs),
+          icon: const Icon(Icons.delete_outline, size: 18),
+          label: Text(context.tr('delete')),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _bulkSetVisible(BuildContext context, List<AdminDoc> targets, bool visible) async {
+    if (targets.isEmpty || _bulkBusy) return;
+    final repo = widget.repo;
+    final epoch = _screenEpoch;
+    final messenger = _messenger;
+    final msg = context.tr(visible ? 'bulkShown' : 'bulkHidden', {'n': '${targets.length}'});
+    final failed = context.tr('saveFailed', {'e': '{e}'});
+    final isAr = context.isAr;
+    final keys = [for (final d in targets) _visKey(def.name, d.id)];
+    setState(() {
+      _bulkBusy = true;
+      for (final k in keys) {
+        _optimisticVisible[k] = visible;
+        _settledAtStreamSeq.remove(k);
+      }
+    });
+    try {
+      await batchWriteChunked(
+        repo,
+        updates: {
+          for (final d in targets) (def.name, d.id): {'visible': visible},
+        },
+      );
+      if (!mounted || epoch != _screenEpoch || !identical(widget.repo, repo)) return;
+      setState(() {
+        final curSeq = _streamSeqByCollection[def.name] ?? 0;
+        for (final k in keys) {
+          if (_latestStreamVisible[k] == visible) {
+            _optimisticVisible.remove(k);
+            _settledAtStreamSeq.remove(k);
+          } else {
+            _settledAtStreamSeq[k] = curSeq;
+          }
+        }
+        _bulkBusy = false;
+        _selectionMode = false;
+        _selectedIds.clear();
+      });
+      _undo.showSnack(
+        messenger,
+        SnackBar(content: Text(msg), duration: const Duration(seconds: 2)),
+        deferWhileUndo: true,
+      );
+    } catch (e) {
+      if (!mounted || epoch != _screenEpoch || !identical(widget.repo, repo)) return;
+      setState(() {
+        for (final k in keys) {
+          _optimisticVisible.remove(k);
+          _settledAtStreamSeq.remove(k);
+        }
+        _bulkBusy = false;
+      });
+      _undo.showSnack(
+        messenger,
+        SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e, isAr: isAr)))),
+        deferWhileUndo: true,
+      );
+    }
+  }
+
+  Future<void> _bulkConfirmSample(BuildContext context, List<AdminDoc> targets) async {
+    if (targets.isEmpty || _bulkBusy) return;
+    final repo = widget.repo;
+    final epoch = _screenEpoch;
+    final messenger = _messenger;
+    final msg = context.tr('bulkConfirmed', {'n': '${targets.length}'});
+    final failed = context.tr('saveFailed', {'e': '{e}'});
+    final isAr = context.isAr;
+    setState(() => _bulkBusy = true);
+    try {
+      await batchWriteChunked(
+        repo,
+        updates: {
+          for (final d in targets) (def.name, d.id): {'sample': false},
+        },
+      );
+      if (!mounted || epoch != _screenEpoch || !identical(widget.repo, repo)) return;
+      setState(() {
+        _bulkBusy = false;
+        _selectionMode = false;
+        _selectedIds.clear();
+      });
+      _undo.showSnack(
+        messenger,
+        SnackBar(content: Text(msg), duration: const Duration(seconds: 2)),
+        deferWhileUndo: true,
+      );
+    } catch (e) {
+      if (!mounted || epoch != _screenEpoch || !identical(widget.repo, repo)) return;
+      setState(() => _bulkBusy = false);
+      _undo.showSnack(
+        messenger,
+        SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e, isAr: isAr)))),
+        deferWhileUndo: true,
+      );
+    }
+  }
+
+  Future<void> _bulkDelete(List<AdminDoc> targets) async {
+    if (targets.isEmpty || _bulkBusy) return;
+    if (def.name == 'categories') {
+      await _bulkDeleteCategories(targets);
+      return;
+    }
+    final repo = widget.repo;
+    final epoch = _screenEpoch;
+    final ok = await confirmNamedAction(
+      context,
+      summary: context.tr('deleteSelectedConfirm', {'n': '${targets.length}'}),
+      actionLabel: context.tr('delete'),
+      destructive: true,
+    );
+    if (!ok || !mounted || epoch != _screenEpoch || !identical(widget.repo, repo)) return;
+    final items = [for (final d in targets) (doc: d, title: _title(d))];
+    final messenger = _messenger;
+    final failedMsg = context.tr('deleteFailed', {'e': '{e}'});
+    final undoLabel = context.tr('undo');
+    final undoAllLabel = context.tr('undoAll');
+    setState(() {
+      _selectionMode = false;
+      _selectedIds.clear();
+      _bulkBusy = false;
+    });
+    await _undo.deleteBatch(
+      repo: repo,
+      collection: def.name,
+      items: items,
+      messenger: messenger,
+      failedMsg: failedMsg,
+      undoLabel: undoLabel,
+      undoAllLabel: undoAllLabel,
+    );
+  }
+
+  Future<void> _bulkDeleteCategories(List<AdminDoc> targets) async {
+    final repo = widget.repo;
+    final epoch = _screenEpoch;
+    final messenger = _messenger;
+    final failedMsg = context.tr('deleteFailed', {'e': '{e}'});
+    final deletedMsg = context.tr('catDeleted');
+    final deletedWithPagesMsg = context.tr('catDeletedWithPages');
+    final actionLabel = context.tr('delete');
+    final isAr = context.isAr;
+    setState(() => _bulkBusy = true);
+    late final List<AdminDoc> entries;
+    late final List<AdminDoc> pages;
+    try {
+      final results = await Future.wait([
+        repo.watch('entries').first.timeout(const Duration(seconds: 15)),
+        repo.watch('pages').first.timeout(const Duration(seconds: 15)),
+      ]);
+      entries = results[0];
+      pages = results[1];
+    } catch (e) {
+      if (!mounted || epoch != _screenEpoch || !identical(widget.repo, repo)) return;
+      setState(() => _bulkBusy = false);
+      _undo.showSnack(messenger, SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e, isAr: isAr)))));
+      return;
+    }
+    if (!mounted || epoch != _screenEpoch || !identical(widget.repo, repo)) return;
+    final catIds = {for (final c in targets) c.id};
+    final inCats = entries.where((e) => !isSoftDeleted(e.data) && catIds.contains(e.data['categoryId'])).length;
+    final linkedPages = [
+      for (final p in pages)
+        if (!isSoftDeleted(p.data) &&
+            p.data['placement'] == PagePlacements.section &&
+            catIds.contains(p.data['categoryId']))
+          p,
+    ];
+    final summary = [
+      context.tr('deleteSelectedCatsConfirm', {'n': '${targets.length}', 'c': '$inCats'}),
+      if (linkedPages.isNotEmpty) context.tr('catDeletePagesWarn', {'p': '${linkedPages.length}'}),
+    ].join('\n\n');
+    final ok = await confirmNamedAction(
+      context,
+      summary: summary,
+      actionLabel: actionLabel,
+      destructive: true,
+    );
+    if (!ok || !mounted || epoch != _screenEpoch || !identical(widget.repo, repo)) {
+      if (mounted) setState(() => _bulkBusy = false);
+      return;
+    }
+    try {
+      final entryData = [for (final e in entries) (id: e.id, data: e.data)];
+      final pageData = [for (final p in pages) (id: p.id, data: p.data)];
+      final updates = <(String, String), Map<String, dynamic>>{
+        for (final c in targets) ...{
+          for (final id in entryIdsToHide(c.id, entryData)) ('entries', id): {'visible': false},
+          for (final id in pageIdsToUnlink(c.id, pageData))
+            ('pages', id): {'placement': PagePlacements.link, 'categoryId': ''},
+        },
+      };
+      await batchWriteChunked(
+        repo,
+        updates: updates,
+        deletes: [for (final c in targets) (def.name, c.id)],
+      );
+      if (!mounted || epoch != _screenEpoch || !identical(widget.repo, repo)) return;
+      setState(() {
+        _bulkBusy = false;
+        _selectionMode = false;
+        _selectedIds.clear();
+      });
+      _undo.showSnack(messenger, SnackBar(content: Text(linkedPages.isEmpty ? deletedMsg : deletedWithPagesMsg)));
+    } catch (e) {
+      if (!mounted || epoch != _screenEpoch || !identical(widget.repo, repo)) return;
+      setState(() => _bulkBusy = false);
+      _undo.showSnack(messenger, SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e, isAr: isAr)))));
+    }
   }
 
   Future<void> _setVisible(BuildContext context, AdminDoc d, bool visible, {CollectionDef? targetDef}) async {

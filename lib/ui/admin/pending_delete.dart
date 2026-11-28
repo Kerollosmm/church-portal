@@ -356,37 +356,16 @@ class SoftDeleteUndo {
     return next;
   }
 
-  Future<void> delete({
+  void _scheduleSoftDelete({
     required AdminBackend repo,
     required String collection,
-    required AdminDoc doc,
-    required String title,
+    required String id,
+    required Map<String, dynamic> docData,
     required ScaffoldMessengerState? messenger,
     required String failedMsg,
     required String undoLabel,
     required String undoAllLabel,
-  }) async {
-    final id = doc.id;
-    if (_pending.isPending(id)) return;
-    final docData = doc.data;
-    final prevCutoff = _undoneCutoffs[id];
-    var deleteNow = DateTime.now().toUtc();
-    if (prevCutoff != null && !deleteNow.isAfter(prevCutoff)) {
-      deleteNow = prevCutoff.add(const Duration(milliseconds: 1));
-    }
-    final gen = (_gen[id] ?? 0) + 1;
-    _gen[id] = gen;
-    _restoringIds.remove(id);
-    _pendingDeletedAt[id] = deleteNow;
-
-    final priorPending = [
-      for (final entry in _entries.entries.toList())
-        if (entry.key != id && _pending.isPending(entry.key)) (id: entry.key, info: entry.value),
-    ];
-
-    // Register before awaiting Firestore so rapid consecutive deletes and immediate
-    // "Undo all" taps always operate on the full batch atomically.
-    _entries[id] = (repo: repo, collection: collection, title: title);
+  }) {
     _pending.schedule(id, () async {
       _entries.remove(id);
       _pendingDeletedAt.remove(id);
@@ -422,6 +401,49 @@ class SoftDeleteUndo {
         undoAllLabel: undoAllLabel,
       );
     });
+  }
+
+  Future<void> delete({
+    required AdminBackend repo,
+    required String collection,
+    required AdminDoc doc,
+    required String title,
+    required ScaffoldMessengerState? messenger,
+    required String failedMsg,
+    required String undoLabel,
+    required String undoAllLabel,
+  }) async {
+    final id = doc.id;
+    if (_pending.isPending(id)) return;
+    final docData = doc.data;
+    final prevCutoff = _undoneCutoffs[id];
+    var deleteNow = DateTime.now().toUtc();
+    if (prevCutoff != null && !deleteNow.isAfter(prevCutoff)) {
+      deleteNow = prevCutoff.add(const Duration(milliseconds: 1));
+    }
+    final gen = (_gen[id] ?? 0) + 1;
+    _gen[id] = gen;
+    _restoringIds.remove(id);
+    _pendingDeletedAt[id] = deleteNow;
+
+    final priorPending = [
+      for (final entry in _entries.entries.toList())
+        if (entry.key != id && _pending.isPending(entry.key)) (id: entry.key, info: entry.value),
+    ];
+
+    // Register before awaiting Firestore so rapid consecutive deletes and immediate
+    // "Undo all" taps always operate on the full batch atomically.
+    _entries[id] = (repo: repo, collection: collection, title: title);
+    _scheduleSoftDelete(
+      repo: repo,
+      collection: collection,
+      id: id,
+      docData: docData,
+      messenger: messenger,
+      failedMsg: failedMsg,
+      undoLabel: undoLabel,
+      undoAllLabel: undoAllLabel,
+    );
     onChanged();
 
     // Acquire holds BEFORE scheduling _barTimer so renewal anchors stay aligned at t = 10s.
@@ -488,6 +510,181 @@ class SoftDeleteUndo {
 
     // Renew deletedAt for prior pending items, serialized per item so slower earlier
     // renewals never overwrite newer deletedAt timestamps.
+    _renewPriorPending(
+      priorPending,
+      priorTokens,
+      deleteNow,
+      messenger,
+      failedMsg: failedMsg,
+      undoLabel: undoLabel,
+      undoAllLabel: undoAllLabel,
+    );
+  }
+
+  /// Soft-deletes [items] in one chunked WriteBatch (up to 400 ops/batch),
+  /// registers them in the shared 10-second Undo window, and commits hard
+  /// deletes on expiry unless undone.
+  Future<void> deleteBatch({
+    required AdminBackend repo,
+    required String collection,
+    required List<({AdminDoc doc, String title})> items,
+    required ScaffoldMessengerState? messenger,
+    required String failedMsg,
+    required String undoLabel,
+    required String undoAllLabel,
+  }) async {
+    final batchItems = [
+      for (final item in items)
+        if (!_pending.isPending(item.doc.id)) item,
+    ];
+    if (batchItems.isEmpty) return;
+
+    var deleteNow = DateTime.now().toUtc();
+    for (final item in batchItems) {
+      final prevCutoff = _undoneCutoffs[item.doc.id];
+      if (prevCutoff != null && !deleteNow.isAfter(prevCutoff)) {
+        deleteNow = prevCutoff.add(const Duration(milliseconds: 1));
+      }
+    }
+
+    final batchIds = [for (final item in batchItems) item.doc.id];
+    final batchIdSet = batchIds.toSet();
+    final priorPending = [
+      for (final entry in _entries.entries.toList())
+        if (!batchIdSet.contains(entry.key) && _pending.isPending(entry.key))
+          (id: entry.key, info: entry.value),
+    ];
+
+    final gens = <String, int>{};
+    for (final item in batchItems) {
+      final id = item.doc.id;
+      final docData = item.doc.data;
+      final gen = (_gen[id] ?? 0) + 1;
+      _gen[id] = gen;
+      gens[id] = gen;
+      _restoringIds.remove(id);
+      _pendingDeletedAt[id] = deleteNow;
+      _entries[id] = (repo: repo, collection: collection, title: item.title);
+      _scheduleSoftDelete(
+        repo: repo,
+        collection: collection,
+        id: id,
+        docData: docData,
+        messenger: messenger,
+        failedMsg: failedMsg,
+        undoLabel: undoLabel,
+        undoAllLabel: undoAllLabel,
+      );
+    }
+    onChanged();
+
+    final batchTokens = _pending.holdAll(batchIds);
+    final priorTokens = priorPending.isEmpty
+        ? const <String, Object>{}
+        : _pending.holdAll([for (final p in priorPending) p.id]);
+
+    _presentBar(
+      messenger,
+      title: batchItems.last.title,
+      fallbackRepo: repo,
+      fallbackCollection: collection,
+      failedMsg: failedMsg,
+      undoLabel: undoLabel,
+      undoAllLabel: undoAllLabel,
+      resetTimer: true,
+    );
+
+    final priorSelfWrites = <Future<bool>>[
+      for (final id in batchIds) ?_inFlightWrites[id],
+    ];
+    final batchFuture = () async {
+      for (final prev in priorSelfWrites) {
+        try {
+          await prev;
+        } catch (_) {}
+      }
+      var written = false;
+      try {
+        await batchWriteChunked(
+          repo,
+          updates: {
+            for (final id in batchIds) (collection, id): {'deletedAt': deleteNow},
+          },
+        );
+        written = true;
+      } catch (e) {
+        if (isMounted()) {
+          var anyRolledBack = false;
+          for (final id in batchIds) {
+            if (_gen[id] == gens[id]) {
+              _pending.undo(id);
+              _entries.remove(id);
+              _pendingDeletedAt.remove(id);
+              anyRolledBack = true;
+            }
+          }
+          if (anyRolledBack) {
+            onChanged();
+            _syncAfterExpiry(
+              messenger,
+              failedMsg: failedMsg,
+              undoLabel: undoLabel,
+              undoAllLabel: undoAllLabel,
+            );
+            showSnack(
+              messenger,
+              SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))),
+              deferWhileUndo: true,
+            );
+          }
+        }
+        return false;
+      }
+      if (!isMounted()) return written;
+      for (final id in batchIds) {
+        if (_gen[id] == gens[id]) {
+          await _pending.releaseHold(id, extend: true, token: batchTokens[id]);
+        }
+      }
+      if (isMounted()) {
+        _syncAfterExpiry(
+          messenger,
+          failedMsg: failedMsg,
+          undoLabel: undoLabel,
+          undoAllLabel: undoAllLabel,
+        );
+      }
+      return written;
+    }();
+    for (final id in batchIds) {
+      _inFlightWrites[id] = batchFuture;
+      unawaited(batchFuture.whenComplete(() {
+        if (identical(_inFlightWrites[id], batchFuture)) {
+          _inFlightWrites.remove(id);
+        }
+      }));
+    }
+
+    _renewPriorPending(
+      priorPending,
+      priorTokens,
+      deleteNow,
+      messenger,
+      failedMsg: failedMsg,
+      undoLabel: undoLabel,
+      undoAllLabel: undoAllLabel,
+    );
+  }
+
+  void _renewPriorPending(
+    List<({String id, ({AdminBackend repo, String collection, String title}) info})> priorPending,
+    Map<String, Object> priorTokens,
+    DateTime deleteNow,
+    ScaffoldMessengerState? messenger, {
+    required String failedMsg,
+    required String undoLabel,
+    required String undoAllLabel,
+  }) {
     for (final p in priorPending) {
       final token = priorTokens[p.id];
       final priorGen = _gen[p.id];
@@ -762,9 +959,9 @@ class SoftDeleteUndo {
     flushDeferredSnacks(messenger);
     if (undone.isEmpty) return;
 
-    final restoreTasks = <Future<bool>>[];
-    for (final item in undone) {
-      restoreTasks.add(_enqueueWrite(item.id, (_) async {
+    if (undone.length == 1) {
+      final item = undone.single;
+      await _enqueueWrite(item.id, (_) async {
         var hadSoftDeleteWrite = true;
         if (item.inFlight != null) {
           try {
@@ -794,9 +991,80 @@ class SoftDeleteUndo {
           if (_gen[item.id] == item.undoGen) _restoringIds.remove(item.id);
           if (isMounted()) onChanged();
         }
-      }));
+      });
+      return;
     }
-    await Future.wait(restoreTasks);
+
+    // Batch-restore multiple undone items per repo using chunked WriteBatch.
+    final toRestore = <({String id, AdminBackend repo, String collection, int undoGen})>[];
+    final readyChecks = <Future<void>>[];
+    for (final item in undone) {
+      readyChecks.add(() async {
+        var hadSoftDeleteWrite = true;
+        if (item.inFlight != null) {
+          try {
+            hadSoftDeleteWrite = await item.inFlight!;
+          } catch (_) {
+            hadSoftDeleteWrite = false;
+          }
+        }
+        if (!hadSoftDeleteWrite) {
+          if (_gen[item.id] == item.undoGen) _restoringIds.remove(item.id);
+          return;
+        }
+        toRestore.add((id: item.id, repo: item.repo, collection: item.collection, undoGen: item.undoGen));
+      }());
+    }
+    await Future.wait(readyChecks);
+    if (toRestore.isEmpty) {
+      if (isMounted()) onChanged();
+      return;
+    }
+
+    final byRepo = <AdminBackend, List<({String id, AdminBackend repo, String collection, int undoGen})>>{};
+    for (final item in toRestore) {
+      (byRepo[item.repo] ??= []).add(item);
+    }
+    final restoreFutures = <Future<void>>[];
+    for (final entry in byRepo.entries) {
+      final repo = entry.key;
+      final group = entry.value;
+      final future = () async {
+        try {
+          await batchWriteChunked(
+            repo,
+            updates: {
+              for (final item in group) (item.collection, item.id): {'deletedAt': null},
+            },
+          );
+          return false;
+        } catch (e) {
+          if (isMounted()) {
+            showSnack(
+              messenger,
+              SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))),
+              deferWhileUndo: true,
+            );
+          }
+          return true;
+        } finally {
+          for (final item in group) {
+            if (_gen[item.id] == item.undoGen) _restoringIds.remove(item.id);
+          }
+          if (isMounted()) onChanged();
+        }
+      }();
+      for (final item in group) {
+        _inFlightWrites[item.id] = future;
+        unawaited(future.whenComplete(() {
+          if (identical(_inFlightWrites[item.id], future)) {
+            _inFlightWrites.remove(item.id);
+          }
+        }));
+      }
+      restoreFutures.add(future);
+    }
+    await Future.wait(restoreFutures);
   }
 
   void _presentBar(
