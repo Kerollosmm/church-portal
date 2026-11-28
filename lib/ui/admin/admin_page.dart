@@ -11,8 +11,6 @@ import '../../core/l10n.dart';
 import '../../core/theme.dart';
 import '../../data/admin_repository.dart';
 import '../../domain/cairo_time.dart';
-import '../../domain/contact_categories.dart';
-import '../../domain/models.dart';
 import '../../state/providers.dart';
 import '../widgets/coptic_cross.dart';
 import '../widgets/offline_banner.dart';
@@ -651,7 +649,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   final UnsavedGuardRegistry _unsaved = UnsavedGuardRegistry();
   final List<StreamSubscription> _purgeSubs = [];
   late String _current = _normalizeAdminDest(widget.initial);
-  late Stream<List<AdminDoc>> _messagesStream = widget.repo.watch('contact_messages');
+  late MessagesFeed _messagesFeed = MessagesFeed(widget.repo);
 
   @override
   void initState() {
@@ -663,7 +661,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
   void didUpdateWidget(covariant AdminDashboard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.repo != oldWidget.repo) {
-      _messagesStream = widget.repo.watch('contact_messages');
+      _messagesFeed.dispose();
+      _messagesFeed = MessagesFeed(widget.repo);
     }
   }
 
@@ -687,6 +686,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       sub.cancel();
     }
     _purgeSubs.clear();
+    _messagesFeed.dispose();
     _unsaved.dispose();
     super.dispose();
   }
@@ -867,13 +867,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  Widget _messagesBadge(BuildContext context) => StreamBuilder<List<AdminDoc>>(
-        key: ObjectKey(_messagesStream),
-        stream: _messagesStream,
-        builder: (context, snap) {
-          final unread = (snap.data ?? const <AdminDoc>[])
-              .where((d) => !isSoftDeleted(d.data) && messageIsOpen(d.data))
-              .length;
+  Widget _messagesBadge(BuildContext context) => ListenableBuilder(
+        key: ObjectKey(_messagesFeed),
+        listenable: _messagesFeed,
+        builder: (context, _) {
+          final unread = _messagesFeed.unreadCount;
           if (unread <= 0) return const SizedBox.shrink();
           return Container(
             key: const ValueKey('nav-messages-badge'),
@@ -909,66 +907,69 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final resolvedId = _current == 'seasonPreset' ? 'seasons' : _current;
     final dest = adminDestinations(widget.role)
         .firstWhere((d) => d.id == resolvedId, orElse: () => adminDestinations(widget.role).first);
-    return UnsavedGuardScope(
-      registry: _unsaved,
-      child: AdminSessionGuard(
-        enabled: !widget.rememberMe,
-        policy: widget.sessionPolicy,
-        unsaved: _unsaved,
-        onSignOut: widget.onSignOut,
-        child: ListenableBuilder(
-          listenable: _unsaved,
-          builder: (context, child) => PopScope(
-            canPop: !_unsaved.isDirty,
-            onPopInvokedWithResult: (didPop, result) async {
-              if (didPop) return;
-              final discard = await confirmDiscardChanges(context);
-              if (discard && context.mounted) {
-                final nav = Navigator.of(context);
-                if (nav.canPop()) nav.pop(result);
-              }
-            },
-            child: child!,
-          ),
-          child: Scaffold(
-            appBar: AppBar(
-              title: Row(
-                children: [
-                  const ChurchSeal(size: 28),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      '${context.tr('admin')} — ${context.pick(dest.labelAr, dest.labelEn)}',
-                      overflow: TextOverflow.ellipsis,
+    return MessagesFeedScope(
+      feed: _messagesFeed,
+      child: UnsavedGuardScope(
+        registry: _unsaved,
+        child: AdminSessionGuard(
+          enabled: !widget.rememberMe,
+          policy: widget.sessionPolicy,
+          unsaved: _unsaved,
+          onSignOut: widget.onSignOut,
+          child: ListenableBuilder(
+            listenable: _unsaved,
+            builder: (context, child) => PopScope(
+              canPop: !_unsaved.isDirty,
+              onPopInvokedWithResult: (didPop, result) async {
+                if (didPop) return;
+                final discard = await confirmDiscardChanges(context);
+                if (discard && context.mounted) {
+                  final nav = Navigator.of(context);
+                  if (nav.canPop()) nav.pop(result);
+                }
+              },
+              child: child!,
+            ),
+            child: Scaffold(
+              appBar: AppBar(
+                title: Row(
+                  children: [
+                    const ChurchSeal(size: 28),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        '${context.tr('admin')} — ${context.pick(dest.labelAr, dest.labelEn)}',
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
+                  ],
+                ),
+                actions: [
+                  IconButton(
+                    tooltip: context.tr('openSite'),
+                    icon: const Icon(Icons.public),
+                    onPressed: _handleOpenSite,
+                  ),
+                  const LanguageToggle(),
+                ],
+              ),
+              drawer: wide ? null : Drawer(child: _nav(context, inDrawer: true)),
+              body: Column(
+                children: [
+                  OfflineBanner(message: context.tr('adminOfflineBanner')),
+                  Expanded(
+                    child: wide
+                        ? Row(
+                            children: [
+                              SizedBox(width: 270, child: _nav(context, inDrawer: false)),
+                              const VerticalDivider(width: 1),
+                              Expanded(child: _screen()),
+                            ],
+                          )
+                        : _screen(),
                   ),
                 ],
               ),
-              actions: [
-                IconButton(
-                  tooltip: context.tr('openSite'),
-                  icon: const Icon(Icons.public),
-                  onPressed: _handleOpenSite,
-                ),
-                const LanguageToggle(),
-              ],
-            ),
-            drawer: wide ? null : Drawer(child: _nav(context, inDrawer: true)),
-            body: Column(
-              children: [
-                OfflineBanner(message: context.tr('adminOfflineBanner')),
-                Expanded(
-                  child: wide
-                      ? Row(
-                          children: [
-                            SizedBox(width: 270, child: _nav(context, inDrawer: false)),
-                            const VerticalDivider(width: 1),
-                            Expanded(child: _screen()),
-                          ],
-                        )
-                      : _screen(),
-                ),
-              ],
             ),
           ),
         ),

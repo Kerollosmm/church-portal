@@ -506,6 +506,7 @@ const Map<String, List<String>> adminStrings = {
   'msg_handled': ['تمت متابعتها', 'Handled'],
   'msg_all': ['الكل', 'All'],
   'noMessages': ['لا توجد رسائل', 'No messages'],
+  'loadMore': ['تحميل المزيد', 'Load more'],
   'markHandled': ['تمّت', 'Done'],
   'markNew': ['إعادة كجديدة', 'Mark as new'],
   'confirmDeleteMessage': ['حذف هذه الرسالة نهائيًا؟', 'Delete this message permanently?'],

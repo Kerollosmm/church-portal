@@ -60,6 +60,20 @@ abstract class AdminBackend {
   MediaRepository? get media => null;
 
   Stream<List<AdminDoc>> watch(String collection);
+
+  /// Watches up to [limit] documents of [collection] ordered newest-first by
+  /// `createdAt`. Defaults to a client-side slice of [watch] so test fakes
+  /// only need to implement [watch].
+  Stream<List<AdminDoc>> watchLatest(String collection, {int limit = 50}) =>
+      watch(collection).map((docs) {
+        final sorted = [...docs]..sort((a, b) {
+            final ta = a.data['createdAt'], tb = b.data['createdAt'];
+            if (ta is DateTime && tb is DateTime) return tb.compareTo(ta);
+            return ta is DateTime ? -1 : (tb is DateTime ? 1 : 0);
+          });
+        return sorted.length <= limit ? sorted : sorted.sublist(0, limit);
+      });
+
   Stream<AdminDoc?> watchDoc(String path);
 
   /// Creates (id == null) or merges a document; stamps updatedAt/updatedBy.
@@ -176,6 +190,14 @@ class AdminRepository implements AdminBackend {
   Stream<List<AdminDoc>> watch(String collection) => db.collection(collection).snapshots().map(
         (s) => s.docs.map((d) => AdminDoc(d.id, normalizeDoc(d.data()))).toList(),
       );
+
+  @override
+  Stream<List<AdminDoc>> watchLatest(String collection, {int limit = 50}) => db
+      .collection(collection)
+      .orderBy('createdAt', descending: true)
+      .limit(limit)
+      .snapshots()
+      .map((s) => s.docs.map((d) => AdminDoc(d.id, normalizeDoc(d.data()))).toList());
 
   @override
   Stream<AdminDoc?> watchDoc(String path) =>
