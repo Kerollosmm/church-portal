@@ -72,6 +72,22 @@
 - لحذف عنصر مبذور بشكل دائم: احذفه من `tool/gen_seed.py` **وأضف معرفه** تحت اسم مجموعته في قاموس `retired` داخل
   نفس الملف (المولّد يرفض حذف معرف دون تقاعده، ويكتب `tool/retired_seed_ids.json`)، ثم `python3 tool/gen_seed.py`.
 
+### إكمال حقول الظهور (`tool/backfill_visibility.js` — #143 / ADR-094)
+
+القراءات العامة ستنتقل إلى استعلامات مفلترة (`visible == true` و `deletedAt == null`، و `active` في `seasons`).
+فلتر المساواة في Firestore **لا يطابق أبدًا مستندًا ينقصه الحقل**، لذلك تحتاج المستندات القديمة إضافة هذه الحقول مرة واحدة.
+السكربت يكتب **الحقول الناقصة فقط** (`deletedAt: null`، `visible: true`، و `active: true` للمواسم) ولا يغيّر أي قيمة موجودة
+ولا `updatedAt` / `updatedBy`، وتشغيله أكثر من مرة آمن.
+
+**لا يُشغَّل على الإنتاج إلا بموافقة صريحة من المالك**، وبهذا الترتيب:
+```bash
+cd tool && npm install
+node backfill_visibility.js --dry-run   # يطبع العدد لكل مجموعة دون كتابة
+node backfill_visibility.js --apply     # يكتب الحقول الناقصة
+node backfill_visibility.js --dry-run   # يجب أن يطبع "0 docs need backfill"
+```
+بعد `0 docs need backfill` فقط: دمج تحويل الاستعلامات العامة، ثم نشر APK ‏`1.0.7+8`، ثم تشديد القواعد (PR 1b).
+
 ## 4. متابعة Sentry
 
 1. ادخل <https://sentry.io> ← المؤسسة `kerollos-0e` ← المشروع `church-portal` ← **Issues**.
