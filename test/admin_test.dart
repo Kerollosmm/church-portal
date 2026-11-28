@@ -659,7 +659,7 @@ void main() {
         final body = rules.substring(start, rules.indexOf('}', start));
         final list = RegExp(r"(?:keysAllowed\(|changed\.hasOnly\()\[([^\]]*)\]").firstMatch(body)!.group(1)!;
         final keys = RegExp(r"'([A-Za-z]+)'").allMatches(list).map((m) => m.group(1)!).toSet();
-        if (body.contains('concat(meta())')) keys.addAll(['visible', 'sample', 'order', 'updatedAt', 'updatedBy']);
+        if (body.contains('concat(meta())')) keys.addAll(['visible', 'sample', 'order', 'deletedAt', 'updatedAt', 'updatedBy']);
         // PR #11: the 7 detail-page collections also allow the shared detail keys.
         // ADR-041: liturgies, meetings and seasons allow the programme keys.
         if (body.contains('concat(programKeys())')) {
