@@ -12,7 +12,7 @@ import '../../domain/cairo_time.dart';
 import '../../domain/contact_categories.dart';
 import '../../domain/features.dart';
 import '../../domain/models.dart';
-import '../../domain/rules.dart' show usableWhatsappLink;
+import '../../domain/rules.dart' show normalizeDigits, normalizeEgyptianPhone, usableWhatsappLink;
 import '../widgets/cards.dart' show whatsappGreen;
 import 'admin_access.dart';
 import 'admin_schema.dart';
@@ -23,6 +23,93 @@ import 'doc_editor.dart';
 import 'pending_delete.dart';
 import 'screen_header.dart';
 import 'state_switch.dart';
+
+/// Counts open (new), non-soft-deleted messages in a snapshot.
+int countUnreadMessages(Iterable<AdminDoc> docs) =>
+    docs.where((d) => !isSoftDeleted(d.data) && messageIsOpen(d.data)).length;
+
+/// Shared bounded live feed for `contact_messages` so the nav badge,
+/// [OverviewScreen], and [MessagesScreen] share one Firestore listener.
+class MessagesFeed extends ChangeNotifier {
+  static const int pageSize = 50;
+
+  final AdminBackend repo;
+  int _limit;
+  StreamSubscription<List<AdminDoc>>? _sub;
+  List<AdminDoc>? _docs;
+  Object? _error;
+  bool _loadingMore = false;
+  bool _disposed = false;
+
+  MessagesFeed(this.repo, {int initialLimit = pageSize}) : _limit = initialLimit {
+    _subscribe();
+  }
+
+  int get limit => _limit;
+  List<AdminDoc>? get docs => _docs;
+  Object? get error => _error;
+  bool get hasData => _docs != null;
+  bool get hasError => _error != null;
+  bool get loadingMore => _loadingMore;
+  bool get canLoadMore => _docs != null && _docs!.length >= _limit;
+  int get unreadCount => countUnreadMessages(_docs ?? const <AdminDoc>[]);
+
+  void _subscribe() {
+    _sub?.cancel();
+    _sub = repo.watchLatest('contact_messages', limit: _limit).listen(
+      (data) {
+        if (_disposed) return;
+        _docs = data;
+        _error = null;
+        _loadingMore = false;
+        notifyListeners();
+      },
+      onError: (Object err) {
+        if (_disposed) return;
+        if (_loadingMore) {
+          _limit = (_limit - pageSize).clamp(pageSize, _limit);
+        }
+        _error = err;
+        _loadingMore = false;
+        notifyListeners();
+      },
+    );
+  }
+
+  void loadMore() {
+    if (_disposed || _loadingMore || !canLoadMore) return;
+    _limit += pageSize;
+    _loadingMore = true;
+    _error = null;
+    notifyListeners();
+    _subscribe();
+  }
+
+  void retry() {
+    if (_disposed) return;
+    _docs = null;
+    _error = null;
+    _loadingMore = false;
+    notifyListeners();
+    _subscribe();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _sub?.cancel();
+    _sub = null;
+    super.dispose();
+  }
+}
+
+/// Exposes a shared [MessagesFeed] down the admin dashboard widget tree.
+class MessagesFeedScope extends InheritedNotifier<MessagesFeed> {
+  const MessagesFeedScope({super.key, required MessagesFeed feed, required super.child}) : super(notifier: feed);
+
+  static MessagesFeed? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<MessagesFeedScope>()?.notifier;
+}
 
 /// Dashboard home: "Needs your attention" summary, 6 quick task buttons, latest edits.
 class OverviewScreen extends StatefulWidget {
@@ -43,9 +130,8 @@ class OverviewScreen extends StatefulWidget {
 }
 
 class _OverviewScreenState extends State<OverviewScreen> {
-  static final Set<String> _watchedNames = {
+  static final Set<String> _watchedCollections = {
     for (final c in adminCollections) c.name,
-    'contact_messages',
   };
   static const _maxRefreshInterval = Duration(minutes: 1);
   static const _minRefreshDelay = Duration(milliseconds: 50);
@@ -59,13 +145,55 @@ class _OverviewScreenState extends State<OverviewScreen> {
   AdminDoc? _features;
   bool _featuresLoaded = false;
   final List<StreamSubscription<Object?>> _subs = [];
+  StreamSubscription<List<AdminDoc>>? _localMessagesSub;
+  MessagesFeed? _sharedFeed;
   Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
-    _subscribe();
+    _subscribeCollections();
     _rescheduleRefresh();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final shared = MessagesFeedScope.maybeOf(context);
+    if (!identical(shared, _sharedFeed)) {
+      _sharedFeed?.removeListener(_onSharedFeedChanged);
+      _sharedFeed = shared;
+      if (shared != null) {
+        _localMessagesSub?.cancel();
+        _localMessagesSub = null;
+        shared.addListener(_onSharedFeedChanged);
+        _syncSharedFeedWatch(shared);
+      } else {
+        _subscribeLocalMessages();
+      }
+    } else if (shared != null) {
+      _syncSharedFeedWatch(shared);
+    } else if (_localMessagesSub == null) {
+      _subscribeLocalMessages();
+    }
+  }
+
+  void _syncSharedFeedWatch(MessagesFeed shared) {
+    if (shared.hasData || shared.hasError) {
+      _clearStreamWatch('contact_messages');
+    } else if (!_timedOut.contains('contact_messages') && !_streamTimers.containsKey('contact_messages')) {
+      _startStreamTimer('contact_messages');
+    }
+  }
+
+  void _onSharedFeedChanged() {
+    if (!mounted) return;
+    final shared = _sharedFeed;
+    if (shared == null) return;
+    if (shared.hasData || shared.hasError) {
+      _clearStreamWatch('contact_messages');
+    }
+    setState(() {});
   }
 
   @override
@@ -79,7 +207,10 @@ class _OverviewScreenState extends State<OverviewScreen> {
       _timedOut.clear();
       _features = null;
       _featuresLoaded = false;
-      _subscribe();
+      _subscribeCollections();
+      if (_sharedFeed == null) {
+        _subscribeLocalMessages();
+      }
     }
     _rescheduleRefresh();
   }
@@ -89,6 +220,8 @@ class _OverviewScreenState extends State<OverviewScreen> {
       s.cancel();
     }
     _subs.clear();
+    _localMessagesSub?.cancel();
+    _localMessagesSub = null;
     for (final t in _streamTimers.values) {
       t.cancel();
     }
@@ -111,8 +244,8 @@ class _OverviewScreenState extends State<OverviewScreen> {
     _timedOut.remove(key);
   }
 
-  void _subscribe() {
-    for (final n in _watchedNames) {
+  void _subscribeCollections() {
+    for (final n in _watchedCollections) {
       _startStreamTimer(n);
       _subs.add(widget.repo.watch(n).listen(
             (d) => setState(() {
@@ -143,6 +276,23 @@ class _OverviewScreenState extends State<OverviewScreen> {
         ));
   }
 
+  void _subscribeLocalMessages() {
+    _localMessagesSub?.cancel();
+    const key = 'contact_messages';
+    _startStreamTimer(key);
+    _localMessagesSub = widget.repo.watchLatest(key, limit: MessagesFeed.pageSize).listen(
+          (d) => setState(() {
+            _docs[key] = d;
+            _failed.remove(key);
+            _clearStreamWatch(key);
+          }),
+          onError: (_) => setState(() {
+            _failed.add(key);
+            _clearStreamWatch(key);
+          }),
+        );
+  }
+
   void _retry() {
     _cancel();
     setState(() {
@@ -152,7 +302,13 @@ class _OverviewScreenState extends State<OverviewScreen> {
       _features = null;
       _featuresLoaded = false;
     });
-    _subscribe();
+    _subscribeCollections();
+    if (_sharedFeed != null) {
+      _sharedFeed!.retry();
+      _startStreamTimer('contact_messages');
+    } else {
+      _subscribeLocalMessages();
+    }
     _rescheduleRefresh();
   }
 
@@ -191,6 +347,7 @@ class _OverviewScreenState extends State<OverviewScreen> {
 
   @override
   void dispose() {
+    _sharedFeed?.removeListener(_onSharedFeedChanged);
     _cancel();
     super.dispose();
   }
@@ -199,10 +356,9 @@ class _OverviewScreenState extends State<OverviewScreen> {
   Widget build(BuildContext context) {
     registerAdminStrings();
     final onOpen = widget.onOpen;
-    final messages = _docs['contact_messages'];
-    final newMessages = (messages ?? const <AdminDoc>[])
-        .where((d) => !isSoftDeleted(d.data) && messageIsOpen(d.data))
-        .length;
+    final sharedFeed = _sharedFeed;
+    final messages = sharedFeed != null ? sharedFeed.docs : _docs['contact_messages'];
+    final newMessages = countUnreadMessages(messages ?? const <AdminDoc>[]);
     final f = FeatureSettings.fromMap(_features?.data);
     final alertsList = _currentAlerts();
     var unconfirmed = 0;
@@ -250,10 +406,15 @@ class _OverviewScreenState extends State<OverviewScreen> {
       unconfirmedTarget: unconfirmedTarget ?? 'liturgies',
       missingEnglishTarget: missingEnglishTarget ?? 'liturgies',
     );
-    final hasError = _failed.isNotEmpty || _timedOut.isNotEmpty;
+    final messagesFailed = sharedFeed != null ? sharedFeed.hasError : _failed.contains('contact_messages');
+    final messagesTimedOut = _timedOut.contains('contact_messages') &&
+        !(sharedFeed?.hasData ?? false) &&
+        !(sharedFeed?.hasError ?? false);
+    final hasError = _failed.isNotEmpty || _timedOut.isNotEmpty || messagesFailed || messagesTimedOut;
     final featuresFailed =
         _failed.contains('settings/features') || _timedOut.contains('settings/features');
-    final ready = !hasError && _featuresLoaded && _watchedNames.every(_docs.containsKey);
+    final messagesReady = sharedFeed != null ? sharedFeed.hasData : _docs.containsKey('contact_messages');
+    final ready = !hasError && _featuresLoaded && _watchedCollections.every(_docs.containsKey) && messagesReady;
 
     final edited = <(String, AdminDoc)>[
       for (final e in _docs.entries)
@@ -738,6 +899,54 @@ class _ChurchInfoScreenState extends State<ChurchInfoScreen> {
   }
 }
 
+/// Client-side search predicate for [MessagesScreen]: matches name,
+/// normalized phone digits, message text, notes, email, dates (`preferredDate`
+/// and Cairo `createdAt`), and category/subtype labels.
+bool messageMatchesQuery(
+  AdminDoc d,
+  ContactSettings cfg,
+  String query, {
+  String anonymousLabel = '',
+  String otherLabel = '',
+}) {
+  final q = normalizeDigits(query).trim().toLowerCase();
+  if (q.isEmpty) return true;
+  final m = d.data;
+  final anonymous = m['anonymous'] == true;
+  final phone = (m['phone'] ?? '').toString();
+  final normPhone = normalizeDigits(phone).replaceAll(RegExp(r'[\s\-().]'), '');
+  final egPhone = normalizeEgyptianPhone(phone) ?? '';
+  final catKey = m['category'] is String ? m['category'] as String : null;
+  final cat = cfg.bySlot(catKey ?? 'c1');
+  final sub = cat?.subtype('${m['bookingType'] ?? ''}');
+  final created = m['createdAt'];
+
+  final parts = <String>[
+    if (anonymous) ...[anonymousLabel, 'anonymous', 'مجهول'] else '${m['name'] ?? ''}',
+    phone,
+    normPhone,
+    egPhone,
+    '${m['email'] ?? ''}',
+    '${m['message'] ?? ''}',
+    '${m['adminNotes'] ?? ''}',
+    '${m['preferredDate'] ?? ''}',
+    '${m['kind'] ?? ''}',
+    if (created is DateTime) ...[fmtDateTime(created), fmtDate(created)],
+    if (catKey != null)
+      if (cat != null) ...[cat.labelAr, cat.labelEn] else otherLabel,
+    if (sub != null) ...[sub.labelAr, sub.labelEn] else '${m['bookingType'] ?? ''}',
+  ];
+  final haystack = normalizeDigits(parts.join(' ')).toLowerCase();
+  if (haystack.contains(q)) return true;
+  final qDigits = q.replaceAll(RegExp(r'[\s\-().]'), '');
+  if (qDigits.isNotEmpty &&
+      RegExp(r'^[+\d]+$').hasMatch(qDigits) &&
+      (normPhone.toLowerCase().contains(qDigits) || egPhone.contains(qDigits))) {
+    return true;
+  }
+  return false;
+}
+
 /// contact_messages inbox: read, mark handled, delete.
 /// Contact inbox (ADR-028): one box per contact category (plus "Other" for
 /// messages of a deleted type and the separate anonymous box), open / done
@@ -752,6 +961,7 @@ class MessagesScreen extends StatefulWidget {
 }
 
 class _MessagesScreenState extends State<MessagesScreen> {
+  final _search = TextEditingController();
   String _filter = 'new';
   String _box = 'all';
   late final _undo = SoftDeleteUndo(
@@ -762,11 +972,32 @@ class _MessagesScreenState extends State<MessagesScreen> {
     removeMedia: false,
   );
   static const _messagesDef = CollectionDef('contact_messages', '', '', [], []);
-  late Stream<List<AdminDoc>> _stream = widget.repo.watch('contact_messages');
+  MessagesFeed? _sharedFeed;
+  MessagesFeed? _ownedFeed;
   late Stream<AdminDoc?> _config = widget.repo.watchDoc('settings/contact');
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final shared = MessagesFeedScope.maybeOf(context);
+    if (!identical(shared, _sharedFeed)) {
+      _sharedFeed = shared;
+      if (shared != null) {
+        _ownedFeed?.dispose();
+        _ownedFeed = null;
+      } else {
+        _ownedFeed ??= MessagesFeed(widget.repo);
+      }
+    } else if (shared == null && _ownedFeed == null) {
+      _ownedFeed = MessagesFeed(widget.repo);
+    }
+  }
+
+  @override
   void dispose() {
+    _search.dispose();
+    _ownedFeed?.dispose();
+    _ownedFeed = null;
     _undo.dispose();
     super.dispose();
   }
@@ -777,14 +1008,18 @@ class _MessagesScreenState extends State<MessagesScreen> {
     // A different backend: re-bind the streams.
     if (widget.repo != oldWidget.repo) {
       _undo.clearTransitionState();
-      _stream = widget.repo.watch('contact_messages');
       _config = widget.repo.watchDoc('settings/contact');
+      if (_sharedFeed == null) {
+        _ownedFeed?.dispose();
+        _ownedFeed = MessagesFeed(widget.repo);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     registerAdminStrings();
+    final feed = _sharedFeed ?? _ownedFeed!;
     return Scaffold(
       backgroundColor: context.pal.background,
       body: StreamBuilder<AdminDoc?>(
@@ -793,17 +1028,15 @@ class _MessagesScreenState extends State<MessagesScreen> {
         builder: (context, cfgSnap) {
           // Missing doc, still loading or unreadable: the code defaults.
           final cfg = ContactSettings.fromMap(cfgSnap.data?.data);
-          return StreamBuilder<List<AdminDoc>>(
-            // A new stream (another backend) gets a fresh StreamBuilder: a reused
-            // one keeps the old backend's list while the new one loads.
-            key: ObjectKey(_stream),
-            stream: _stream,
-            builder: (context, snap) {
-              if (snap.hasError) {
-                return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('${snap.error}')));
+          return ListenableBuilder(
+            key: ObjectKey(feed),
+            listenable: feed,
+            builder: (context, _) {
+              if (!feed.hasData && feed.hasError) {
+                return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('${feed.error}')));
               }
-              if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-              return _body(context, cfg, snap.data!);
+              if (!feed.hasData) return const Center(child: CircularProgressIndicator());
+              return _body(context, cfg, feed.docs!, feed);
             },
           );
         },
@@ -811,7 +1044,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
     );
   }
 
-  Widget _body(BuildContext context, ContactSettings cfg, List<AdminDoc> docs) {
+  Widget _body(BuildContext context, ContactSettings cfg, List<AdminDoc> docs, MessagesFeed feed) {
     _undo.checkLazyPurge(widget.repo, _messagesDef, docs);
     final visible = docs.where(_undo.isVisible).toList();
     final all = [...visible]..sort((a, b) {
@@ -833,10 +1066,20 @@ class _MessagesScreenState extends State<MessagesScreen> {
       if (all.any((d) => boxOf(d) == 'other')) ('other', context.tr('otherCategory')),
     ];
     final box = boxes.any((b) => b.$1 == _box) ? _box : 'all';
+    final anonymousLabel = context.tr('anonymousSender');
+    final otherLabel = context.tr('otherCategory');
+    final query = _search.text;
     final list = all.where((d) {
       if (box != 'all' && boxOf(d) != box) return false;
       final isOpen = messageIsOpen(d.data);
-      return _filter == 'all' || (_filter == 'new' ? isOpen : !isOpen);
+      if (!(_filter == 'all' || (_filter == 'new' ? isOpen : !isOpen))) return false;
+      return messageMatchesQuery(
+        d,
+        cfg,
+        query,
+        anonymousLabel: anonymousLabel,
+        otherLabel: otherLabel,
+      );
     }).toList();
     Widget chip(String id, String label, bool selected, VoidCallback onTap, {Key? key}) => ChoiceChip(
           key: key,
@@ -845,6 +1088,36 @@ class _MessagesScreenState extends State<MessagesScreen> {
           showCheckmark: false,
           labelStyle: TextStyle(color: selected ? context.pal.onBar : context.pal.primary),
           onSelected: (_) => onTap(),
+        );
+    Widget loadMoreSection() => Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (feed.hasError) ...[
+                Text(
+                  formatAdminError(feed.error!, isAr: context.isAr),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: context.pal.alert),
+                ),
+                const SizedBox(height: 8),
+              ],
+              Center(
+                child: OutlinedButton.icon(
+                  key: const Key('messages-load-more'),
+                  onPressed: feed.loadingMore ? null : feed.loadMore,
+                  icon: feed.loadingMore
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.expand_more),
+                  label: Text(context.tr('loadMore')),
+                ),
+              ),
+            ],
+          ),
         );
     return CustomScrollView(
       slivers: [
@@ -856,6 +1129,27 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 title: context.tr('messagesTitle'),
                 help: context.tr('help_messages'),
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                child: TextField(
+                  key: const Key('messages-search'),
+                  controller: _search,
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    prefixIcon: const Icon(Icons.search),
+                    hintText: context.tr('searchHint'),
+                    suffixIcon: _search.text.isEmpty
+                        ? null
+                        : IconButton(
+                            key: const Key('messages-search-clear'),
+                            tooltip: context.tr('clearSearch'),
+                            icon: const Icon(Icons.clear),
+                            onPressed: () => setState(_search.clear),
+                          ),
+                  ),
+                ),
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
@@ -878,16 +1172,32 @@ class _MessagesScreenState extends State<MessagesScreen> {
         if (list.isEmpty)
           SliverFillRemaining(
             hasScrollBody: false,
-            child: Center(child: Text(context.tr('noMessages'))),
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(context.tr('noMessages')),
+                    if (feed.canLoadMore) ...[
+                      const SizedBox(height: 12),
+                      loadMoreSection(),
+                    ],
+                  ],
+                ),
+              ),
+            ),
           )
-        else
+        else ...[
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 40),
+            padding: EdgeInsets.fromLTRB(12, 0, 12, feed.canLoadMore ? 8 : 40),
             sliver: SliverList.builder(
               itemCount: list.length,
               itemBuilder: (context, i) => _message(context, cfg, list[i]),
             ),
           ),
+          if (feed.canLoadMore) SliverToBoxAdapter(child: loadMoreSection()),
+        ],
       ],
     );
   }
