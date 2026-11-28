@@ -63,7 +63,10 @@ The `admin` package implements the authenticated back-office management console 
   - `ListFilter`: Filter enumeration for collection listing (`all`, `visible`, `hidden`, `unconfirmed`).
   - `CollectionListScreen`: Searchable, filterable list table for browsing and managing collection items with named delete confirmation (`confirmNamedAction` via `deleteItemConfirm`) feeding 10-second undoable deletion (retaining pending-deleted items in `_lastDocs` for `takenSlugs` uniqueness and capturing `repo`/`def`/`media` when scheduling deletion). Unifies `categories` + nested `entries` (P1-16/P1-17) and offers the «صفحة تبرعات جاهزة» chooser when adding a page (P1-15).
 - `confirm_named.dart`:
-  - `confirmNamedAction(BuildContext context, {String? title, required String summary, required String actionLabel, bool destructive = false})`: Confirmation dialog displaying explicit name of target item or action; destructive actions use alert palette.
+  - `confirmNamedAction(BuildContext context, {String? title, required String summary, required String actionLabel, bool destructive = false, Widget? details})`: Confirmation dialog displaying explicit name of target item or action with 48 dp tap targets; destructive actions use alert palette.
+  - `confirmSaveDiff(BuildContext context, SaveDiffSummary diff)`: Scrollable field-diff confirmation dialog shown before saving high-impact singleton docs (`features`, `today`, `church`).
+- `save_diff.dart`:
+  - `buildSaveDiffRows` / `buildFeaturesSaveDiffRows`: Pure helpers mapping changed fields to human-readable labels (`old → new` for short values, `"Changed"` for long/complex fields, capped at 12 rows with overflow count).
 - `contact_admin.dart`:
   - `ContactCategoriesScreen`: Department routing and phone directory management screen.
 - `doc_editor.dart`:
