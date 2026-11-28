@@ -341,6 +341,7 @@ For each `CollectionDef`:
 | milestones | milestones | ✔ | ✔ | – | icon choice |
 
 `CollectionDef.publicPath` drives the **Open on site** button.
+- **Bulk selection mode (`BulkSelectionBar` / `BulkRowCheckbox`, `screen_header.dart`)**: `CollectionListScreen` enters selection mode via the toolbar «تحديد» (`admin-selectMode`) button or row long-press (and exits on `Cancel`, `Escape`, or after a successful action), showing 48×48 semantic checkboxes and a pinned selection bar with Select-all (filtered list only), **Show / Hide** (`visible` collections), **Confirm** (`sample: false` where `def.hasSample`), and **Delete** (confirm + `SoftDeleteUndo.deleteBatch` with 10s Undo, or cascade batch on `categories`) — each executing via `batchWriteChunked` (400 ops/WriteBatch).
 
 ### Generic form (`DocEditor`, `doc_editor.dart`)
 - Field widgets by `FieldType`: text, multiline, integer, decimal, boolean, time (stored 24h `"HH:mm"`, UI labels free of `HH:mm`), weekday, weekdays (chips),
@@ -439,7 +440,7 @@ are general inquiries (c1). Status chips **«محتاجة رد» / Needs reply**
 «مُرسِل مجهول»), time, type / occasion / 📅 date chips, message, phone call (`msgCall-<id>`), WhatsApp (`msgWhatsApp-<id>`, shown only when `usableWhatsappLink(phone)` returns a valid `wa.me` mobile link — never for missing, malformed, or landline numbers), email (`mailto:`), internal notes.
 Bookings get a **status dropdown** new → contacted → confirmed / declined (`bookingStatus-<id>`); other open messages
 get one-tap **«تمّت» / Done** (`msgToggleStatus-<id>`, immediately removing the message from the default «محتاجة رد» filter). For handled non-booking messages, **«إعادة كجديدة» / Mark new** (`msgMarkNew-<id>`) sits inside an overflow dialog (`IconButton` `ValueKey('msgMore-<id>')` → `SimpleDialogOption` `ValueKey('msgMarkNew-<id>')`, label wrapped in `Flexible`) away from «تمّت» and the red Delete icon (`delete`). **Notes** (`notes-<id>`, `_NotesDialog`, ≤ 2000 → `adminNotes`), copy, and **delete** with `confirmNamedAction` confirmation and 10-second batched soft-delete undo (`SoftDeleteUndo` in `pending_delete.dart` with `removeMedia: false`, SnackBar «تم مسح «{n}» · تراجع» (`deletedItemUndo`) for single item or «تم مسح {n} عناصر (آخرهم «{last}») · تراجع عن الكل» (`deletedItemMultiUndo` / `undoAll`) for consecutive deletes, preserving queued non-undo SnackBars on the enclosing messenger, and automatic lazy purge via `checkLazyPurge` on screen open).
-The overview's "new messages" counts `status == new`.
+The overview's "new messages" counts `status == new`. **Bulk selection mode** (`messages-selectMode` or card long-press; exits on `Cancel`, `Escape`, or success) adds 48×48 checkboxes, filtered-list Select-all, **Done** (`bulk-mark-handled` → `status: 'handled'`), and **Delete** (`SoftDeleteUndo.deleteBatch` with 10s Undo) via `batchWriteChunked` (400 ops/WriteBatch).
 
 ### Contact form types (`ContactCategoriesScreen`, `contact_admin.dart`) → `settings/contact` (PR #18, PR 3J / P3-31)
 Cards per type (code defaults until saved): Arabic / English name, behaviour (general / booking / complaint /
