@@ -129,6 +129,18 @@ The seed content in `assets/seed/seed.json` is generated deterministically by `t
 | Default (No flags) | Creates missing documents; skips existing ones. | **Medium Risk** | **Recreates deleted documents!** |
 | **`--force`** | **Overwrites all documents** and removes retired IDs. | **CRITICAL RISK** | **FORBIDDEN ON PRODUCTION.** Completely wipes non-developer admin edits. |
 
+### Visibility backfill (`tool/backfill_visibility.js`, #143 / ADR-094)
+Public reads are moving to filtered queries (`visible == true && deletedAt == null`; `active` on `seasons`). Firestore equality filters never match a document that lacks the field, so legacy documents need the keys added once. The script writes **only absent keys** (`deletedAt: null`, `visible: true`, `active: true` on seasons) and never changes an existing value, `updatedAt`, or `updatedBy`. It is idempotent.
+
+Run it on production **only with the owner's explicit OK**, in this order:
+```bash
+cd tool && npm install
+node backfill_visibility.js --dry-run   # counts per collection, writes nothing
+node backfill_visibility.js --apply     # writes the missing keys
+node backfill_visibility.js --dry-run   # must print "0 docs need backfill"
+```
+Auth is the same as the seeder (`GOOGLE_APPLICATION_CREDENTIALS` or `gcloud auth application-default login`). Only after `0 docs need backfill` do the public query switch, the `1.0.7+8` APK, and the rules tightening (PR 1b) follow.
+
 ### Permanent Deletion of Seeded Items
 Because default seeding recreates missing documents, deleting a seeded item in `/admin` is only temporary if someone runs the seeder later. To permanently retire a seeded item:
 1. Open `tool/gen_seed.py`.

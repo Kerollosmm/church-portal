@@ -36,6 +36,7 @@ The `tool` component package encompasses administrative, content generation, dat
   - `[tool/seed_firestore.js:missingFields]`: Recursively computes difference between seed data and existing Firestore documents.
   - `[tool/seed_firestore.js:convert]`: Transforms ISO date strings to Firestore `Timestamp` objects.
   - `[tool/seed_firestore.js:main]`: Uploads seed data with `--dry-run`, `--force`, `--fill-missing`, and `--only` safety gates.
+  - `[tool/backfill_visibility.js:main]`: One-time, idempotent #143 backfill (ADR-094): adds only absent `deletedAt: null` / `visible: true` (`active: true` on `seasons`) so the public filtered queries match legacy docs. `--dry-run` default, `--apply` opt-in; production needs the owner's OK.
 - **Subdirectories & Boundaries:**
   - `./rules_test`: Firestore security rules testing harness running against Firebase Local Emulator (`tool/rules_test/rules.test.mjs`).
 

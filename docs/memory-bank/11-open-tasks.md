@@ -5,6 +5,8 @@ Status as of 6 Nov 2026 (ADR-056 Phase 2 plan; ADR-055 / PR #49; ADR-054 / PR #4
 
 ## Top open items (owner's list, 4 Nov 2026 — details in the sections below)
 
+- **#143 owner gate (ADR-094):** run `tool/backfill_visibility.js` `--dry-run` → `--apply` → `--dry-run` (`0 docs need backfill`) on production with the owner's OK; then merge `fix/143-public-query-switch`, tag APK `1.0.7+8`, then PR 1b (`fix/143-tighten-firestore-rules`). Until PR 1b, hidden / soft-deleted docs stay readable through the REST API.
+
 0. ~~**Follow-up: `firestore.rules` cleanup (`clinics` collection)**~~ — `/clinics/{id}`, `validClinic`, `ownClinic`, and `rules.test.mjs` collection tests removed in PR 5A (`chore/p5a-pure-deletions`, ADR-082); legacy `settings/features` allow-list keys (`sections.clinics`, `pageHeaders.clinics`, `seasonPreset.previous.clinics`, `imageStyles.clinics`) intentionally kept (`D1`) until live `settings/features` is checked.
 
 1. ~~Footer note «تعرض البيانات المحفوظة مع التطبيق» shows on the live site while Firestore works~~ — fixed in PR #30 (ADR-038) → *Live data follow-ups*.

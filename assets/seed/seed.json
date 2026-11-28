@@ -102,7 +102,9 @@
    "startsAt": "2026-10-31T00:00:00+02:00",
    "endsAt": "2027-12-31T23:59:00+02:00",
    "priority": 1,
-   "link": "https://whatsapp.com/channel/0029Vb6Kmbs2UPBMUcrlVB0g"
+   "link": "https://whatsapp.com/channel/0029Vb6Kmbs2UPBMUcrlVB0g",
+   "visible": true,
+   "deletedAt": null
   },
   "nativity-fast-2026": {
    "titleAr": "بركة صوم الميلاد المجيد وسهرات كيهك المباركة",
@@ -113,7 +115,9 @@
    "startsAt": "2026-11-18T00:00:00+02:00",
    "endsAt": "2027-01-07T23:59:00+02:00",
    "priority": 3,
-   "link": "https://whatsapp.com/channel/0029Vb6Kmbs2UPBMUcrlVB0g"
+   "link": "https://whatsapp.com/channel/0029Vb6Kmbs2UPBMUcrlVB0g",
+   "visible": true,
+   "deletedAt": null
   },
   "revival-maximus-2027": {
    "titleAr": "النهضة الروحية وتذكار نياحة القديسين مكسيموس ودوماديوس",
@@ -124,7 +128,9 @@
    "startsAt": "2027-01-10T00:00:00+02:00",
    "endsAt": "2027-01-25T23:59:00+02:00",
    "priority": 5,
-   "link": "https://whatsapp.com/channel/0029Vb6Kmbs2UPBMUcrlVB0g"
+   "link": "https://whatsapp.com/channel/0029Vb6Kmbs2UPBMUcrlVB0g",
+   "visible": true,
+   "deletedAt": null
   },
   "revival-moses-2027": {
    "titleAr": "النهضة الروحية وتذكار استشهاد القوي الأنبا موسى الأسود",
@@ -135,7 +141,9 @@
    "startsAt": "2027-06-12T00:00:00+03:00",
    "endsAt": "2027-07-01T23:59:00+03:00",
    "priority": 5,
-   "link": "https://whatsapp.com/channel/0029Vb6Kmbs2UPBMUcrlVB0g"
+   "link": "https://whatsapp.com/channel/0029Vb6Kmbs2UPBMUcrlVB0g",
+   "visible": true,
+   "deletedAt": null
   }
  },
  "seasons": {
@@ -146,7 +154,8 @@
    "startsAt": "2027-01-06T00:00:00+02:00",
    "endsAt": "2027-01-07T23:59:00+02:00",
    "active": true,
-   "replacesRegular": true
+   "replacesRegular": true,
+   "deletedAt": null
   },
   "revival-maximus-2027": {
    "key": "revival_maximus",
@@ -155,7 +164,8 @@
    "startsAt": "2027-01-21T00:00:00+02:00",
    "endsAt": "2027-01-25T23:59:00+02:00",
    "active": true,
-   "replacesRegular": false
+   "replacesRegular": false,
+   "deletedAt": null
   },
   "holy-week-2027": {
    "key": "holy_week",
@@ -164,7 +174,8 @@
    "startsAt": "2027-04-25T00:00:00+02:00",
    "endsAt": "2027-05-01T18:00:00+03:00",
    "active": true,
-   "replacesRegular": true
+   "replacesRegular": true,
+   "deletedAt": null
   },
   "pascha-2027": {
    "key": "pascha",
@@ -173,7 +184,8 @@
    "startsAt": "2027-05-01T18:00:00+03:00",
    "endsAt": "2027-05-02T23:59:00+03:00",
    "active": true,
-   "replacesRegular": true
+   "replacesRegular": true,
+   "deletedAt": null
   },
   "revival-moses-2027": {
    "key": "revival_moses",
@@ -182,7 +194,8 @@
    "startsAt": "2027-06-22T00:00:00+03:00",
    "endsAt": "2027-07-01T23:59:00+03:00",
    "active": true,
-   "replacesRegular": false
+   "replacesRegular": false,
+   "deletedAt": null
   }
  },
  "liturgies": {
@@ -200,7 +213,9 @@
    "audienceEn": "",
    "seasonKey": null,
    "order": 1,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "fri-2": {
    "type": "mass",
@@ -216,7 +231,9 @@
    "audienceEn": "",
    "seasonKey": null,
    "order": 2,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "fri-kids": {
    "type": "mass",
@@ -232,7 +249,9 @@
    "audienceEn": "For children from nursery to primary",
    "seasonKey": null,
    "order": 3,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "fri-3": {
    "type": "mass",
@@ -248,7 +267,9 @@
    "audienceEn": "",
    "seasonKey": null,
    "order": 4,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "sun-1": {
    "type": "mass",
@@ -264,7 +285,9 @@
    "audienceEn": "",
    "seasonKey": null,
    "order": 1,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "sun-2": {
    "type": "mass",
@@ -280,7 +303,9 @@
    "audienceEn": "",
    "seasonKey": null,
    "order": 2,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "sun-youth": {
    "type": "mass",
@@ -296,7 +321,9 @@
    "audienceEn": "For youth and university students",
    "seasonKey": null,
    "order": 3,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "wed-1": {
    "type": "mass",
@@ -312,7 +339,9 @@
    "audienceEn": "",
    "seasonKey": null,
    "order": 1,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "wed-moses": {
    "type": "mass",
@@ -328,7 +357,9 @@
    "audienceEn": "Divine Liturgy with doxology for St Moses",
    "seasonKey": null,
    "order": 2,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "sat-1": {
    "type": "mass",
@@ -344,7 +375,9 @@
    "audienceEn": "",
    "seasonKey": null,
    "order": 1,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "mon-1": {
    "type": "mass",
@@ -360,7 +393,9 @@
    "audienceEn": "",
    "seasonKey": null,
    "order": 0,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "tue-1": {
    "type": "mass",
@@ -376,7 +411,9 @@
    "audienceEn": "",
    "seasonKey": null,
    "order": 0,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "thu-1": {
    "type": "mass",
@@ -392,7 +429,9 @@
    "audienceEn": "",
    "seasonKey": null,
    "order": 0,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "sat-vespers": {
    "type": "vespers",
@@ -408,7 +447,9 @@
    "audienceEn": "",
    "seasonKey": null,
    "order": 1,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "sat-praise": {
    "type": "praise",
@@ -424,7 +465,9 @@
    "audienceEn": "",
    "seasonKey": null,
    "order": 2,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "tue-vespers": {
    "type": "vespers",
@@ -440,7 +483,9 @@
    "audienceEn": "",
    "seasonKey": null,
    "order": 0,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "thu-vespers": {
    "type": "vespers",
@@ -456,7 +501,9 @@
    "audienceEn": "",
    "seasonKey": null,
    "order": 0,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "nat-eve": {
    "type": "mass",
@@ -472,7 +519,9 @@
    "audienceEn": "Celebrated by all priests — please arrive early",
    "seasonKey": "nativity",
    "order": 0,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "nat-day": {
    "type": "mass",
@@ -488,7 +537,9 @@
    "audienceEn": "",
    "seasonKey": "nativity",
    "order": 0,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "rev-max-1": {
    "type": "other",
@@ -504,7 +555,9 @@
    "audienceEn": "",
    "seasonKey": "revival_maximus",
    "order": 0,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "rev-max-2": {
    "type": "other",
@@ -520,7 +573,9 @@
    "audienceEn": "",
    "seasonKey": "revival_maximus",
    "order": 1,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "rev-max-3": {
    "type": "other",
@@ -536,7 +591,9 @@
    "audienceEn": "",
    "seasonKey": "revival_maximus",
    "order": 2,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "rev-max-4": {
    "type": "other",
@@ -552,7 +609,9 @@
    "audienceEn": "",
    "seasonKey": "revival_maximus",
    "order": 3,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "rev-max-5": {
    "type": "other",
@@ -568,7 +627,9 @@
    "audienceEn": "",
    "seasonKey": "revival_maximus",
    "order": 4,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "rev-max-6": {
    "type": "other",
@@ -584,7 +645,9 @@
    "audienceEn": "",
    "seasonKey": "revival_maximus",
    "order": 5,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "rev-max-7": {
    "type": "other",
@@ -600,7 +663,9 @@
    "audienceEn": "",
    "seasonKey": "revival_maximus",
    "order": 6,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "rev-max-feast": {
    "type": "mass",
@@ -616,7 +681,9 @@
    "audienceEn": "",
    "seasonKey": "revival_maximus",
    "order": 0,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "hw-day-1": {
    "type": "other",
@@ -632,7 +699,9 @@
    "audienceEn": "",
    "seasonKey": "holy_week",
    "order": 0,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "hw-eve-1": {
    "type": "other",
@@ -648,7 +717,9 @@
    "audienceEn": "",
    "seasonKey": "holy_week",
    "order": 0,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "hw-day-2": {
    "type": "other",
@@ -664,7 +735,9 @@
    "audienceEn": "",
    "seasonKey": "holy_week",
    "order": 0,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "hw-eve-2": {
    "type": "other",
@@ -680,7 +753,9 @@
    "audienceEn": "",
    "seasonKey": "holy_week",
    "order": 0,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "hw-day-3": {
    "type": "other",
@@ -696,7 +771,9 @@
    "audienceEn": "",
    "seasonKey": "holy_week",
    "order": 0,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "hw-eve-3": {
    "type": "other",
@@ -712,7 +789,9 @@
    "audienceEn": "",
    "seasonKey": "holy_week",
    "order": 0,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "hw-palm": {
    "type": "mass",
@@ -728,7 +807,9 @@
    "audienceEn": "",
    "seasonKey": "holy_week",
    "order": 0,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "hw-thursday": {
    "type": "mass",
@@ -744,7 +825,9 @@
    "audienceEn": "",
    "seasonKey": "holy_week",
    "order": 0,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "hw-friday": {
    "type": "other",
@@ -760,7 +843,9 @@
    "audienceEn": "",
    "seasonKey": "holy_week",
    "order": 0,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "hw-saturday": {
    "type": "mass",
@@ -776,7 +861,9 @@
    "audienceEn": "",
    "seasonKey": "holy_week",
    "order": 0,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "pascha-eve": {
    "type": "mass",
@@ -792,7 +879,9 @@
    "audienceEn": "Please arrive early",
    "seasonKey": "pascha",
    "order": 0,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "pascha-day": {
    "type": "mass",
@@ -808,7 +897,9 @@
    "audienceEn": "",
    "seasonKey": "pascha",
    "order": 0,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "rev-moses-1": {
    "type": "other",
@@ -824,7 +915,9 @@
    "audienceEn": "",
    "seasonKey": "revival_moses",
    "order": 0,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "rev-moses-2": {
    "type": "other",
@@ -840,7 +933,9 @@
    "audienceEn": "",
    "seasonKey": "revival_moses",
    "order": 1,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "rev-moses-3": {
    "type": "other",
@@ -856,7 +951,9 @@
    "audienceEn": "",
    "seasonKey": "revival_moses",
    "order": 2,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "rev-moses-4": {
    "type": "other",
@@ -872,7 +969,9 @@
    "audienceEn": "",
    "seasonKey": "revival_moses",
    "order": 3,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "rev-moses-5": {
    "type": "other",
@@ -888,7 +987,9 @@
    "audienceEn": "",
    "seasonKey": "revival_moses",
    "order": 4,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "rev-moses-6": {
    "type": "other",
@@ -904,7 +1005,9 @@
    "audienceEn": "",
    "seasonKey": "revival_moses",
    "order": 5,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "rev-moses-7": {
    "type": "other",
@@ -920,7 +1023,9 @@
    "audienceEn": "",
    "seasonKey": "revival_moses",
    "order": 6,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "rev-moses-feast": {
    "type": "mass",
@@ -936,7 +1041,9 @@
    "audienceEn": "",
    "seasonKey": "revival_moses",
    "order": 0,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   }
  },
  "meetings": {
@@ -952,7 +1059,9 @@
    "facebookUrl": "",
    "whatsappUrl": "",
    "notes": "",
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "primary": {
    "stage": "primary",
@@ -966,7 +1075,9 @@
    "facebookUrl": "",
    "whatsappUrl": "",
    "notes": "",
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "preparatory": {
    "stage": "preparatory",
@@ -980,7 +1091,9 @@
    "facebookUrl": "",
    "whatsappUrl": "",
    "notes": "",
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "secondary": {
    "stage": "secondary",
@@ -994,7 +1107,9 @@
    "facebookUrl": "",
    "whatsappUrl": "",
    "notes": "",
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "university": {
    "stage": "university",
@@ -1008,7 +1123,9 @@
    "facebookUrl": "",
    "whatsappUrl": "",
    "notes": "",
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "graduates": {
    "stage": "graduates",
@@ -1022,7 +1139,9 @@
    "facebookUrl": "",
    "whatsappUrl": "",
    "notes": "",
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "youth": {
    "stage": "youth",
@@ -1036,7 +1155,9 @@
    "facebookUrl": "https://www.facebook.com/MaximousYouth",
    "whatsappUrl": "",
    "notes": "",
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "family": {
    "stage": "family",
@@ -1050,7 +1171,9 @@
    "facebookUrl": "",
    "whatsappUrl": "",
    "notes": "",
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "men": {
    "stage": "men",
@@ -1064,7 +1187,9 @@
    "facebookUrl": "",
    "whatsappUrl": "",
    "notes": "",
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "women": {
    "stage": "women",
@@ -1078,7 +1203,9 @@
    "facebookUrl": "",
    "whatsappUrl": "",
    "notes": "",
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "elderly": {
    "stage": "elderly",
@@ -1092,7 +1219,9 @@
    "facebookUrl": "",
    "whatsappUrl": "",
    "notes": "",
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   }
  },
  "activities": {
@@ -1107,7 +1236,9 @@
    "ageRange": "",
    "contactPhone": "",
    "link": "",
-   "sample": false
+   "sample": false,
+   "visible": true,
+   "deletedAt": null
   },
   "avamose-choir": {
    "category": "choir",
@@ -1120,7 +1251,9 @@
    "ageRange": "",
    "contactPhone": "",
    "link": "https://www.facebook.com/100069922352210",
-   "sample": false
+   "sample": false,
+   "visible": true,
+   "deletedAt": null
   },
   "davids-tones": {
    "category": "choir",
@@ -1133,7 +1266,9 @@
    "ageRange": "",
    "contactPhone": "",
    "link": "https://www.facebook.com/n8amatdawoudchoire",
-   "sample": false
+   "sample": false,
+   "visible": true,
+   "deletedAt": null
   },
   "hymns-school": {
    "category": "hymns",
@@ -1146,7 +1281,9 @@
    "ageRange": "",
    "contactPhone": "",
    "link": "https://www.facebook.com/Esshaqibrahi",
-   "sample": false
+   "sample": false,
+   "visible": true,
+   "deletedAt": null
   },
   "maximous-youth": {
    "category": "youth",
@@ -1159,7 +1296,9 @@
    "ageRange": "",
    "contactPhone": "",
    "link": "https://www.facebook.com/MaximousYouth",
-   "sample": false
+   "sample": false,
+   "visible": true,
+   "deletedAt": null
   },
   "prep-boys": {
    "category": "youth",
@@ -1172,7 +1311,9 @@
    "ageRange": "",
    "contactPhone": "",
    "link": "",
-   "sample": false
+   "sample": false,
+   "visible": true,
+   "deletedAt": null
   },
   "antibiotic-mime": {
    "category": "drama",
@@ -1185,7 +1326,9 @@
    "ageRange": "",
    "contactPhone": "",
    "link": "https://www.facebook.com/AntibioticMimeTeam",
-   "sample": false
+   "sample": false,
+   "visible": true,
+   "deletedAt": null
   },
   "karouz-school": {
    "category": "servants",
@@ -1198,7 +1341,9 @@
    "ageRange": "",
    "contactPhone": "",
    "link": "https://www.youtube.com/@-maximuschurch/playlists",
-   "sample": false
+   "sample": false,
+   "visible": true,
+   "deletedAt": null
   },
   "servant-care": {
    "category": "servants",
@@ -1211,7 +1356,9 @@
    "ageRange": "",
    "contactPhone": "",
    "link": "https://www.facebook.com/100070313048338",
-   "sample": false
+   "sample": false,
+   "visible": true,
+   "deletedAt": null
   },
   "media-center": {
    "category": "media",
@@ -1224,7 +1371,9 @@
    "ageRange": "",
    "contactPhone": "",
    "link": "https://www.facebook.com/100070313048338",
-   "sample": false
+   "sample": false,
+   "visible": true,
+   "deletedAt": null
   },
   "kalimtein": {
    "category": "media",
@@ -1237,7 +1386,9 @@
    "ageRange": "",
    "contactPhone": "",
    "link": "https://www.youtube.com/@-maximuschurch/playlists",
-   "sample": false
+   "sample": false,
+   "visible": true,
+   "deletedAt": null
   }
  },
  "facilities": {
@@ -1250,7 +1401,9 @@
    "phone": "035368888",
    "hoursAr": "",
    "hoursEn": "",
-   "sample": false
+   "sample": false,
+   "visible": true,
+   "deletedAt": null
   },
   "nursery": {
    "type": "nursery",
@@ -1261,7 +1414,9 @@
    "phone": "",
    "hoursAr": "",
    "hoursEn": "",
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "employment": {
    "type": "employment",
@@ -1272,7 +1427,9 @@
    "phone": "",
    "hoursAr": "",
    "hoursEn": "",
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "halls": {
    "type": "halls",
@@ -1283,7 +1440,9 @@
    "phone": "",
    "hoursAr": "",
    "hoursEn": "",
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "library": {
    "type": "other",
@@ -1294,7 +1453,9 @@
    "phone": "",
    "hoursAr": "",
    "hoursEn": "",
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   }
  },
  "priests": {
@@ -1310,7 +1471,9 @@
    "bioAr": "رُسم كاهنًا بيد البابا شنودة الثالث، ونال رتبة القمصية بيد البابا تواضروس الثاني في 10 نوفمبر 2022. قدّم نبذة عن تاريخ الكنيسة في زيارة قداسة البابا (يونيو 2025).",
    "bioEn": "Ordained by Pope Shenouda III; raised to hegumen by Pope Tawadros II on 10 Nov 2022. Presented the church's history during the Pope's visit (June 2025).",
    "order": 1,
-   "sample": false
+   "sample": false,
+   "visible": true,
+   "deletedAt": null
   },
   "bigol": {
    "name": "القمص بيجول صالح نخلة",
@@ -1324,7 +1487,9 @@
    "bioAr": "نال رتبة القمصية في 10 نوفمبر 2022.",
    "bioEn": "Raised to hegumen on 10 Nov 2022.",
    "order": 2,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "bedaba": {
    "name": "القمص بضابا بخيت شنودة",
@@ -1338,7 +1503,9 @@
    "bioAr": "رُسم كاهنًا بيد البابا شنودة الثالث، ونال رتبة القمصية في 10 نوفمبر 2022.",
    "bioEn": "Ordained by Pope Shenouda III; raised to hegumen on 10 Nov 2022.",
    "order": 3,
-   "sample": false
+   "sample": false,
+   "visible": true,
+   "deletedAt": null
   },
   "doumadious": {
    "name": "القس دوماديوس حليم عطية",
@@ -1352,7 +1519,9 @@
    "bioAr": "",
    "bioEn": "",
    "order": 4,
-   "sample": false
+   "sample": false,
+   "visible": true,
+   "deletedAt": null
   },
   "moussa": {
    "name": "القس موسى جمال",
@@ -1366,7 +1535,9 @@
    "bioAr": "رُسم بيد البابا تواضروس الثاني بدير الأنبا بيشوي.",
    "bioEn": "Ordained by Pope Tawadros II at St Bishoy Monastery.",
    "order": 5,
-   "sample": false
+   "sample": false,
+   "visible": true,
+   "deletedAt": null
   },
   "yonathan": {
    "name": "القس يوناثان محفوظ",
@@ -1380,7 +1551,9 @@
    "bioAr": "يخدم مشروع تطوير خدمة الأنبا أبرآم لرعاية الأسر المحتاجة.",
    "bioEn": "Serves the Anba Abraam development project for families in need.",
    "order": 6,
-   "sample": false
+   "sample": false,
+   "visible": true,
+   "deletedAt": null
   },
   "loukas": {
    "name": "القس لوكاس رفاعي",
@@ -1394,7 +1567,9 @@
    "bioAr": "",
    "bioEn": "",
    "order": 7,
-   "sample": false
+   "sample": false,
+   "visible": true,
+   "deletedAt": null
   },
   "saleeb": {
    "name": "القس صليب سمير",
@@ -1408,7 +1583,9 @@
    "bioAr": "",
    "bioEn": "",
    "order": 8,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "barnaba": {
    "name": "القس برنابا أمير",
@@ -1422,7 +1599,9 @@
    "bioAr": "ورد اسمه في عظات قناة الكنيسة (2025).",
    "bioEn": "Named in the church channel's sermons (2025).",
    "order": 9,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   },
   "tadros": {
    "name": "المتنيح القمص تادرس لبيب يوسف",
@@ -1436,7 +1615,9 @@
    "bioAr": "أقدم آباء الكنيسة المعروفين؛ خدم أكثر من 41 عامًا في الكهنوت وتنيح في 10 فبراير 2022. بركة صلواته تكون معنا.",
    "bioEn": "The church's earliest known priest; served over 41 years in the priesthood and departed on 10 Feb 2022. May his prayers be with us.",
    "order": 20,
-   "sample": false
+   "sample": false,
+   "visible": true,
+   "deletedAt": null
   },
   "maximus": {
    "name": "المتنيح القس مكسيموس فؤاد أندراوس",
@@ -1450,7 +1631,9 @@
    "bioAr": "خدم بالكنيسة ثم انتقل إلى كنيسة السيدة العذراء بالمعمورة، وتنيح في 4 فبراير 2021. نياحًا لنفسه.",
    "bioEn": "Served here before moving to St Mary Church, El-Maamoura; departed on 4 Feb 2021. May his soul rest in peace.",
    "order": 21,
-   "sample": true
+   "sample": true,
+   "visible": true,
+   "deletedAt": null
   }
  },
  "milestones": {
@@ -1461,7 +1644,9 @@
    "descEn": "Fr Tadros Labib was ordained for the church on 1 Aug 1980, its earliest known date of service.",
    "year": 1980,
    "icon": "church",
-   "order": 1
+   "order": 1,
+   "visible": true,
+   "deletedAt": null
   },
   "deacons-2022": {
    "titleAr": "رسامة 200 شماس",
@@ -1470,7 +1655,9 @@
    "descEn": "On 30 Jun 2022 Anba Pavly ordained 150 psaltoi and 50 anagnostai at the church.",
    "year": 2022,
    "icon": "people",
-   "order": 2
+   "order": 2,
+   "visible": true,
+   "deletedAt": null
   },
   "hegumens-2022": {
    "titleAr": "ثلاثة قمامصة جدد",
@@ -1479,7 +1666,9 @@
    "descEn": "On 10 Nov 2022 Pope Tawadros II raised Frs Bemwa Ghaly, Bigol Saleh and Bedaba Bekhit to hegumen.",
    "year": 2022,
    "icon": "altar",
-   "order": 3
+   "order": 3,
+   "visible": true,
+   "deletedAt": null
   },
   "pope-visit": {
    "titleAr": "أول زيارة لقداسة البابا تواضروس الثاني",
@@ -1488,7 +1677,9 @@
    "descEn": "On 25 Jun 2025 the Pope gave his Wednesday sermon from the church and prayed Vespers with thousands from El-Asafra.",
    "year": 2025,
    "icon": "pope",
-   "order": 4
+   "order": 4,
+   "visible": true,
+   "deletedAt": null
   }
  },
  "saints": {
@@ -1501,7 +1692,9 @@
    "feastCopticEn": "14 Tuba (Maximus) and 17 Tuba (Domadius)",
    "feastGregorian": "22 & 25 January",
    "feastGregorianAr": "22 و25 يناير",
-   "order": 1
+   "order": 1,
+   "visible": true,
+   "deletedAt": null
   },
   "moses-black": {
    "nameAr": "القوي الأنبا موسى الأسود",
@@ -1512,7 +1705,9 @@
    "feastCopticEn": "24 Paona (martyrdom)",
    "feastGregorian": "1 July",
    "feastGregorianAr": "1 يوليو",
-   "order": 2
+   "order": 2,
+   "visible": true,
+   "deletedAt": null
   }
  }
 }

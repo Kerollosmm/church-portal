@@ -33,6 +33,29 @@ bool isStaleDoc(
   return !sameTimestamp(curUpdatedAt, expectedUpdatedAt);
 }
 
+/// Collections the public reads with `visible == true && deletedAt == null`
+/// (#143, ADR-094). `seasons` filters on `active` instead.
+const publicVisibleCollections = {
+  'alerts', 'liturgies', 'meetings', 'activities', 'facilities', //
+  'priests', 'milestones', 'saints', 'categories', 'entries', 'pages',
+};
+
+/// [data] for a NEW document of [collection] with the keys the public
+/// filtered queries need always present (#143, ADR-094): Firestore equality
+/// filters never match a document that lacks the field. `deletedAt: null`
+/// and `visible` (`active` on `seasons`, default true like a missing key is
+/// read today) are added only when absent; an explicit value is kept.
+Map<String, dynamic> withPresenceKeys(String collection, Map<String, dynamic> data) {
+  final isSeason = collection == 'seasons';
+  if (!isSeason && !publicVisibleCollections.contains(collection)) return data;
+  return {
+    ...data,
+    if (!data.containsKey('deletedAt')) 'deletedAt': null,
+    if (isSeason && !data.containsKey('active')) 'active': true,
+    if (!isSeason && !data.containsKey('visible')) 'visible': true,
+  };
+}
+
 class AdminDoc {
   final String id;
   final Map<String, dynamic> data;
@@ -260,7 +283,7 @@ class AdminRepository implements AdminBackend {
     final col = db.collection(collection);
     if (id == null || id.isEmpty) {
       final ref = col.doc();
-      await ref.set(_stamp(data));
+      await ref.set(_stamp(withPresenceKeys(collection, data)));
       return ref.id;
     }
     await _merge(col.doc(id), data);

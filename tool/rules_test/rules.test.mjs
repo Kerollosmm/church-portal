@@ -1,6 +1,7 @@
 // Firestore security-rules tests. Run inside the emulator:
 //   cd tool/rules_test && npm ci && npm test
 // (needs Java 11+ for the Firestore emulator).
+import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { after, before, beforeEach, describe, test } from 'node:test';
@@ -8,7 +9,8 @@ import { fileURLToPath } from 'node:url';
 
 import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebase/rules-unit-testing';
 import {
-  Timestamp, deleteDoc, doc, getDoc, getDocs, collection, increment, serverTimestamp, setDoc, updateDoc, writeBatch,
+  Timestamp, deleteDoc, doc, getDoc, getDocs, collection, increment, query, serverTimestamp, setDoc, updateDoc, where,
+  writeBatch,
 } from 'firebase/firestore';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -1552,6 +1554,20 @@ describe('ADR-027: custom categories, their items and custom pages', () => {
     await assertFails(deleteDoc(doc(pub, 'entries', 'e1')));
     await assertSucceeds(deleteDoc(doc(ed, 'categories', 'k1')));
     await assertSucceeds(deleteDoc(doc(ed, 'pages', 'p1')));
+  });
+
+  test('#143: new docs carry explicit visible + deletedAt: null, and the public filtered query lists them', async () => {
+    const ed = db(EDITOR);
+    await assertSucceeds(setDoc(doc(ed, 'categories', 'k1'), cat({ deletedAt: null })));
+    await assertSucceeds(setDoc(doc(ed, 'entries', 'e1'), entry({ deletedAt: null })));
+    await assertSucceeds(setDoc(doc(ed, 'pages', 'p1'), page({ deletedAt: null })));
+    await assertSucceeds(setDoc(doc(ed, 'pages', 'p2'), page({ slug: 'hidden-one', visible: false, deletedAt: null })));
+    const pub = db(null);
+    for (const col of ['categories', 'entries', 'pages']) {
+      const snap = await assertSucceeds(getDocs(query(collection(pub, col),
+        where('visible', '==', true), where('deletedAt', '==', null))));
+      assert.equal(snap.size, 1, `${col}: one visible, non-deleted doc`);
+    }
   });
 
   test('categories: slug, name, icon and sizes are validated', async () => {
