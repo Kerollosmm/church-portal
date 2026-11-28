@@ -168,6 +168,9 @@ class LiturgyCard extends ConsumerWidget {
                           occurrence: l.date != null ? isoDate(CairoTime.calendarDate(l.date!)) : null,
                           title: {'ar': l.nameAr, 'en': l.nameEn},
                           startsAt: next,
+                          endsAt: l.startMinutes == null
+                              ? null
+                              : calendarEndsAt(next, startMinutes: l.startMinutes!, endMinutes: l.endMinutes),
                           recurring: isWeekly,
                         ),
                         if (hasCalendar)
@@ -442,6 +445,7 @@ class NextMassCard extends ConsumerWidget {
               occurrence: n.liturgy.date != null ? isoDate(CairoTime.calendarDate(n.liturgy.date!)) : null,
               title: {'ar': n.liturgy.nameAr, 'en': n.liturgy.nameEn},
               startsAt: n.start,
+              endsAt: n.end,
               recurring: n.liturgy.date == null,
             ),
             ActionChipButton(

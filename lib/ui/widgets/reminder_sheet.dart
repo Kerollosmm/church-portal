@@ -48,6 +48,7 @@ Future<void> showReminderSheet(
   String? occurrence,
   required Map<String, String> title,
   required DateTime startsAt,
+  DateTime? endsAt,
   bool recurring = false,
   Reminder? existing,
   bool? isWeb,
@@ -66,6 +67,7 @@ Future<void> showReminderSheet(
       occurrence: occurrence,
       title: title,
       startsAt: startsAt,
+      endsAt: endsAt,
       recurring: recurring,
       existing: existing,
       isWeb: isWeb,
@@ -120,6 +122,7 @@ class _ReminderConfigSheet extends ConsumerStatefulWidget {
   final String? occurrence;
   final Map<String, String> title;
   final DateTime startsAt;
+  final DateTime? endsAt;
   final bool recurring;
   final Reminder? existing;
   final bool? isWeb;
@@ -129,6 +132,7 @@ class _ReminderConfigSheet extends ConsumerStatefulWidget {
     this.occurrence,
     required this.title,
     required this.startsAt,
+    this.endsAt,
     this.recurring = false,
     this.existing,
     this.isWeb,
@@ -408,6 +412,7 @@ class _ReminderConfigSheetState extends ConsumerState<_ReminderConfigSheet> {
                                 onPressed: () {
                                   final gUrl = singleCalendarUrl(
                                     startsAt: widget.startsAt,
+                                    endsAt: widget.endsAt,
                                     title: titleText,
                                     recurringWeekly: _every,
                                   );
@@ -421,6 +426,7 @@ class _ReminderConfigSheetState extends ConsumerState<_ReminderConfigSheet> {
                                   final ics = buildReminderIcs(
                                     title: titleText,
                                     startsAt: widget.startsAt,
+                                    endsAt: widget.endsAt,
                                     leadMinutes: _selectedLead ?? 15,
                                     recurringWeekly: _every,
                                   );

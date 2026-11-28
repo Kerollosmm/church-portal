@@ -1,10 +1,11 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/services.dart' show SystemNavigator, SystemUiOverlayStyle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../core/back_navigation.dart';
 import '../../core/l10n.dart';
 import '../../core/motion_env.dart';
 import '../../core/push_env.dart' show hasPendingWebPushSync, readWebPushStorageState;
@@ -84,6 +85,28 @@ const askNavItem = NavItem('ask', '/ask', Icons.auto_awesome_rounded);
 
 bool _isNavSelected(String location, String path) =>
     location == path || (path != '/' && location.startsWith('$path/'));
+
+/// Test hook: pretend to run on the web in [goBackTo].
+@visibleForTesting
+bool? debugBackIsWeb;
+
+/// The page the visitor was on before the current one (this session only).
+String? _previousInAppLocation;
+
+/// The in-app Back arrows. Every in-app link is a `context.go`, so a plain
+/// `go(parent)` on the web would push a new history entry and browser Back
+/// would return to the page just left. When the visitor came from [parent]
+/// the browser entry is popped; otherwise the current entry is replaced.
+void goBackTo(BuildContext context, String parent, {bool? isWeb}) {
+  switch (decideBackAction(isWeb: isWeb ?? debugBackIsWeb ?? kIsWeb, previous: _previousInAppLocation, target: parent)) {
+    case BackAction.historyBack:
+      browserHistoryBack();
+    case BackAction.replace:
+      context.replace(parent);
+    case BackAction.go:
+      context.go(parent);
+  }
+}
 
 /// Whether the shell shows the full desktop link bar (no phone Back arrow).
 /// Compared in unscaled-text units so large system text gets the compact bar.
@@ -200,6 +223,7 @@ class _AppShellState extends ConsumerState<AppShell> {
   @override
   void initState() {
     super.initState();
+    _previousInAppLocation = null;
     _unlistenInstall = ref.read(installEnvProvider).listenInstallChanges(() {
       if (mounted) setState(() {});
     });
@@ -332,6 +356,7 @@ class _AppShellState extends ConsumerState<AppShell> {
   void didUpdateWidget(covariant AppShell oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.location != widget.location) {
+      _previousInAppLocation = oldWidget.location;
       final clearFocus = !widget.location.startsWith('/readings');
       final fromPush = widget.location.contains('from_push=1');
       if (clearFocus || fromPush) {
@@ -435,7 +460,7 @@ class _AppShellState extends ConsumerState<AppShell> {
               tooltip: toParent ? backToLabel(context, parent, customCats) : context.tr('backHome'),
               // Mirrored automatically in RTL (matchTextDirection).
               icon: const Icon(Icons.arrow_back_rounded),
-              onPressed: () => context.go(parent),
+              onPressed: () => goBackTo(context, parent, isWeb: widget.isWeb),
             )
           : null,
       title: InkWell(
