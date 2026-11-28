@@ -24,6 +24,7 @@ import {
   EXPIRE_WINDOW_MS,
   MAX_FCM_SENDS_PER_RUN,
   MAX_SENT_LOG_SIZE,
+  isValidTestTopic,
   parseScheduleRow,
   runPushSender,
   sendFcmMessage,
@@ -368,16 +369,172 @@ describe('push_sender', () => {
     assert.equal(res.reason, 'push_disabled');
   });
 
-  test('runPushSender rejects topicOverride not starting with test_', async () => {
-    await assert.rejects(
-      async () => {
-        await runPushSender(
-          { FIREBASE_SERVICE_ACCOUNT: JSON.stringify(fakeSa) },
-          { topicOverride: 'prod_override' },
-        );
+  test('runPushSender validates topicOverride against ^test_[a-z0-9_]{3,20}$', async () => {
+    const invalidOverrides = [
+      'prod_override',
+      'test_ab',
+      'test_ABC',
+      'test_xx-yy',
+      'test_',
+      'test_   ',
+      'test_a b',
+      `test_${'a'.repeat(21)}`,
+    ];
+
+    for (const bad of invalidOverrides) {
+      assert.equal(isValidTestTopic(bad.trim()), false);
+      await assert.rejects(
+        async () => {
+          await runPushSender(
+            { FIREBASE_SERVICE_ACCOUNT: JSON.stringify(fakeSa) },
+            { topicOverride: bad },
+          );
+        },
+        /topic_override must match/,
+      );
+    }
+
+    assert.equal(isValidTestTopic('test_kerollos1'), true);
+    assert.equal(isValidTestTopic('test_abc'), true);
+    assert.equal(isValidTestTopic(`test_${'a'.repeat(20)}`), true);
+  });
+
+  test('runPushSender with valid topicOverride and dryRun=false sends exactly one test payload and ignores due rows & Firestore writes (even when features.push=true)', async () => {
+    const now = new Date('2026-11-08T18:00:00Z');
+    const fcmCalls = [];
+    const firestoreCalls = [];
+    const schedule = ['r1\x1f2026-11-08T17:00:00Z\x1fall\x1fProd Title\x1f\x1fProd Body\x1f\x1f/\x1f'];
+
+    const mockFetch = async (url, opts) => {
+      if (url.includes(':batchGet') || opts?.method === 'PATCH' || url.includes(':commit')) {
+        firestoreCalls.push({ url, method: opts?.method, body: opts?.body });
+        if (url.includes(':batchGet')) {
+          return {
+            ok: true,
+            text: async () =>
+              JSON.stringify([
+                {
+                  found: {
+                    name: 'projects/p/databases/(default)/documents/settings/features',
+                    fields: { push: { booleanValue: true }, pushTypes: { arrayValue: { values: [] } } },
+                  },
+                },
+                {
+                  found: {
+                    name: 'projects/p/databases/(default)/documents/settings/notifications',
+                    fields: {
+                      schedule: { arrayValue: { values: schedule.map((s) => ({ stringValue: s })) } },
+                      status: { mapValue: { fields: {} } },
+                    },
+                  },
+                },
+              ]),
+          };
+        }
+        return { ok: true, json: async () => ({}) };
+      }
+      if (url.includes('messages:send')) {
+        fcmCalls.push(JSON.parse(opts.body));
+        return { ok: true, json: async () => ({ name: 'projects/p/messages/test-msg-1' }) };
+      }
+      return { ok: true, json: async () => ({}) };
+    };
+
+    const res = await runPushSender(
+      { FIREBASE_SERVICE_ACCOUNT: JSON.stringify(fakeSa) },
+      {
+        fetchImpl: mockFetch,
+        now,
+        dryRun: false,
+        topicOverride: 'test_kerollos1',
+        mintToken: async () => 'mock-tok',
       },
-      /must start with 'test_'/,
     );
+
+    assert.equal(res.status, 'success');
+    assert.equal(res.testTopic, 'test_kerollos1');
+    assert.equal(res.fcmSends, 1);
+    assert.equal(fcmCalls.length, 1);
+    assert.equal(firestoreCalls.length, 0);
+
+    const msg = fcmCalls[0].message;
+    assert.equal(msg.topic, 'test_kerollos1');
+    assert.equal(msg.condition, undefined);
+    assert.equal(msg.data.type, 'announcements');
+    assert.equal(msg.data.lang, 'ar');
+    assert.equal(msg.data.title, 'تجربة');
+    assert.equal(msg.data.body, 'هذا إشعار تجريبي. لن يصل لغير أجهزة التجربة.');
+    assert.equal(msg.data.link, '/notifications');
+    assert.equal(msg.data.eventKey, '');
+    assert.equal(msg.data.nid, `test_${now.getTime()}`);
+    assert.equal(msg.data.sentAt, now.toISOString());
+  });
+
+  test('runPushSender with valid topicOverride sends even when features.push is false or omitted', async () => {
+    const now = new Date('2026-11-08T18:05:00Z');
+    const fcmCalls = [];
+    const firestoreCalls = [];
+
+    const mockFetch = async (url, opts) => {
+      if (url.includes(':batchGet') || opts?.method === 'PATCH' || url.includes(':commit')) {
+        firestoreCalls.push({ url, method: opts?.method });
+        return { ok: true, json: async () => ({}) };
+      }
+      if (url.includes('messages:send')) {
+        fcmCalls.push(JSON.parse(opts.body));
+        return { ok: true, json: async () => ({ name: 'projects/p/messages/test-msg-2' }) };
+      }
+      return { ok: true, json: async () => ({}) };
+    };
+
+    const res = await runPushSender(
+      { FIREBASE_SERVICE_ACCOUNT: JSON.stringify(fakeSa) },
+      {
+        fetchImpl: mockFetch,
+        now,
+        dryRun: false,
+        topicOverride: 'test_kerollos1',
+        mintToken: async () => 'mock-tok',
+      },
+    );
+
+    assert.equal(res.status, 'success');
+    assert.equal(res.fcmSends, 1);
+    assert.equal(fcmCalls.length, 1);
+    assert.equal(fcmCalls[0].message.topic, 'test_kerollos1');
+    assert.equal(firestoreCalls.length, 0);
+  });
+
+  test('runPushSender with valid topicOverride and dryRun=true sends nothing and writes nothing', async () => {
+    const now = new Date('2026-11-08T18:10:00Z');
+    const networkCalls = [];
+    let mintCalled = false;
+
+    const mockFetch = async (url, opts) => {
+      networkCalls.push({ url, method: opts?.method });
+      return { ok: true, json: async () => ({}) };
+    };
+
+    const res = await runPushSender(
+      { FIREBASE_SERVICE_ACCOUNT: JSON.stringify(fakeSa) },
+      {
+        fetchImpl: mockFetch,
+        now,
+        dryRun: true,
+        topicOverride: 'test_kerollos1',
+        mintToken: async () => {
+          mintCalled = true;
+          return 'mock-tok';
+        },
+      },
+    );
+
+    assert.equal(res.status, 'success');
+    assert.equal(res.reason, 'dry_run');
+    assert.equal(res.testTopic, 'test_kerollos1');
+    assert.equal(res.fcmSends, 0);
+    assert.equal(mintCalled, false);
+    assert.equal(networkCalls.length, 0);
   });
 
   test('runPushSender processes due event pushes and enforces 16-send cap', async () => {

@@ -367,4 +367,142 @@ describe('runPushQueueDrain workflow', () => {
     // Check meta/push_topics was updated with active topic
     assert.ok(savedTopics?.fields?.topics?.mapValue?.fields?.['web_rem_lit-sun1_60_ar']);
   });
+
+  test('subscribes valid test_* topics from newest want, ignores invalid strings, and cleans up unenroll & prevToken', async () => {
+    const now = new Date('2026-11-15T12:00:00Z');
+    const older = new Date('2026-11-15T11:50:00Z').toISOString();
+    const newer = new Date('2026-11-15T11:55:00Z').toISOString();
+    const iidCalls = [];
+
+    const tok1 = 'tok1_' + 'x'.repeat(115);
+    const oldTok = 'old1_' + 'y'.repeat(115);
+    const tok2 = 'tok2_' + 'z'.repeat(115);
+
+    const queueDocsResponse = [
+      // Token 1 older doc: enrolled in test_old_topic and test_keep_topic, plus prevToken
+      {
+        document: {
+          name: 'projects/test-project/databases/(default)/documents/push_queue/docA1',
+          fields: {
+            token: { stringValue: tok1 },
+            prevToken: { stringValue: oldTok },
+            want: {
+              arrayValue: {
+                values: [
+                  { stringValue: 'web_announcements_ar' },
+                  { stringValue: 'test_old_topic' },
+                  { stringValue: 'test_keep_topic' },
+                ],
+              },
+            },
+            rem: { stringValue: 'web_rem_lit-sun1_60_ar' },
+            createdAt: { stringValue: older },
+          },
+        },
+      },
+      // Token 1 newer doc: keeps test_keep_topic, drops test_old_topic, adds test_kerollos1, plus invalid strings
+      {
+        document: {
+          name: 'projects/test-project/databases/(default)/documents/push_queue/docA2',
+          fields: {
+            token: { stringValue: tok1 },
+            want: {
+              arrayValue: {
+                values: [
+                  { stringValue: 'web_announcements_ar' },
+                  { stringValue: 'test_keep_topic' },
+                  { stringValue: 'test_kerollos1' },
+                  { stringValue: 'all' },
+                  { stringValue: 'app_announcements_ar' },
+                  { stringValue: 'test_AB' },
+                  { stringValue: 'test_ab' },
+                  { stringValue: 'test_xx-yy' },
+                ],
+              },
+            },
+            createdAt: { stringValue: newer },
+          },
+        },
+      },
+      // Token 2: has invalid test topic in want and a reminder in rem/drop (rem/drop must not be treated as test topics)
+      {
+        document: {
+          name: 'projects/test-project/databases/(default)/documents/push_queue/docB1',
+          fields: {
+            token: { stringValue: tok2 },
+            want: {
+              arrayValue: {
+                values: [{ stringValue: 'test_INVALID' }],
+              },
+            },
+            rem: { stringValue: 'web_rem_meeting-youth_15_ar' },
+            drop: { stringValue: 'web_rem_day-old_30_ar' },
+            createdAt: { stringValue: newer },
+          },
+        },
+      },
+    ];
+
+    const fakeFetch = async (url, options) => {
+      if (url.includes(':runQuery')) {
+        return new Response(JSON.stringify(queueDocsResponse), { status: 200 });
+      }
+      if (url.includes(':batchGet')) {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+      if (url.includes('iid.googleapis.com')) {
+        const op = url.split(':').pop();
+        const body = JSON.parse(options.body);
+        iidCalls.push({ op, ...body });
+        return new Response(
+          JSON.stringify({ results: body.registration_tokens.map(() => ({})) }),
+          { status: 200 },
+        );
+      }
+      return new Response('{}', { status: 200 });
+    };
+
+    const res = await runPushQueueDrain(
+      {},
+      {
+        serviceAccount: mockSa,
+        now,
+        mintToken: async () => 'test-token',
+        fetchImpl: fakeFetch,
+      },
+    );
+
+    assert.equal(res.status, 'ok');
+    assert.equal(res.processed, 3);
+
+    const hasCall = (op, topic, token) =>
+      iidCalls.some(
+        (c) => c.op === op && c.to === `/topics/${topic}` && c.registration_tokens.includes(token),
+      );
+
+    // Subscribed to newest valid test topics
+    assert.ok(hasCall('batchAdd', 'test_keep_topic', tok1));
+    assert.ok(hasCall('batchAdd', 'test_kerollos1', tok1));
+
+    // Unsubscribed tok1 from test_old_topic (present in older doc, missing in newest)
+    assert.ok(hasCall('batchRemove', 'test_old_topic', tok1));
+
+    // Unsubscribed prevToken from all test topics seen for tok1
+    assert.ok(hasCall('batchRemove', 'test_old_topic', oldTok));
+    assert.ok(hasCall('batchRemove', 'test_keep_topic', oldTok));
+    assert.ok(hasCall('batchRemove', 'test_kerollos1', oldTok));
+
+    // Invalid want strings never trigger IID calls
+    for (const bad of ['all', 'app_announcements_ar', 'test_AB', 'test_ab', 'test_xx-yy', 'test_INVALID']) {
+      assert.equal(
+        iidCalls.some((c) => c.to === `/topics/${bad}`),
+        false,
+        `must not call IID for invalid topic ${bad}`,
+      );
+    }
+
+    // Reminder topics handled normally via rem/drop
+    assert.ok(hasCall('batchAdd', 'web_rem_meeting-youth_15_ar', tok2));
+    assert.ok(hasCall('batchRemove', 'web_rem_day-old_30_ar', tok2));
+  });
 });

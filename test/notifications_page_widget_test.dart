@@ -1733,6 +1733,124 @@ void main() {
     expect(downloaded, hasLength(2));
     expect(downloaded.last.content, contains('RRULE:FREQ=WEEKLY;BYDAY=FR'));
   });
+
+  testWidgets('hidden test topic enrollment dialog validates, subscribes, and unsubscribes via debug hook',
+      (tester) async {
+    final calls = <({String topic, bool subscribe})>[];
+    NotificationsPage.debugTestTopicHook = (topic, {required bool subscribe}) async {
+      calls.add((topic: topic, subscribe: subscribe));
+      return true;
+    };
+    addTearDown(() => NotificationsPage.debugTestTopicHook = null);
+
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: false),
+      pushSettings: const PushSettings(enabled: true, offered: [NotifyType.announcements]),
+      pushEnv: FakeTestPushEnv(permission: 'granted'),
+      installEnv: FakeTestInstallEnv(),
+    ));
+    await tester.pumpAndSettle();
+
+    // Long-press the hidden enrollment trigger
+    await tester.longPress(find.byKey(const ValueKey('notifications-test-topic-enroll')));
+    await tester.pumpAndSettle();
+    expect(find.text('موضوع تجربة الإشعارات'), findsOneWidget);
+
+    // Invalid input shows error inside dialog and does not call hook
+    await tester.enterText(find.byType(TextField), 'test_AB');
+    await tester.tap(find.text('اشتراك'));
+    await tester.pumpAndSettle();
+    expect(calls, isEmpty);
+    expect(find.textContaining('اسم الموضوع غير صالح'), findsOneWidget);
+    expect(find.text('موضوع تجربة الإشعارات'), findsOneWidget);
+
+    // Valid input without prefix normalizes to test_kerollos1 and calls hook(subscribe: true)
+    await tester.enterText(find.byType(TextField), 'kerollos1');
+    await tester.tap(find.text('اشتراك'));
+    await tester.pumpAndSettle();
+    expect(calls, [(topic: 'test_kerollos1', subscribe: true)]);
+    expect(find.textContaining('تم الاشتراك في موضوع التجربة: test_kerollos1'), findsOneWidget);
+
+    // Re-open and unsubscribe with full topic name
+    await tester.longPress(find.byKey(const ValueKey('notifications-test-topic-enroll')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'test_kerollos1');
+    await tester.tap(find.text('إلغاء الاشتراك'));
+    await tester.pumpAndSettle();
+    expect(calls, [
+      (topic: 'test_kerollos1', subscribe: true),
+      (topic: 'test_kerollos1', subscribe: false),
+    ]);
+    expect(find.textContaining('تم إلغاء الاشتراك من موضوع التجربة: test_kerollos1'), findsOneWidget);
+  });
+
+  testWidgets('hidden test topic dialog also works when master push toggle is off', (tester) async {
+    final calls = <({String topic, bool subscribe})>[];
+    NotificationsPage.debugTestTopicHook = (topic, {required bool subscribe}) async {
+      calls.add((topic: topic, subscribe: subscribe));
+      return true;
+    };
+    addTearDown(() => NotificationsPage.debugTestTopicHook = null);
+
+    await tester.pumpWidget(buildTestable(
+      locale: const Locale('en'),
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(enabled: false),
+      pushEnv: FakeTestPushEnv(),
+      installEnv: FakeTestInstallEnv(),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.byKey(const ValueKey('notifications-test-topic-enroll')));
+    await tester.pumpAndSettle();
+    expect(find.text('Test notification topic'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), 'kerollos1');
+    await tester.tap(find.text('Subscribe'));
+    await tester.pumpAndSettle();
+    expect(calls, [(topic: 'test_kerollos1', subscribe: true)]);
+    expect(find.textContaining('Subscribed to test topic: test_kerollos1'), findsOneWidget);
+  });
+
+  testWidgets('unsubscribe-all on web clears stored test topic and syncs empty want', (tester) async {
+    final writes = <Map<String, dynamic>>[];
+    web_push.WebPushRepository.debugBatchWriter = (qid, queueData, rateData, {bool isSetCount1 = false}) async {
+      writes.add(Map<String, dynamic>.from(queueData));
+    };
+    addTearDown(() => web_push.WebPushRepository.debugBatchWriter = null);
+
+    final pushEnv = FakeTestPushEnv(
+      permission: 'granted',
+      storage: {
+        testPushTopicStorageKey: 'test_kerollos1',
+      },
+    );
+    final installEnv = FakeTestInstallEnv();
+
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(
+        enabled: true,
+        offered: [NotifyType.announcements],
+        vapidKey: 'test_vapid_key_01234567890123456789012345678901234567890123456789012345678901234567890123456789',
+      ),
+      pushEnv: pushEnv,
+      installEnv: installEnv,
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('تنويهات وأخبار'));
+    await tester.pumpAndSettle();
+    expect(writes.last['want'], ['web_announcements_ar', 'test_kerollos1']);
+
+    await tester.ensureVisible(find.text('إيقاف كل الإشعارات'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('إيقاف كل الإشعارات'));
+    await tester.pumpAndSettle();
+
+    expect(pushEnv.storage[testPushTopicStorageKey], '');
+    expect(writes.last['want'], isEmpty);
+  });
 }
 
 class _DelayedEnablePushEnv extends FakeTestPushEnv {
