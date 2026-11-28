@@ -290,4 +290,76 @@ class PushMessaging {
       return false;
     }
   }
+
+  /// Reads the currently enrolled test push topic from local preferences, if valid.
+  static Future<String?> getStoredTestTopic({SharedPreferences? sharedPrefs}) async {
+    if (kIsWeb) return null;
+    try {
+      final sp = sharedPrefs ?? await SharedPreferences.getInstance();
+      final raw = sp.getString(testPushTopicStorageKey)?.trim();
+      return (raw != null && isValidTestPushTopic(raw)) ? raw : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Subscribes this device to a validated `test_*` FCM topic and stores it locally.
+  /// Unsubscribes from any different previously stored test topic first.
+  static Future<bool> subscribeTestTopic(
+    String topic, {
+    FirebaseMessaging? messagingInstance,
+    SharedPreferences? sharedPrefs,
+    Duration timeout = topicSyncTimeout,
+  }) async {
+    if (kIsWeb) return false;
+    final normalized = normalizeTestPushTopic(topic);
+    if (normalized == null) return false;
+    try {
+      final sp = sharedPrefs ?? await SharedPreferences.getInstance();
+      final messaging = messagingInstance ?? FirebaseMessaging.instance;
+      final previous = sp.getString(testPushTopicStorageKey)?.trim();
+      if (previous != null &&
+          previous.isNotEmpty &&
+          previous != normalized &&
+          isValidTestPushTopic(previous)) {
+        await messaging.unsubscribeFromTopic(previous).timeout(timeout);
+      }
+      await messaging.subscribeToTopic(normalized).timeout(timeout);
+      await sp.setString(testPushTopicStorageKey, normalized);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Unsubscribes this device from [topic] (and any stored test topic) and clears storage.
+  static Future<bool> unsubscribeTestTopic(
+    String topic, {
+    FirebaseMessaging? messagingInstance,
+    SharedPreferences? sharedPrefs,
+    Duration timeout = topicSyncTimeout,
+  }) async {
+    if (kIsWeb) return false;
+    final trimmed = topic.trim();
+    final normalized = trimmed.isEmpty ? null : normalizeTestPushTopic(trimmed);
+    if (trimmed.isNotEmpty && normalized == null) return false;
+    try {
+      final sp = sharedPrefs ?? await SharedPreferences.getInstance();
+      final stored = sp.getString(testPushTopicStorageKey)?.trim();
+      final targets = <String>{
+        ?normalized,
+        if (stored != null && isValidTestPushTopic(stored)) stored,
+      };
+      if (targets.isNotEmpty) {
+        final messaging = messagingInstance ?? FirebaseMessaging.instance;
+        for (final t in targets) {
+          await messaging.unsubscribeFromTopic(t).timeout(timeout);
+        }
+      }
+      await sp.remove(testPushTopicStorageKey);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 }

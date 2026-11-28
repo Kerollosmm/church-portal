@@ -18,4 +18,25 @@ class PushMessaging {
 
   /// No-op pending topic sync clear on web.
   static Future<void> clearPendingTopicSync() async {}
+
+  /// No-op stored test topic lookup on web (web uses PushEnv storage).
+  static Future<String?> getStoredTestTopic({Object? sharedPrefs}) async => null;
+
+  /// No-op test topic subscription on web (web uses WebPushRepository).
+  static Future<bool> subscribeTestTopic(
+    String topic, {
+    Object? messagingInstance,
+    Object? sharedPrefs,
+    Duration timeout = const Duration(seconds: 20),
+  }) async =>
+      false;
+
+  /// No-op test topic unsubscription on web (web uses WebPushRepository).
+  static Future<bool> unsubscribeTestTopic(
+    String topic, {
+    Object? messagingInstance,
+    Object? sharedPrefs,
+    Duration timeout = const Duration(seconds: 20),
+  }) async =>
+      false;
 }

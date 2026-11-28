@@ -183,6 +183,25 @@ final _webReminderTopicRegex = RegExp(
 /// Whether [topic] is a syntactically valid Web Push reminder topic.
 bool isValidWebReminderTopic(String topic) => _webReminderTopicRegex.hasMatch(topic);
 
+/// Local storage / SharedPreferences key for the optional Phase 6H test topic.
+const String testPushTopicStorageKey = 'church_portal_test_push_topic';
+
+/// Single-topic validator matching JS `^test_[a-z0-9_]{3,20}$` (case-sensitive).
+final _testPushTopicRegex = RegExp(r'^test_[a-z0-9_]{3,20}$');
+
+/// Whether [topic] is a valid Phase 6H test push topic (`test_[a-z0-9_]{3,20}`).
+bool isValidTestPushTopic(String topic) => _testPushTopicRegex.hasMatch(topic);
+
+/// Trims [raw] and prepends `test_` if missing, returning `null` if invalid.
+///
+/// Rejects uppercase letters so validation matches JS and Firestore rules.
+String? normalizeTestPushTopic(String raw) {
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty) return null;
+  final candidate = trimmed.startsWith('test_') ? trimmed : 'test_$trimmed';
+  return isValidTestPushTopic(candidate) ? candidate : null;
+}
+
 /// Generates the dynamic per-event topic name for user event reminders on the web.
 ///
 /// Format:
@@ -1301,16 +1320,21 @@ WebTopicPlan computeWebTopicSync({
   required DateTime now,
   String? currentToken,
   String? previousSyncedToken,
+  String? testTopic,
 }) {
   final lang = prefs.lang.trim().toLowerCase() == 'en' ? 'en' : 'ar';
 
-  // 1. Fixed web topics: announcements and seasons only (max 2)
+  // 1. Fixed web topics: announcements and seasons only (max 2) + optional test topic
   final want = <String>[];
   if (prefs.types.contains(NotifyType.announcements)) {
     want.add('web_announcements_$lang');
   }
   if (prefs.types.contains(NotifyType.seasons)) {
     want.add('web_seasons_$lang');
+  }
+  final cleanTestTopic = testTopic?.trim();
+  if (cleanTestTopic != null && isValidTestPushTopic(cleanTestTopic)) {
+    want.add(cleanTestTopic);
   }
 
   // 2. Reminder topics (max 30)

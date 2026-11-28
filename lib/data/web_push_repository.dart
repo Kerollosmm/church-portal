@@ -187,6 +187,16 @@ class WebPushRepository {
     } catch (_) {}
   }
 
+  String? _readStoredTestTopic() {
+    try {
+      final raw = pushEnv.readStorage(testPushTopicStorageKey)?.trim();
+      if (raw == null || raw.isEmpty || !isValidTestPushTopic(raw)) return null;
+      return raw;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Request permission and initialize web token.
   Future<String?> enable({
     required String vapidKey,
@@ -214,9 +224,10 @@ class WebPushRepository {
   }) async {
     _lastPrefs = prefs;
     _lastReminders = List.from(reminders);
+    final testTopic = _readStoredTestTopic();
 
     if (_syncedToken == null) {
-      return prefs.types.isEmpty;
+      return prefs.types.isEmpty && testTopic == null;
     }
 
     final plan = computeWebTopicSync(
@@ -226,6 +237,7 @@ class WebPushRepository {
       now: DateTime.now().toUtc(),
       previousSyncedToken: null,
       currentToken: _syncedToken!,
+      testTopic: testTopic,
     );
 
     final remList = plan.rem.split(',').where((s) => s.isNotEmpty).toList();
@@ -339,6 +351,7 @@ class WebPushRepository {
       now: DateTime.now().toUtc(),
       previousSyncedToken: null,
       currentToken: _syncedToken!,
+      testTopic: _readStoredTestTopic(),
     );
 
     final remList = plan.rem.split(',').where((s) => s.isNotEmpty).toList();
@@ -410,6 +423,7 @@ class WebPushRepository {
           now: DateTime.now().toUtc(),
           previousSyncedToken: oldToken,
           currentToken: freshToken,
+          testTopic: _readStoredTestTopic(),
         );
 
         final success = await _executeRetryWrite(
@@ -462,6 +476,9 @@ class WebPushRepository {
     _syncedRem = const [];
     _pendingSync = false;
     _lastSyncedAt = null;
+    try {
+      pushEnv.writeStorage(testPushTopicStorageKey, '');
+    } catch (_) {}
     _saveState();
     return true;
   }
