@@ -5,9 +5,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui' show Tristate;
 
+import 'package:church_portal/core/document_lang.dart' show kCanonicalOrigin;
 import 'package:church_portal/core/l10n.dart';
 import 'package:church_portal/data/admin_repository.dart';
 import 'package:church_portal/data/content_repository.dart';
@@ -39,6 +39,7 @@ import 'package:church_portal/ui/widgets/cards.dart' show NextMassCard;
 import 'package:church_portal/ui/widgets/common.dart';
 import 'package:church_portal/ui/widgets/feature_gate.dart';
 import 'package:church_portal/ui/widgets/golden.dart' show Reveal;
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -6174,6 +6175,54 @@ void main() {
       );
       expect(find.byType(SectionUnavailable), findsOneWidget);
       expect(find.byType(NotFoundPage), findsNothing);
+    });
+
+    testWidgets('share button appears on custom pages and copies canonical URL with title semantic label',
+        (tester) async {
+      final copied = <String>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') copied.add((call.arguments as Map)['text'] as String);
+        return null;
+      });
+      addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+
+      await _pump(tester, '/page/donate', size: const Size(320, 1200), locale: const Locale('en'));
+      final pageShare = find.byKey(const Key('pageShare'));
+      expect(pageShare, findsOneWidget);
+      expect(find.bySemanticsLabel('Share link — Building donations'), findsOneWidget);
+      await tester.ensureVisible(pageShare);
+      await tester.tap(pageShare);
+      await tester.pump();
+      expect(copied, ['$kCanonicalOrigin/page/donate?lang=en']);
+      expect(find.text('Link copied'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await _pump(tester, '/page/does-not-exist');
+      expect(find.byKey(const Key('pageShare')), findsNothing);
+    });
+
+    testWidgets('share button appears on custom sections and copies canonical URL with title semantic label',
+        (tester) async {
+      final copied = <String>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') copied.add((call.arguments as Map)['text'] as String);
+        return null;
+      });
+      addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+
+      await _pump(tester, '/section/youth-trips', size: const Size(320, 1200), locale: const Locale('ar'));
+      final categoryShare = find.byKey(const Key('categoryShare'));
+      expect(categoryShare, findsOneWidget);
+      expect(find.bySemanticsLabel('مشاركة الرابط — رحلات الشباب'), findsOneWidget);
+      await tester.ensureVisible(categoryShare);
+      await tester.tap(categoryShare);
+      await tester.pump();
+      expect(copied, ['$kCanonicalOrigin/section/youth-trips']);
+      expect(find.text('تم نسخ الرابط'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await _pump(tester, '/section/does-not-exist');
+      expect(find.byKey(const Key('categoryShare')), findsNothing);
     });
   });
 }

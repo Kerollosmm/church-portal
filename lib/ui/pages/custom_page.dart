@@ -9,6 +9,7 @@ import '../../domain/custom_content.dart';
 import '../../domain/media.dart';
 import '../../domain/rules.dart' show toArabicDigits;
 import '../../state/providers.dart';
+import '../widgets/cards.dart' show ShareLinkButton;
 import '../widgets/common.dart';
 import '../widgets/golden.dart';
 import '../widgets/styled_image.dart';
@@ -52,6 +53,7 @@ class CustomPageView extends ConsumerWidget {
             final categories = ref.watch(categoriesProvider).value;
             final title = context.pick(p.titleAr, p.titleEn);
             final subtitle = context.pick(p.subtitleAr.trim(), p.subtitleEn.trim());
+            final shareUrl = shareableUrlForPath(path, english: !context.isAr);
             final hero = p.image;
             final visibleBlocks = [
               for (final b in p.blocks)
@@ -79,6 +81,13 @@ class CustomPageView extends ConsumerWidget {
                                 aspectRatio: 16 / 7,
                                 maxHeight: 420),
                           ),
+                        Align(
+                          alignment: AlignmentDirectional.centerStart,
+                          child: Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: ShareLinkButton(key: const Key('pageShare'), url: shareUrl, title: title),
+                          ),
+                        ),
                         for (var i = 0; i < visibleBlocks.length; i++)
                           Padding(
                             padding: EdgeInsets.only(

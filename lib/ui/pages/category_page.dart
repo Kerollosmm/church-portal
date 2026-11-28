@@ -75,10 +75,12 @@ class CategoryPage extends ConsumerWidget {
           return const NotFoundPage(key: Key('categoryNotFound'));
         }
         final c = cat;
+        final title = context.pick(c.nameAr, c.nameEn);
         final intro = context.pick(c.introAr.trim(), c.introEn.trim());
+        final shareUrl = shareableUrlForPath(path, english: !context.isAr);
         return PageBody(
           key: Key('category-${c.slug}'),
-          header: PageHeader(title: context.pick(c.nameAr, c.nameEn), icon: categoryIcon(c.icon)),
+          header: PageHeader(title: title, icon: categoryIcon(c.icon)),
           children: [
             if (intro.isNotEmpty)
               Padding(
@@ -88,6 +90,13 @@ class CategoryPage extends ConsumerWidget {
                   child: Text(intro, style: TextStyle(height: 1.75, color: context.pal.ink)),
                 ),
               ),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: ShareLinkButton(key: const Key('categoryShare'), url: shareUrl, title: title),
+              ),
+            ),
             AsyncSection(
               provider: entriesProvider,
               retry: entriesProvider,

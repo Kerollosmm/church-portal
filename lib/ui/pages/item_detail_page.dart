@@ -1,4 +1,3 @@
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
@@ -555,51 +554,28 @@ class _DetailView extends ConsumerWidget {
     final english = !context.isAr;
     final url = absoluteDetailUrl(kCanonicalOrigin, kind, id, english: english);
     final now = ref.watch(nowProvider).value ?? DateTime.now();
-    final calendar = e.calendarDays.isEmpty
-        ? null
-        : weeklyCalendarUrl(
-            title: e.title,
-            weekdays: e.calendarDays,
-            start: e.start,
-            end: e.end,
-            details: url,
-            location: settings == null
-                ? ''
-                : [context.pick(settings.nameAr, settings.nameEn), context.pick(settings.addressAr, settings.addressEn)]
-                    .where((x) => x.trim().isNotEmpty)
-                    .join(english ? ', ' : '، '),
-            now: now,
-          );
+    final startMin = parseHm(e.start);
+    final nextStart = _nextWeeklyStart(e.calendarDays, startMin, now);
     return [
-      if (calendar != null)
-        ActionChipButton(
+      if (nextStart != null && startMin != null)
+        AddToCalendarButton(
           key: const Key('detailAddToCalendar'),
-          icon: Icons.event_available_rounded,
-          label: context.tr('addToCalendar'),
-          semanticLabel: actionSemanticLabel(context.tr('addToCalendar'), e.title),
-          color: context.pal.bar,
-          onTap: () => openUrl(calendar),
+          uid: '${kind.name}-$id@maximos-domadios',
+          title: e.title,
+          startsAt: nextStart,
+          endsAt: calendarEndsAt(nextStart, startMinutes: startMin, endMinutes: parseHm(e.end)),
+          recurringWeekly: true,
+          description: url,
+          location: calendarLocation(context, settings),
+          filename: safeIcsFilename('${kind.name}_$id', fallback: kind.name),
         ),
-      if (kind == DetailKind.meeting && e.calendarDays.isNotEmpty && e.start.isNotEmpty)
-        Builder(builder: (c) {
-          // The earliest coming session over all the item's weekdays (a
-          // item may run on several days); today's counts until it starts.
-          final cNow = CairoTime.fromInstant(now);
-          final sm = parseHm(e.start) ?? 0;
-          DateTime? target;
-          for (final weekday in e.calendarDays) {
-            final daysAhead = (weekday - cNow.weekday + 7) % 7;
-            var t = CairoTime.at(cNow.year, cNow.month, cNow.day + daysAhead, sm);
-            if (t.isBefore(cNow)) t = CairoTime.at(cNow.year, cNow.month, cNow.day + daysAhead + 7, sm);
-            if (target == null || t.isBefore(target)) target = t;
-          }
-          return RemindMeButton(
-            eventKey: EventKey.meeting(id),
-            title: e.reminderTitle.isNotEmpty ? e.reminderTitle : {'ar': e.title, 'en': e.title},
-            startsAt: target!,
-            recurring: true,
-          );
-        }),
+      if (kind == DetailKind.meeting && nextStart != null)
+        RemindMeButton(
+          eventKey: EventKey.meeting(id),
+          title: e.reminderTitle.isNotEmpty ? e.reminderTitle : {'ar': e.title, 'en': e.title},
+          startsAt: nextStart,
+          recurring: true,
+        ),
       if (e.onSite && settings != null && _hasDestination(settings))
         ActionChipButton(
           key: const Key('detailDirections'),
@@ -609,26 +585,28 @@ class _DetailView extends ConsumerWidget {
           color: context.pal.goldText,
           onTap: () => openUrl(mapsDirectionsUrl(settings)),
         ),
-      ActionChipButton(
+      ShareLinkButton(
         key: const Key('detailShare'),
-        icon: Icons.share_rounded,
-        label: context.tr('shareLink'),
-        semanticLabel: actionSemanticLabel(context.tr('shareLink'), e.title),
-        color: context.pal.muted,
-        onTap: () async {
-          final messenger = ScaffoldMessenger.maybeOf(context);
-          final copied = context.tr('linkCopied');
-          final failed = context.tr('linkCopyFailed', {'u': url});
-          try {
-            await Clipboard.setData(ClipboardData(text: url));
-            messenger?.showSnackBar(SnackBar(content: Text(copied)));
-          } catch (_) {
-            // Clipboard refused (browser permission): show the link so it can still be copied by hand.
-            messenger?.showSnackBar(SnackBar(content: SelectableText(failed), duration: const Duration(seconds: 8)));
-          }
-        },
+        url: url,
+        title: e.title,
       ),
     ];
+  }
+
+  /// Earliest upcoming Cairo occurrence for [weekdays] at [startMinutes] after [now].
+  static DateTime? _nextWeeklyStart(List<int> weekdays, int? startMinutes, DateTime now) {
+    if (startMinutes == null) return null;
+    final valid = weekdays.where((d) => d >= 1 && d <= 7).toSet();
+    if (valid.isEmpty) return null;
+    final cNow = CairoTime.fromInstant(now);
+    DateTime? target;
+    for (final weekday in valid) {
+      final daysAhead = (weekday - cNow.weekday + 7) % 7;
+      var t = CairoTime.at(cNow.year, cNow.month, cNow.day + daysAhead, startMinutes);
+      if (t.isBefore(cNow)) t = CairoTime.at(cNow.year, cNow.month, cNow.day + daysAhead + 7, startMinutes);
+      if (target == null || t.isBefore(target)) target = t;
+    }
+    return target;
   }
 
   List<Widget> _contactButtons(BuildContext context, WidgetRef ref, _Entry e) {

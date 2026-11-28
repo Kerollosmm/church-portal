@@ -1,7 +1,9 @@
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../core/document_lang.dart';
 import '../../core/l10n.dart';
 import '../../core/launch.dart';
 import '../../core/theme.dart';
@@ -140,17 +142,53 @@ class LiturgyCard extends ConsumerWidget {
               IconLine(Icons.place_outlined, context.pick(l.placeAr, l.placeEn)),
               IconLine(Icons.people_outline, context.pick(l.audienceAr, l.audienceEn)),
               ProgramDetails(l.program, parallelText: parallelText),
-              if (nextLiturgyOccurrence(l, now, skipToday: notHeldToday, heldOn: heldOn) case final next?)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: RemindMeButton(
-                    eventKey: EventKey.liturgy(l.id),
-                    occurrence: l.date != null ? isoDate(CairoTime.calendarDate(l.date!)) : null,
-                    title: {'ar': l.nameAr, 'en': l.nameEn},
-                    startsAt: next,
-                    recurring: l.date == null,
-                  ),
-                ),
+              if (nextLiturgyOccurrence(l, now, skipToday: notHeldToday, heldOn: heldOn) case final next?) ...[
+                Builder(builder: (context) {
+                  final showRemind =
+                      ref.watch(pushSettingsProvider.select((p) => p.remindsFor(EventKey.liturgy(l.id)))) &&
+                          !next.isBefore(now);
+                  final hasCalendar = l.startMinutes != null &&
+                      (l.date != null || (l.weekday != null && l.weekday! >= 1 && l.weekday! <= 7));
+                  if (!showRemind && !hasCalendar) return const SizedBox.shrink();
+                  final title = context.pick(l.nameAr, l.nameEn);
+                  final opts = ref.watch(featuresProvider.select((f) => f.programOptions));
+                  final settings = ref.watch(featuresProvider.select((f) => f.enabled(Sections.contactInfo)))
+                      ? ref.watch(settingsProvider).value
+                      : null;
+                  final isWeekly = l.date == null;
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Wrap(
+                      spacing: showRemind ? 8 : 0,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        RemindMeButton(
+                          eventKey: EventKey.liturgy(l.id),
+                          occurrence: l.date != null ? isoDate(CairoTime.calendarDate(l.date!)) : null,
+                          title: {'ar': l.nameAr, 'en': l.nameEn},
+                          startsAt: next,
+                          recurring: isWeekly,
+                        ),
+                        if (hasCalendar)
+                          AddToCalendarButton(
+                            key: ValueKey('liturgyCalendar-${l.id}'),
+                            uid: isWeekly
+                                ? 'liturgy-${l.id}@maximos-domadios'
+                                : 'liturgy-${l.id}-${isoDate(CairoTime.calendarDate(l.date!))}@maximos-domadios',
+                            title: title,
+                            startsAt: next,
+                            endsAt: calendarEndsAt(next, startMinutes: l.startMinutes!, endMinutes: l.endMinutes),
+                            recurringWeekly: isWeekly,
+                            description: shareableUrlForPath('/mass-schedule', english: !context.isAr),
+                            location: calendarLocation(context, settings, place: servicePlace(context, opts, l)),
+                            filename: safeIcsFilename('liturgy_${l.id}', fallback: 'liturgy'),
+                          ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
             ]),
           ),
         ]),
@@ -641,6 +679,109 @@ class ActionChipButton extends StatelessWidget {
 
 /// "Call — Youth meeting": an action label plus the item it acts on.
 String actionSemanticLabel(String action, String target) => target.isEmpty ? action : '$action — $target';
+
+/// End instant in Cairo wall time for an event starting at [start], rolling
+/// overnight ends (`endMinutes <= startMinutes`) into the next day and
+/// defaulting to +60 minutes when [endMinutes] is null.
+DateTime calendarEndsAt(DateTime start, {required int startMinutes, int? endMinutes}) {
+  var em = endMinutes ?? (startMinutes + 60);
+  if (em <= startMinutes) em += 24 * 60;
+  final c = CairoTime.fromInstant(start);
+  return CairoTime.at(c.year, c.month, c.day, em);
+}
+
+/// Sanitizes [raw] into a safe `<name>.ics` filename.
+String safeIcsFilename(String raw, {String fallback = 'event'}) {
+  final safe = raw.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+  return '${safe.isEmpty ? fallback : safe}.ics';
+}
+
+/// Formatted event location combining an optional in-church [place] and the
+/// church's name and address when [settings] is available.
+String calendarLocation(BuildContext context, ChurchSettings? settings, {String place = ''}) {
+  final parts = <String>[
+    if (place.trim().isNotEmpty) place.trim(),
+    if (settings != null) ...[
+      context.pick(settings.nameAr, settings.nameEn).trim(),
+      context.pick(settings.addressAr, settings.addressEn).trim(),
+    ],
+  ];
+  return parts.where((x) => x.isNotEmpty).join(context.isAr ? '، ' : ', ');
+}
+
+/// Share button copying [url] to the clipboard with a SnackBar confirmation
+/// (used on detail pages, custom pages, and custom sections).
+class ShareLinkButton extends StatelessWidget {
+  final String url;
+  final String title;
+  const ShareLinkButton({super.key, required this.url, required this.title});
+
+  @override
+  Widget build(BuildContext context) => ActionChipButton(
+        icon: Icons.share_rounded,
+        label: context.tr('shareLink'),
+        semanticLabel: actionSemanticLabel(context.tr('shareLink'), title),
+        color: context.pal.muted,
+        onTap: () async {
+          final messenger = ScaffoldMessenger.maybeOf(context);
+          final copied = context.tr('linkCopied');
+          final failed = context.tr('linkCopyFailed', {'u': url});
+          try {
+            await Clipboard.setData(ClipboardData(text: url));
+            messenger?.showSnackBar(SnackBar(content: Text(copied)));
+          } catch (_) {
+            // Clipboard refused (browser permission): show the link so it can still be copied by hand.
+            messenger?.showSnackBar(SnackBar(content: SelectableText(failed), duration: const Duration(seconds: 8)));
+          }
+        },
+      );
+}
+
+/// "Add to calendar" action chip: triggers deferred `.ics` download on web or
+/// opens Google Calendar on native platforms.
+class AddToCalendarButton extends StatelessWidget {
+  final String uid;
+  final String title;
+  final DateTime startsAt;
+  final DateTime? endsAt;
+  final bool recurringWeekly;
+  final String description;
+  final String location;
+  final String filename;
+
+  const AddToCalendarButton({
+    super.key,
+    required this.uid,
+    required this.title,
+    required this.startsAt,
+    this.endsAt,
+    this.recurringWeekly = false,
+    this.description = '',
+    this.location = '',
+    required this.filename,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final label = context.tr('addToCalendar');
+    return ActionChipButton(
+      icon: Icons.event_available_rounded,
+      label: label,
+      semanticLabel: actionSemanticLabel(label, title),
+      color: context.pal.bar,
+      onTap: () => exportCalendarEventDeferred(
+        uid: uid,
+        title: title,
+        startsAt: startsAt,
+        endsAt: endsAt,
+        recurringWeekly: recurringWeekly,
+        description: description,
+        location: location,
+        filename: filename,
+      ),
+    );
+  }
+}
 
 // Darkened brand fills so white button text meets WCAG AA (>= 4.5:1).
 // Third-party brand colours, not theme colours (palette-exempt).

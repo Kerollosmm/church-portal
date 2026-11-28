@@ -18,6 +18,7 @@ import 'package:church_portal/router.dart';
 import 'package:church_portal/state/providers.dart';
 import 'package:church_portal/ui/widgets/app_shell.dart';
 import 'package:church_portal/ui/widgets/common.dart';
+import 'package:church_portal/ui/widgets/ics_download.dart' show debugOnIcsDownload;
 import 'package:church_portal/ui/widgets/remind_me.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -198,7 +199,10 @@ const _detailRoutes = {
 };
 
 void main() {
-  setUpAll(CairoTime.ensureInitialized);
+  setUpAll(() async {
+    CairoTime.ensureInitialized();
+    await RemindMeButton.preloadSheetForTest();
+  });
   tearDown(() => debugOnRouteMeta = null);
 
   group('Task 3.1: detail sub-routes & parent-aware back navigation', () {
@@ -899,6 +903,54 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.byKey(const Key('detailFacts')), findsOneWidget);
       expect(find.byKey(const Key('detailShare')), findsOneWidget);
+    });
+
+    testWidgets('calendar export: web downloads weekly .ics, native opens Google Calendar', (tester) async {
+      final downloaded = <({String content, String filename})>[];
+      debugOnIcsDownload = (content, filename) => downloaded.add((content: content, filename: filename));
+      addTearDown(() => debugOnIcsDownload = null);
+
+      final launched = <String>[];
+      const channel = MethodChannel('plugins.flutter.io/url_launcher');
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (call) async {
+        final args = call.arguments;
+        if (args is Map && args['url'] is String) launched.add(args['url'] as String);
+        return true;
+      });
+      addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, null));
+      addTearDown(() => debugCalendarIsWeb = null);
+
+      await _pump(tester, initial: '/church-education/d-meeting');
+      final calBtn = find.byKey(const Key('detailAddToCalendar'));
+      expect(calBtn, findsOneWidget);
+
+      // Web: downloads .ics with weekly RRULE in Cairo time.
+      debugCalendarIsWeb = true;
+      await tester.ensureVisible(calBtn);
+      await tester.tap(calBtn);
+      await tester.pumpAndSettle();
+      expect(downloaded, hasLength(1));
+      expect(downloaded.single.filename, 'meeting_d-meeting.ics');
+      expect(downloaded.single.content, contains('SUMMARY:Test meeting\r\n'));
+      expect(downloaded.single.content, contains('DTSTART;TZID=Africa/Cairo:20261106T190000\r\n'));
+      expect(downloaded.single.content, contains('RRULE:FREQ=WEEKLY;BYDAY=FR\r\n'));
+      expect(
+        downloaded.single.content.replaceAll('\r\n ', ''),
+        contains('DESCRIPTION:$kCanonicalOrigin/church-education/d-meeting?lang=en\r\n'),
+      );
+      expect(launched, isEmpty);
+
+      // Native Android: opens Google Calendar singleCalendarUrl with weekly RRULE.
+      debugCalendarIsWeb = false;
+      await tester.tap(calBtn);
+      await tester.pumpAndSettle();
+      expect(launched, hasLength(1));
+      final gUri = Uri.parse(launched.single);
+      expect(gUri.host, 'calendar.google.com');
+      expect(gUri.queryParameters['action'], 'TEMPLATE');
+      expect(gUri.queryParameters['text'], 'Test meeting');
+      expect(gUri.queryParameters['ctz'], 'Africa/Cairo');
+      expect(gUri.queryParameters['recur'], 'RRULE:FREQ=WEEKLY;BYDAY=FR');
     });
   });
 }

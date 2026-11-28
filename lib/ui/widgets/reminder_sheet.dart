@@ -73,6 +73,46 @@ Future<void> showReminderSheet(
   );
 }
 
+/// Exports a single or weekly-recurring calendar event: on web, downloads an
+/// RFC 5545 `.ics` file via [buildReminderIcs] + [downloadIcsFile]; off web
+/// (native Android/iOS), opens Google Calendar via [singleCalendarUrl].
+Future<void> exportCalendarEvent({
+  required String uid,
+  required String title,
+  required DateTime startsAt,
+  DateTime? endsAt,
+  bool recurringWeekly = false,
+  String description = '',
+  String location = '',
+  required String filename,
+  bool? isWeb,
+}) async {
+  if (isWeb ?? kIsWeb) {
+    final ics = buildReminderIcs(
+      uid: uid,
+      title: title,
+      startsAt: startsAt,
+      endsAt: endsAt,
+      leadMinutes: 15,
+      recurringWeekly: recurringWeekly,
+      description: description,
+      location: location,
+    );
+    downloadIcsFile(ics, filename: filename);
+    return;
+  }
+  await openUrl(
+    singleCalendarUrl(
+      title: title,
+      startsAt: startsAt,
+      endsAt: endsAt,
+      details: description,
+      location: location,
+      recurringWeekly: recurringWeekly,
+    ),
+  );
+}
+
 /// Its own [ConsumerStatefulWidget] so the clock and the admin settings
 /// rebuild it while it is open (a lead whose time passes gets disabled).
 class _ReminderConfigSheet extends ConsumerStatefulWidget {

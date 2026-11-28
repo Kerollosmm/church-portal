@@ -11,6 +11,42 @@ import '../../state/providers.dart';
 // tap (ADR-057 size budget).
 import 'reminder_sheet.dart' deferred as sheet;
 
+/// Test override for platform branching in [exportCalendarEventDeferred]
+/// (`true` = web `.ics` download, `false` = native Google Calendar link).
+@visibleForTesting
+bool? debugCalendarIsWeb;
+
+/// Loads the deferred reminder-sheet chunk and exports a calendar event
+/// (`.ics` download on web, Google Calendar link on native).
+Future<void> exportCalendarEventDeferred({
+  required String uid,
+  required String title,
+  required DateTime startsAt,
+  DateTime? endsAt,
+  bool recurringWeekly = false,
+  String description = '',
+  String location = '',
+  required String filename,
+}) async {
+  try {
+    await sheet.loadLibrary();
+  } catch (e, st) {
+    ErrorReporting.capture(e, st, section: 'deferred_chunk', source: 'reminder_sheet');
+    return;
+  }
+  await sheet.exportCalendarEvent(
+    uid: uid,
+    title: title,
+    startsAt: startsAt,
+    endsAt: endsAt,
+    recurringWeekly: recurringWeekly,
+    description: description,
+    location: location,
+    filename: filename,
+    isWeb: debugCalendarIsWeb,
+  );
+}
+
 /// Button that lets visitors set a custom reminder for an event or liturgy (ADR-057).
 class RemindMeButton extends ConsumerWidget {
   /// Preloads the deferred reminder sheet outside `FakeAsync` test zones
