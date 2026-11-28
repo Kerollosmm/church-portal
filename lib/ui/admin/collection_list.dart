@@ -23,6 +23,7 @@ import 'admin_validators.dart';
 import 'confirm_named.dart';
 import 'doc_editor.dart';
 import 'pending_delete.dart';
+import 'schedule_date_preview.dart';
 import 'screen_header.dart';
 
 enum ListFilter { all, visible, hidden, unconfirmed }
@@ -635,6 +636,14 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
               onPressed: hasItems ? _enterSelectionMode : null,
             ),
           // The public page that shows this collection (CollectionDef.publicPath).
+          if (def.name == 'liturgies')
+            IconButton(
+              key: const Key('admin-previewScheduleDate'),
+              tooltip: context.tr('previewScheduleDate'),
+              style: IconButton.styleFrom(minimumSize: const Size(48, 48)),
+              icon: const Icon(Icons.visibility_outlined),
+              onPressed: () => showScheduleDatePreview(context, repo: widget.repo),
+            ),
           IconButton(
             key: const Key('admin-openOnSite'),
             tooltip: context.tr('openOnSite'),
