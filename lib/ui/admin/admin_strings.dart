@@ -850,7 +850,18 @@ const Map<String, List<String>> adminStrings = {
     'حذف {n} رسائل؟ يمكنك التراجع خلال ١٠ ثوانٍ.',
     'Delete {n} message(s)? You can undo for 10 seconds.',
   ],
+  // #159: preview the public schedule as of a chosen Cairo date
+  'previewScheduleDate': ['معاينة الجدول في تاريخ', 'Preview schedule on a date'],
+  'previewScheduleDateTitle': ['معاينة كما يراها الزائر', 'Preview as a visitor'],
+  'previewIncludeInactiveSeasons': ['شغّل المواسم غير المفعّلة أيضاً', 'Also turn on inactive seasons'],
+  'previewSeasonsInEffect': ['المواسم في هذا اليوم', 'Seasons on this day'],
+  'previewNoSeasonsInEffect': ['لا يوجد موسم نافذ في هذا اليوم.', 'No season is in effect on this day.'],
+  'previewDaysServices': ['خدمات هذا اليوم', "This day's services"],
+  'previewNoServices': ['لا توجد خدمات في هذا اليوم.', 'No services on this day.'],
+  'previewPickDate': ['التاريخ', 'Date'],
+  'previewNextService': ['الخدمة التالية', 'Next service'],
 };
+
 
 /// Idempotently registers [adminStrings] in the runtime localization table.
 void registerAdminStrings() => registerStrings(adminStrings);
