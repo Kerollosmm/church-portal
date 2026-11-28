@@ -73,6 +73,6 @@ This does not change seeded church content or the verification tables above.
 - **Stage 1 Android test passed** the same evening: GitHub Actions «Push Sender (Manual Fallback)» run [`46168247091`](https://github.com/Kerollosmm/church-portal/actions/runs/46168247091) on `main` @ `c75f878`, `topic_override: test_kerollos1`, arrived once, Arabic title/body rendered cleanly, and the tap opened `/notifications`.
 - **Web / PWA test was not run.**
 - A 24–48 h post-launch watch (Sentry, Spark Firestore/Hosting, `/admin → متقدم` heartbeats, `capReached == false`) is still pending.
-- Android test enrollment used a **local sideload** of signed release **1.0.6** (arm64 versionCode `2007` / arm32 `1007`). `pubspec.yaml` on `main` is still `1.0.5+6`; a version bump + public `apk-v` release is pending.
+- Android test enrollment and public release **1.0.6** (`pubspec.yaml` `1.0.6+7`, arm64 versionCode `2007` / arm32 `1007`, tag `apk-v1.0.6`).
 - Ops, enrollment, the Actions secret, and the kill switch: [`documentation/operations.md`](../../documentation/operations.md). Decision: [`ADR-093`](10-decisions-and-history.md). Tracker: [`docs/plans/phase6/STATUS.md`](../plans/phase6/STATUS.md).
 
