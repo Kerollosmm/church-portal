@@ -50,7 +50,7 @@
 ### Android test APK (follow-up, not a Phase 6 code packet)
 
 - Local signed sideload **1.0.6** was built from `c75f878` for Stage 1 enrollment (arm64 versionCode `2007`, arm32 versionCode `1007`).
-- `pubspec.yaml` on `main` is still `1.0.5+6`. A version-bump PR and public `apk-v` release (in-app update / `version.json`) are **pending**.
+- `pubspec.yaml` is `1.0.6+7` with public `apk-v1.0.6` release (in-app update / `version.json`).
 
 Ops reference: [`documentation/operations.md`](../../../documentation/operations.md) (Actions secret, enrollment, kill switch). Decision: [`ADR-093`](../../memory-bank/10-decisions-and-history.md).
 
