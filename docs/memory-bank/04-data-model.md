@@ -29,13 +29,14 @@ Four places must agree for every field — change them together:
 | Field | Type | Default when missing | Meaning |
 |---|---|---|---|
 | `visible` | bool | **true** | false = hidden from the public by an admin (kept in DB). Filtered by `publicItems` in providers. Not on `seasons`. |
+| `deletedAt` | timestamp \| null | null (not deleted) | Soft delete (admin bin). Since ADR-094 (#143) written **explicitly as `null`** on every new doc (`withPresenceKeys`), the seed and the backfill (`tool/backfill_visibility.js`), together with explicit `visible` (`active` on `seasons`): the public filtered queries (`visible == true && deletedAt == null`) never match a doc that lacks the field. |
 | `order` | int (−100000…100000) | 0 | Display order (stable sort; ties keep input order). Drag-reorder writes 10, 20, 30… |
 | `sample` | bool | false | **Unconfirmed / placeholder** awaiting the church. Public UI shows nothing since ADR-046 (badge / banner removed); admin shows «غير مؤكد»; assistant prefixes `[UNCONFIRMED]`; ADR-045 suppresses sample templates. Admin label "Unconfirmed (pending church confirmation)". |
 | `updatedAt` | timestamp | — | Stamped by `AdminRepository._stamp` (`FieldValue.serverTimestamp()`); rules require `== request.time` or unchanged |
 | `updatedBy` | string | — | Admin email (or uid); rules require it to equal `request.auth.token.email` (or uid) or be unchanged |
 
 Rules `common(d, changed)`: ≤ 80 keys (60 before PR #11), `visible`/`sample` bool, `order` int in range, `image`
-(if present and not null) passes `validImage`, `stampOk`. `meta()` = `['visible','sample','order','updatedAt','updatedBy']`
+(if present and not null) passes `validImage`, `stampOk`. `meta()` = `['visible','sample','order','deletedAt','updatedAt','updatedBy']`
 is added to every content allow-list. Since PR #11 every check runs only for the keys the write **creates or
 changes** (`changedKeys`; a create checks all keys) — see `05-firebase.md` (expression budget).
 
