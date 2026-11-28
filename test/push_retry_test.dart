@@ -141,6 +141,47 @@ void main() {
       expect(ok, isFalse);
       expect(prefs.getBool(pendingTopicSyncKey), isTrue);
     });
+
+    test('subscribeTestTopic normalizes, unsubscribes previous topic, and persists; unsubscribeTestTopic clears',
+        () async {
+      final prefs = await SharedPreferences.getInstance();
+      final messaging = _FakeFirebaseMessaging();
+
+      // Rejects invalid without touching messaging or storage
+      expect(
+        await PushMessaging.subscribeTestTopic('test_ABC', messagingInstance: messaging, sharedPrefs: prefs),
+        isFalse,
+      );
+      expect(messaging.subscribed, isEmpty);
+      expect(prefs.getString(testPushTopicStorageKey), isNull);
+
+      // Subscribes valid (auto-prefixed)
+      expect(
+        await PushMessaging.subscribeTestTopic('kerollos1', messagingInstance: messaging, sharedPrefs: prefs),
+        isTrue,
+      );
+      expect(messaging.subscribed, ['test_kerollos1']);
+      expect(prefs.getString(testPushTopicStorageKey), 'test_kerollos1');
+      expect(await PushMessaging.getStoredTestTopic(sharedPrefs: prefs), 'test_kerollos1');
+
+      // Subscribing a different test topic unsubscribes the previous one first
+      expect(
+        await PushMessaging.subscribeTestTopic('test_kerollos2', messagingInstance: messaging, sharedPrefs: prefs),
+        isTrue,
+      );
+      expect(messaging.unsubscribed, ['test_kerollos1']);
+      expect(messaging.subscribed, ['test_kerollos1', 'test_kerollos2']);
+      expect(prefs.getString(testPushTopicStorageKey), 'test_kerollos2');
+
+      // Unsubscribe clears storage and unsubscribes from FCM
+      expect(
+        await PushMessaging.unsubscribeTestTopic('kerollos2', messagingInstance: messaging, sharedPrefs: prefs),
+        isTrue,
+      );
+      expect(messaging.unsubscribed, ['test_kerollos1', 'test_kerollos2']);
+      expect(prefs.getString(testPushTopicStorageKey), isNull);
+      expect(await PushMessaging.getStoredTestTopic(sharedPrefs: prefs), isNull);
+    });
   });
 
   group('NotifyPlanner FCM retry on connectivity reconnect and app resume', () {
