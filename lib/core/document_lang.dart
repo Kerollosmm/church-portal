@@ -23,6 +23,10 @@ String canonicalUrlForPath(String path) {
   return p.startsWith('/') ? '$kCanonicalOrigin$p' : '$kCanonicalOrigin/$p';
 }
 
+/// Shareable canonical URL for [path] (`?lang=en` when [english] is true).
+String shareableUrlForPath(String path, {bool english = false}) =>
+    '${canonicalUrlForPath(path)}${english ? '?lang=en' : ''}';
+
 /// What the document `<head>` should say about the current route: a
 /// `<link rel="canonical">` URL (null = no link) and whether
 /// `<meta name="robots" content="noindex">` is present. Never both: Google
