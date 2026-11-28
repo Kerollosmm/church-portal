@@ -177,15 +177,18 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
   @override
   bool get wantKeepAlive => true;
 
-  late final Stream<AdminDoc?> _featuresStream = widget.repo.watchDoc('settings/features');
-  late final Stream<AdminDoc?> _notificationsStream = widget.repo.watchDoc('settings/notifications');
+  late Stream<AdminDoc?> _featuresStream = widget.repo.watchDoc('settings/features');
+  late Stream<AdminDoc?> _notificationsStream = widget.repo.watchDoc('settings/notifications');
 
   // ---- settings/features form (saved with the bottom bar) ----
   bool _saving = false;
   bool _dirty = false;
   bool _populating = false;
+  bool _featuresLoaded = false;
+  AdminDoc? _shownFeatures;
   AdminDoc? _lastFeatures;
   Map<String, dynamic> _featuresData = const {};
+  Map<String, dynamic> _initialPush = const {};
   bool _showErrors = false;
   String? _leadsNote;
 
@@ -271,6 +274,23 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
     _bindDraftFieldListener('titleEn', _draftTitleEn);
     _bindDraftFieldListener('bodyAr', _draftBodyAr);
     _bindDraftFieldListener('bodyEn', _draftBodyEn);
+    _initialPush = _collectPushMap();
+  }
+
+  @override
+  void didUpdateWidget(covariant NotificationsAdminSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.repo != oldWidget.repo) {
+      _featuresStream = widget.repo.watchDoc('settings/features');
+      _notificationsStream = widget.repo.watchDoc('settings/notifications');
+      _featuresLoaded = false;
+      _shownFeatures = null;
+      _lastFeatures = null;
+      _featuresData = const {};
+      _dirty = false;
+      _showErrors = false;
+      _leadsNote = null;
+    }
   }
 
   void _bindDraftFieldListener(String field, TextEditingController ctrl) {
@@ -367,6 +387,36 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
     } finally {
       _populating = false;
     }
+    _initialPush = _collectPushMap();
+  }
+
+  Map<String, dynamic> _collectPushMap() {
+    final rows = <String>[];
+    for (final type in NotifyType.values) {
+      final c = _typeCtrls[type]!;
+      final def = NotifyTypeSpec.builtInDefaults[type]!;
+      String v(String k) => c[k]!.text.trim();
+      final days = type == NotifyType.seasons ? v('daysBefore') : '';
+      final modified = v('time') != def.time ||
+          (type == NotifyType.seasons && days != '${def.daysBefore}') ||
+          v('titleAr') != def.titleAr ||
+          v('titleEn') != def.titleEn ||
+          v('bodyAr') != def.bodyAr ||
+          v('bodyEn') != def.bodyEn;
+      if (modified) {
+        rows.add([type.name, v('time'), days, v('titleAr'), v('titleEn'), v('bodyAr'), v('bodyEn')].join('\u001f'));
+      }
+    }
+    final leads = _reminderLeads.toList()..sort();
+    return {
+      'push': _pushEnabled,
+      if (widget.showTechnical) 'pushVapidKey': _vapidCtrl.text.trim(),
+      'pushTypes': [for (final t in NotifyType.values) if (_offeredTypes.contains(t)) t.name],
+      'reminderLeads': leads,
+      'reminderDefaultLead': leads.contains(_reminderDefaultLead) ? _reminderDefaultLead : leads.first,
+      'reminderSources': [for (final s in const ['lit', 'mtg', 'day']) if (_reminderSources.contains(s)) s].join(','),
+      'notifyTypes': rows,
+    };
   }
 
   /// First problem in the settings form (l10n key), or null.
@@ -391,35 +441,36 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
       _snack(context.tr(problem), error: true);
       return;
     }
+    final currentPush = _collectPushMap();
+    final payload = changedFields(_initialPush, currentPush);
+    // validPushCore in firestore.rules requires reminderDefaultLead in reminderLeads.
+    if (payload.containsKey('reminderDefaultLead') &&
+        !payload.containsKey('reminderLeads') &&
+        !_featuresData.containsKey('reminderLeads')) {
+      payload['reminderLeads'] = currentPush['reminderLeads'];
+    }
+    if (payload.isEmpty) {
+      setState(() {
+        _dirty = false;
+        _showErrors = false;
+      });
+      _snack(context.tr('noChanges'));
+      return;
+    }
     setState(() => _saving = true);
     try {
-      final rows = <String>[];
-      for (final type in NotifyType.values) {
-        final c = _typeCtrls[type]!;
-        final def = NotifyTypeSpec.builtInDefaults[type]!;
-        String v(String k) => c[k]!.text.trim();
-        final days = type == NotifyType.seasons ? v('daysBefore') : '';
-        final modified = v('time') != def.time ||
-            (type == NotifyType.seasons && days != '${def.daysBefore}') ||
-            v('titleAr') != def.titleAr ||
-            v('titleEn') != def.titleEn ||
-            v('bodyAr') != def.bodyAr ||
-            v('bodyEn') != def.bodyEn;
-        if (modified) {
-          rows.add([type.name, v('time'), days, v('titleAr'), v('titleEn'), v('bodyAr'), v('bodyEn')].join('\u001f'));
+      await widget.repo.saveDocsFresh(['settings/features'], (current) {
+        if (isStaleDoc(
+          current['settings/features'],
+          expectedExists: _shownFeatures != null,
+          expectedUpdatedAt: _shownFeatures?.updatedAt,
+        )) {
+          throw const StaleDocumentException('settings/features');
         }
-      }
-      final leads = _reminderLeads.toList()..sort();
-      await widget.repo.saveDoc('settings/features', {
-        'push': _pushEnabled,
-        if (widget.showTechnical) 'pushVapidKey': _vapidCtrl.text.trim(),
-        'pushTypes': [for (final t in NotifyType.values) if (_offeredTypes.contains(t)) t.name],
-        'reminderLeads': leads,
-        'reminderDefaultLead': leads.contains(_reminderDefaultLead) ? _reminderDefaultLead : leads.first,
-        'reminderSources': [for (final s in const ['lit', 'mtg', 'day']) if (_reminderSources.contains(s)) s].join(','),
-        'notifyTypes': rows,
+        return {'settings/features': payload};
       });
       if (!mounted) return;
+      _initialPush = currentPush;
       setState(() {
         _dirty = false;
         _showErrors = false;
@@ -925,14 +976,37 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
     registerStrings(_notificationsAdminStrings);
     registerAdminStrings();
     return StreamBuilder<AdminDoc?>(
+      key: ObjectKey(_featuresStream),
       stream: _featuresStream,
       builder: (context, featSnap) {
-        if (featSnap.connectionState != ConnectionState.waiting) {
-          _englishEnabled = FeatureSettings.fromMap(featSnap.data?.data).englishEnabled;
-          if (!_showDraftEnglish) _previewEnglish = false;
-          _populateFeatures(featSnap.data);
+        final ready = featSnap.connectionState != ConnectionState.waiting || featSnap.hasData;
+        final latest = featSnap.data;
+        var changed = false;
+        var echo = false;
+        if (ready) {
+          changed = !_featuresLoaded ||
+              !sameTimestamp(latest?.updatedAt, _shownFeatures?.updatedAt) ||
+              (latest == null) != (_shownFeatures == null) ||
+              (latest?.updatedAt == null &&
+                  _shownFeatures?.updatedAt == null &&
+                  !sameValue(latest?.data, _shownFeatures?.data));
+          echo = _featuresLoaded && isEchoOfEditor(_shownFeatures?.data ?? const {}, latest?.data, _collectPushMap());
+          if (changed && (!_dirty && !_saving || echo)) {
+            _shownFeatures = latest;
+            _featuresLoaded = true;
+            _englishEnabled = FeatureSettings.fromMap(latest?.data).englishEnabled;
+            if (!_showDraftEnglish) _previewEnglish = false;
+            if (!_dirty && !_saving) {
+              _populateFeatures(latest, force: true);
+            } else {
+              _lastFeatures = latest;
+              _featuresData = latest?.data ?? const <String, dynamic>{};
+            }
+          }
         }
+        final stale = _featuresLoaded && changed && (_dirty || _saving) && !echo;
         return StreamBuilder<AdminDoc?>(
+          key: ObjectKey(_notificationsStream),
           stream: _notificationsStream,
           builder: (context, notifSnap) {
             _schedule = NotifySchedule.fromDoc(notifSnap.data?.data);
@@ -942,32 +1016,56 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
               onBrowserBackDiscard: _discardAllOnBrowserBack,
               child: Scaffold(
                 backgroundColor: context.pal.background,
-                body: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 760),
-                    child: SingleChildScrollView(
-                      key: const ValueKey('notifications-admin-list'),
-                      padding: const EdgeInsets.fromLTRB(12, 16, 12, 40),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _statusCard(context),
-                          const SizedBox(height: 16),
-                          _scheduledSection(context),
-                          const SizedBox(height: 16),
-                          _typesSection(context),
-                          const SizedBox(height: 16),
-                          _remindSection(context),
-                          const SizedBox(height: 16),
-                          _sentLogSection(context),
-                          if (widget.showTechnical) ...[
-                            const SizedBox(height: 16),
-                            _advancedSection(context),
-                          ],
+                body: Column(
+                  children: [
+                    if (stale)
+                      MaterialBanner(
+                        content: Text(context.tr('updatedElsewhere')),
+                        actions: [
+                          TextButton(
+                            onPressed: () => setState(() {
+                              _dirty = false;
+                              _showErrors = false;
+                              _leadsNote = null;
+                              _shownFeatures = latest;
+                              _englishEnabled = FeatureSettings.fromMap(latest?.data).englishEnabled;
+                              if (!_showDraftEnglish) _previewEnglish = false;
+                              _populateFeatures(latest, force: true);
+                            }),
+                            child: Text(context.tr('reload')),
+                          ),
                         ],
                       ),
+                    Expanded(
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 760),
+                          child: SingleChildScrollView(
+                            key: const ValueKey('notifications-admin-list'),
+                            padding: const EdgeInsets.fromLTRB(12, 16, 12, 40),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _statusCard(context),
+                                const SizedBox(height: 16),
+                                _scheduledSection(context),
+                                const SizedBox(height: 16),
+                                _typesSection(context),
+                                const SizedBox(height: 16),
+                                _remindSection(context),
+                                const SizedBox(height: 16),
+                                _sentLogSection(context),
+                                if (widget.showTechnical) ...[
+                                  const SizedBox(height: 16),
+                                  _advancedSection(context),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
                 bottomNavigationBar: UnsavedBar(
                   dirty: _dirty,

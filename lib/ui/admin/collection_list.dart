@@ -1766,6 +1766,11 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         docId: d?.id,
         newDefaults: {...editDef.newDefaults, ...extraDefaults},
         onSave: (data) async => id = await repo.save(editDef.name, id, data),
+        onSaveFresh: d == null
+            ? null
+            : (data, expectedUpdatedAt) =>
+                repo.saveFresh(editDef.name, d.id, data, expectedUpdatedAt: expectedUpdatedAt),
+        watchDoc: d == null ? null : () => repo.watchDoc('${editDef.name}/${d.id}'),
         media: repo.media,
         dynamicChoices: dynamicChoices,
         linkTargets: linkTargets,
