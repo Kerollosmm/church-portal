@@ -10,7 +10,7 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
 - **Hero** (`_Hero`, always first, branch `design/coptic-identity`): parchment ground; start column = kicker
   «كنيسة قبطية أرثوذكسية», title (`heroTitleAr/En` or the church name, display face), place line (`heroSubtitleAr/En`
   or, when `settings/features.heroShowAddress` is on, the address), verse (no panel since PR #22) with a gold start rule, CTAs **Mass times** (primary) + **About the church** (outlined; Contact
-  if About is off) — each only if its route is enabled. End column = the **arcade**: the first two `saints` in
+  if About is off) — each only if its route is enabled; shows `ErrorState` with retry (`Key('heroError')`) when `settingsProvider` fails. End column = the **arcade**: the first two `saints` in
   gold-leaf `ArchFrame`s (the admin `heroImageUrl` takes the large arch), tapping opens the saint page; no image /
   saints or images off → arches hold the drawn Coptic cross. A plaster "ledge" closes the hero.
 - **Featured pages** (`_FeaturedPages`, key `home-featuredPages`): placed in the discovery zone before the first of
@@ -33,7 +33,7 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   | `nextMass` | `NextMassCard` | schedule |
   | `quickContacts` | `_QuickContacts` (first 3 phones, call + WhatsApp for mobiles) | contactInfo |
   | `milestones` | "Our story" `MilestoneCard` grid (`lib/ui/widgets/milestone_card.dart`, shared with `/about`, ADR-052; icon by `icon`, year in local digits) | milestones |
-  | `directory` | `DirectoryCard` grid from `_directory` (mass, education, activities, services, about, contact) + "Ask the church" when visible; cards for disabled routes are skipped | — |
+  | `directory` | `DirectoryCard` grid from `_directory` (mass, education, activities, services, about, contact) + non-empty `customSections` (`publicNonEmptyCategories`) + "Ask the church" when visible; cards for disabled routes are skipped | — |
   | `map` | `ChurchMap` (iframe + Open in Maps + Directions; protected by `MapInteractionGuard` click-to-interact shield on web) | contactInfo |
   On wide screens (≥ 900 px) adjacent `nextMass` + `quickContacts` share a row.
 
@@ -176,11 +176,11 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   hour or dark themes; switch `heroSeasonTint`. Ken Burns, haze and rays unchanged. The parallel line keeps «، ».
 
 ### `/about` — `about_page.dart` `AboutPage`
-- History card (bishop line + `historyAr/En`) and **altars** grid (main altar gets a gold cross) — section `history`.
+- History card (bishop line + `historyAr/En`, omitted when both are blank) and **altars** grid (main altar gets a gold cross) — section `history`.
 - **«محطات الكنيسة» / "Church milestones"** (ADR-052, key `about-milestones`): the same `MilestoneCard`s as Home
   "Our story", sorted chronologically by `compareMilestonesByYear` (`year` ascending, `null` last, `order` then `id`
   tie-breaker, ADR-090), right after the history & altars — section `milestones` AND
-  `settings/features.aboutMilestones` (default on). Milestone detail Back goes to `/about` while listed here.
+  `settings/features.aboutMilestones` (default on; also keeps `routeEnabled('/about')` open while both are on). Milestone detail Back goes to `/about` while listed here.
 - Patron saints cards (name, feast pills Coptic + Gregorian, bio) — section `saints`.
 - Priests (`PriestCard`: avatar/photo, name (`nameEn` in English if set), rank «قمص/قس», ordination date, hegumen
   date, repose date «تاريخ النياحة / Departed» (`departedDate`, BUG-08), bio) — section `priests` (status ≠ departed); departed fathers on a cream card — section
@@ -244,15 +244,15 @@ the same day with overlapping times in different venues (`parallelServices`) get
   graduates), **اجتماعات خاصة** (family, men, women, elderly), plus "Other stages" for unknown stage keys.
 - Timeline item: a `Wrap` of stage pill (`stageLabels`), «اليوم / Today» pill when `m.weekday` is today's Cairo
   weekday (FR-E-03) (wraps at 320 px instead of overflowing, BUG-11); name, weekday (goldText),
-  both-digit time, hall, notes, Facebook/WhatsApp buttons (screen-reader label names the meeting).
+  both-digit time, hall, notes, Facebook/WhatsApp buttons (screen-reader label names the meeting), and `RemindMeButton` (recurring weekly from `weekday` + `start`).
 
 ### `/church-activities` — `activities_page.dart` `ActivitiesPage`
 - Cards sorted by `_categoryOrder` (service, choir, hymns, youth, servants, media, drama, scouts, deacons, bible,
-  summer, sports, exhibitions; unknown last), stable within a category (admin order kept). Icon per category
+  summer, sports, exhibitions; unknown last), stable within a category (admin order kept), grouped under category `SectionTitle` headers with `ChoiceChip` filters when 2+ categories exist. Icon per category
   (`activityIcon`). Schedule, ages, "Open page" link (YouTube/Facebook styled), call + WhatsApp (mobiles only).
 
 ### `/public-services` — `public_services_page.dart` `PublicServicesPage`
-- Facilities grid (`facilityIcon` by type, description, hours, call button).
+- Facilities grid (`facilityIcon` by type, description, hours, call + WhatsApp button when `details.whatsapp` or `isEgyptianMobile(phone)`).
 
 ### `/contact` — `contact_page.dart` `ContactPage`
 - `_InfoColumn`: phones (`PhoneRow`, call + WhatsApp for `isMobile`) and address/transport (section `contactInfo`);
@@ -591,7 +591,7 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
   - `HeroVideo` (`lib/ui/widgets/hero_video_io.dart`) wrapped in `RepaintBoundary` to isolate 60 fps video rendering from ancestor repaint layers.
 - Arabic scripture text (Van Dyck) and English chapter:verse references (`refs-only`).
 - Offline caching via `ReadingsStore` (SharedPreferences on mobile, 8 s HTTP fetch timeout falling back cleanly to cached JSON or `null`, in-memory on web) with automatic pruning of dates older than yesterday; Android additionally registers an unmetered periodic Workmanager job (`church_portal_readings_prefetch`, `ExistingPeriodicWorkPolicy.keep`) executing `prefetchUpcomingDays` for the next 7 `Africa/Cairo` days (`CairoTime` + `isoDate`).
-- Accessible directly via the «اقرأ القراءات» action on the Today card, permanent «قراءات اليوم» navigation links in the desktop bar, mobile drawer, and footer (`/readings`, redirecting to today's Cairo date `/readings/YYYY-MM-DD`, preserving query parameters), or direct link `/readings/YYYY-MM-DD`.
+- Accessible directly via the «اقرأ القراءات» action on the Today card, permanent «قراءات اليوم» navigation links in the desktop bar, mobile drawer, and footer (`/readings`, redirecting to today's Cairo date `/readings/YYYY-MM-DD`, preserving query parameters), or direct link `/readings/YYYY-MM-DD`. Calls `setDocumentRouteMeta` (`noindex` for invalid dates) and syncs tab taps (`katameros` / `verse`) to `?tab=` while preserving other query parameters.
 - Contact form (`ContactForm._pickDate`) uses the same Cairo date (`CairoTime`) for `firstDate`/`currentDate`/`initialDate` as submit validation.
 
 ### Notification Preferences & Reminders (`/notifications`, `notifications_page.dart`, ADR-057, ADR-064, ADR-065, ADR-067)

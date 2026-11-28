@@ -91,11 +91,15 @@ void main() {
 
     test('pages built from several sections stay up while any one is on', () {
       var f = FeatureSettings.fromMap({
-        'sections': {'history': false, 'saints': false, 'priests': false},
+        'sections': {'history': false, 'saints': false, 'priests': false, 'milestones': false},
       });
       expect(f.routeEnabled('/about'), isTrue); // departed fathers still on
       f = f.copyWith(sections: {...f.sections, Sections.departedPriests: false});
       expect(f.routeEnabled('/about'), isFalse);
+      // Milestones (when aboutMilestones is on) also keeps /about up on its own.
+      final onlyMilestones = f.copyWith(sections: {...f.sections, Sections.milestones: true});
+      expect(onlyMilestones.routeEnabled('/about'), isTrue);
+      expect(onlyMilestones.copyWith(aboutMilestones: false).routeEnabled('/about'), isFalse);
 
       var c = FeatureSettings.fromMap({
         'sections': {'contactInfo': false, 'socials': false},

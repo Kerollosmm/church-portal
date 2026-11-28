@@ -213,12 +213,14 @@ class _AdvancedOwnerScreenState extends State<AdvancedOwnerScreen> with SingleTi
         body: TabBarView(
           controller: _tabs,
           children: [
-            _buildSystemTab(context),
-            ChurchInfoScreen(
-              key: const ValueKey('app-install-doc'),
-              repo: widget.repo,
-              doc: appInstallDoc,
-              showHeader: false,
+            _KeepAliveTab(child: _buildSystemTab(context)),
+            _KeepAliveTab(
+              child: ChurchInfoScreen(
+                key: const ValueKey('app-install-doc'),
+                repo: widget.repo,
+                doc: appInstallDoc,
+                showHeader: false,
+              ),
             ),
           ],
         ),
@@ -375,5 +377,24 @@ class _AdvancedOwnerScreenState extends State<AdvancedOwnerScreen> with SingleTi
         );
       },
     );
+  }
+}
+
+class _KeepAliveTab extends StatefulWidget {
+  final Widget child;
+  const _KeepAliveTab({required this.child});
+
+  @override
+  State<_KeepAliveTab> createState() => _KeepAliveTabState();
+}
+
+class _KeepAliveTabState extends State<_KeepAliveTab> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
   }
 }

@@ -31,51 +31,60 @@ class AboutPage extends ConsumerWidget {
           title: context.tr('about'), subtitle: context.tr('dir_about'), icon: Icons.church_rounded),
       children: [
         const PageIntro(pageKey: CustomizablePages.about),
-        if (f.enabled(Sections.history)) ...[
-        SectionTitle(context.tr('history'), icon: Icons.history_edu_rounded),
+        if (f.enabled(Sections.history))
         AsyncSection<ChurchSettings>(
           provider: settingsProvider,
           retry: settingsProvider,
+          header: SectionTitle(context.tr('history'), icon: Icons.history_edu_rounded),
+          isEmpty: (s) =>
+              context.pick(s.bishopAr, s.bishopEn).trim().isEmpty &&
+              context.pick(s.historyAr, s.historyEn).trim().isEmpty &&
+              s.altars.isEmpty,
           loading: const SkeletonBox(height: 160, radius: 16),
-          builder: (context, s) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(18),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  if (context.pick(s.bishopAr, s.bishopEn).isNotEmpty) ...[
-                    IconLine(Icons.workspace_premium_rounded, '${context.tr('bishop')}: ${context.pick(s.bishopAr, s.bishopEn)}',
-                        style: TextStyle(fontWeight: FontWeight.w700, color: context.pal.primary)),
-                    const SizedBox(height: 8),
-                  ],
-                  Text(context.pick(s.historyAr, s.historyEn), style: const TextStyle(height: 1.9, fontSize: 15)),
-                ]),
-              ),
-            ),
-            if (s.altars.isNotEmpty) SectionTitle(context.tr('altars'), icon: Icons.local_fire_department_rounded),
-            if (s.altars.isNotEmpty) ResponsiveGrid(minItemWidth: 260, children: [
-              for (final a in s.altars)
+          builder: (context, s) {
+            final bishop = context.pick(s.bishopAr, s.bishopEn).trim();
+            final history = context.pick(s.historyAr, s.historyEn).trim();
+            return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              if (bishop.isNotEmpty || history.isNotEmpty)
                 Card(
+                  key: const Key('aboutHistoryCard'),
                   child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Row(children: [
-                      CopticCross(
-                          size: 30,
-                          color: a.kind == 'main'
-                              ? context.pal.ornament
-                              : Color.lerp(context.pal.primary, context.pal.background, 0.15)!),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(context.pick(a.nameAr, a.nameEn),
-                            style: TextStyle(
-                                fontWeight: a.kind == 'main' ? FontWeight.w800 : FontWeight.w600, height: 1.5)),
-                      ),
+                    padding: const EdgeInsets.all(18),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      if (bishop.isNotEmpty)
+                        IconLine(Icons.workspace_premium_rounded, '${context.tr('bishop')}: $bishop',
+                            style: TextStyle(fontWeight: FontWeight.w700, color: context.pal.primary)),
+                      if (bishop.isNotEmpty && history.isNotEmpty) const SizedBox(height: 8),
+                      if (history.isNotEmpty)
+                        Text(history, style: const TextStyle(height: 1.9, fontSize: 15)),
                     ]),
                   ),
                 ),
-            ]),
-          ]),
+              if (s.altars.isNotEmpty) SectionTitle(context.tr('altars'), icon: Icons.local_fire_department_rounded),
+              if (s.altars.isNotEmpty) ResponsiveGrid(minItemWidth: 260, children: [
+                for (final a in s.altars)
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Row(children: [
+                        CopticCross(
+                            size: 30,
+                            color: a.kind == 'main'
+                                ? context.pal.ornament
+                                : Color.lerp(context.pal.primary, context.pal.background, 0.15)!),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(context.pick(a.nameAr, a.nameEn),
+                              style: TextStyle(
+                                  fontWeight: a.kind == 'main' ? FontWeight.w800 : FontWeight.w600, height: 1.5)),
+                        ),
+                      ]),
+                    ),
+                  ),
+              ]),
+            ]);
+          },
         ),
-        ],
         // Church milestones (ADR-052): the same cards as Home "Our story",
         // from the same milestonesProvider (no extra listener).
         if (f.showAboutMilestones)

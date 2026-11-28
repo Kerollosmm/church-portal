@@ -830,10 +830,11 @@ void main() {
       await _pump(tester, '/');
       await tester.tap(find.byTooltip('Menu'));
       await tester.pumpAndSettle();
-      expect(find.text('Youth trips'), findsOneWidget);
-      expect(find.text('Library'), findsNothing, reason: 'showInNav off');
-      expect(find.text('Hidden'), findsNothing);
-      expect(find.text('Building donations'), findsOneWidget);
+      final drawer = find.byType(Drawer);
+      expect(find.descendant(of: drawer, matching: find.text('Youth trips')), findsOneWidget);
+      expect(find.descendant(of: drawer, matching: find.text('Library')), findsNothing, reason: 'showInNav off');
+      expect(find.descendant(of: drawer, matching: find.text('Hidden')), findsNothing);
+      expect(find.descendant(of: drawer, matching: find.text('Building donations')), findsOneWidget);
     });
 
     testWidgets('menu hides empty category with showInNav: true, while direct route renders EmptyState', (tester) async {
@@ -853,8 +854,10 @@ void main() {
       final (router, _) = await _pump(tester, '/', repo: repo);
       await tester.tap(find.byTooltip('Menu'));
       await tester.pumpAndSettle();
-      expect(find.text('Youth trips'), findsOneWidget);
-      expect(find.text('Empty Section'), findsNothing, reason: 'empty category is hidden from menu');
+      final drawer = find.byType(Drawer);
+      expect(find.descendant(of: drawer, matching: find.text('Youth trips')), findsOneWidget);
+      expect(find.descendant(of: drawer, matching: find.text('Empty Section')), findsNothing,
+          reason: 'empty category is hidden from menu');
 
       router.go('/section/empty-cat');
       await tester.pumpAndSettle();
