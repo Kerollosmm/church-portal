@@ -64,3 +64,15 @@ FB official Facebook page; YT official YouTube channel; A St-Takla church page; 
 C Al-Masry Al-Youm (25 Jun 2025); D El-Watan (25 Jun 2025); E findinegypt; F shewaya; K/K2 copt4g/Watani (2022);
 L Al-Masry Al-Youm (2018); T Cairo24 (10 Nov 2022); J Dostor (10 Feb 2022); P1–P7 St-Takla priest pages; W1/W2
 St-Takla saint bios. Full URLs in `docs/CONTENT_SOURCES.md`.
+
+## Push notifications (Phase 6H close-out)
+
+This does not change seeded church content or the verification tables above.
+
+- **28 Nov 2026, 7:05 PM Africa/Cairo:** the owner gave explicit go for Stage 2 broad launch and is turning on «تشغيل الإشعارات» in `/admin → الإعلانات والإشعارات` himself.
+- **Stage 1 Android test passed** the same evening: GitHub Actions «Push Sender (Manual Fallback)» run [`46168247091`](https://github.com/Kerollosmm/church-portal/actions/runs/46168247091) on `main` @ `c75f878`, `topic_override: test_kerollos1`, arrived once, Arabic title/body rendered cleanly, and the tap opened `/notifications`.
+- **Web / PWA test was not run.**
+- A 24–48 h post-launch watch (Sentry, Spark Firestore/Hosting, `/admin → متقدم` heartbeats, `capReached == false`) is still pending.
+- Android test enrollment used a **local sideload** of signed release **1.0.6** (arm64 versionCode `2007` / arm32 `1007`). `pubspec.yaml` on `main` is still `1.0.5+6`; a version bump + public `apk-v` release is pending.
+- Ops, enrollment, the Actions secret, and the kill switch: [`documentation/operations.md`](../../documentation/operations.md). Decision: [`ADR-093`](10-decisions-and-history.md). Tracker: [`docs/plans/phase6/STATUS.md`](../plans/phase6/STATUS.md).
+
